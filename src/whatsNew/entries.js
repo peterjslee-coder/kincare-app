@@ -31,6 +31,36 @@ const WINDOW_DAYS = 45;
 
 const ENTRIES = [
   {
+    id: "care-photos-from-messages",
+    version: "1.137.0",
+    date: "2026-11-20",
+    audience: ["family"],
+    title: "Save a photo from Messages to Care photos",
+    body: "When a caregiver sends a photo, hold it and save it to your loved one's Care photos, with the visit it came from or on its own. Care photos on Home now include them, and you can move or delete any photo there.",
+    howTo: [
+      "In Messages, press and hold a photo",
+      "Tap Save to care photos, check the visit, tap Save",
+      "On Home, tap a photo in Care photos to move it to a visit or delete it",
+    ],
+    examples: ["Keep the picture of Mom's scraped knee with Tuesday's visit"],
+    preview: "carePhotoSave",
+    action: { label: "Show me", page: "messages" },
+  },
+  {
+    id: "smaller-loved-one-card",
+    version: "1.137.0",
+    date: "2026-11-20",
+    audience: ["family"],
+    title: "A smaller card for your loved one",
+    body: "The green card on Home takes less room: photo, name and town on one line, with the care team underneath. It's about them, so your own relationship label is on Care Team instead.",
+    howTo: [
+      "Tap the name to open their page",
+      "Tap the team row for Care Team, or the calendar for the schedule",
+    ],
+    preview: "smallerLovedOneCard",
+    action: { label: "Show me", page: "dashboard" },
+  },
+  {
     id: "spend-30-days",
     version: "1.136.0",
     date: "2026-11-20",

@@ -3621,6 +3621,29 @@ async function initializeDatabase() {
             AND NOT EXISTS (SELECT 1 FROM outreach_messages m WHERE m.contact_id = c.id AND m.direction = 'out')`,
       ],
     },
+    {
+      // v1.137.0 — Pete, 11/20: a photo sent in Messages can be saved to Betty's care photos,
+      // with a visit or on its own. photo_url holds the same stored reference the message has
+      // (an "r2:" marker or legacy base64) — the bytes are not copied. Family only; a caregiver
+      // sees one only when it is on her own visit. deleted_at hides it from the album.
+      id: "089_care_photos",
+      statements: [
+        `CREATE TABLE IF NOT EXISTS care_photos (
+           id TEXT PRIMARY KEY,
+           care_recipient_id TEXT NOT NULL REFERENCES care_recipients(id),
+           session_id TEXT REFERENCES care_sessions(id),
+           source_message_id TEXT,
+           photo_url TEXT NOT NULL,
+           caption TEXT,
+           added_by TEXT REFERENCES users(id),
+           created_at TIMESTAMPTZ DEFAULT NOW(),
+           deleted_at TIMESTAMPTZ,
+           deleted_by TEXT
+         )`,
+        `CREATE INDEX IF NOT EXISTS idx_care_photos_recipient ON care_photos(care_recipient_id, created_at DESC)`,
+        `CREATE INDEX IF NOT EXISTS idx_care_photos_session ON care_photos(session_id)`,
+      ],
+    },
   ];
   for (const m of MIGRATIONS_V2) {
     if (applied.has(m.id)) continue;

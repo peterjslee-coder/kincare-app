@@ -422,12 +422,32 @@ async function familyDashboard(db, userId, res) {
         createdAt: p.created_at,
         expiresAt: p.expires_at,
       })),
-      recentPhotos: recentPhotos.map(p => ({
+      // v1.137.0 — photos saved from Messages join the visit photos, newest first.
+      recentPhotos: (await (async () => {
+        if (allRecipientIds.length === 0) return recentPhotos;
+        const saved = await db.prepare(`
+          SELECT p.id, p.photo_url, p.caption, p.created_at, p.session_id, 'care' AS kind,
+                 cs.scheduled_date,
+                 cr.first_name || ' ' || cr.last_name AS recipient_name,
+                 su.first_name || ' ' || su.last_name AS caregiver_name
+            FROM care_photos p
+            JOIN care_recipients cr ON p.care_recipient_id = cr.id
+            LEFT JOIN care_sessions cs ON p.session_id = cs.id
+            LEFT JOIN messages m ON p.source_message_id = m.id
+            LEFT JOIN users su ON m.sender_id = su.id
+           WHERE p.deleted_at IS NULL AND p.care_recipient_id IN (${recipientPlaceholders})
+           ORDER BY p.created_at DESC LIMIT 12
+        `).all(...allRecipientIds).catch(() => []);
+        return [...recentPhotos, ...saved]
+          .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+          .slice(0, 12);
+      })()).map(p => ({
         id: p.id,
+        kind: p.kind === 'care' ? 'care' : 'visit',
         // v1.106.7 — twelve visit photos inline was the single biggest thing in this response:
         // 4–6 MB of base64 parsed on the main thread before the dashboard could paint, and
         // re-fetched in full every time. Now twelve <img> requests the browser caches for a day.
-        photoUrl: storedImageUrl("/api/photos", p),
+        photoUrl: storedImageUrl(p.kind === 'care' ? "/api/care-photos" : "/api/photos", p),
         caption: p.caption,
         createdAt: p.created_at,
         caregiverName: p.caregiver_name,

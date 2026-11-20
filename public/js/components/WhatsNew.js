@@ -83,6 +83,30 @@ const WN_PREVIEWS = {
     );
   },
   // v1.134.0 — the caregiver home's optional sections close
+  // v1.137.0 — Save to care photos (made-up names)
+  carePhotoSave: () => (
+    <div style={{ padding: '12px 12px 10px', borderRadius: 12, border: '1px solid var(--border-color)', background: 'var(--bg-card)' }}>
+      <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 6 }}>Save to Mom's care photos</div>
+      <div style={{ ...wnCard, fontSize: 12.5, color: 'var(--text-primary)', border: '2px solid var(--role-color)' }}>
+        <span style={{ fontWeight: 700 }}>The visit with Sam</span> {'·'} Tue, Mar 3
+      </div>
+      <div style={{ ...wnCard, fontSize: 12.5, color: 'var(--text-secondary)' }}>Just Care photos</div>
+    </div>
+  ),
+  // v1.137.0 — the smaller loved-one card (made-up names)
+  smallerLovedOneCard: () => (
+    <div style={{ padding: 12, borderRadius: 12, background: 'var(--bg-hero)', color: 'var(--text-on-primary)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <span style={{ fontSize: 26 }}>{'\u{1F337}'}</span>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 16, fontWeight: 800 }}>Jane Doe</div>
+          <div style={{ fontSize: 11.5, opacity: 0.85 }}>Springfield</div>
+        </div>
+        <span style={{ opacity: 0.6 }}>{'\u203A'}</span>
+      </div>
+      <div style={{ marginTop: 10, paddingTop: 8, borderTop: '1px solid rgba(255,255,255,0.15)', fontSize: 12, fontWeight: 600 }}>Jane's Care Team {'·'} 3 members</div>
+    </div>
+  ),
   // v1.136.0 — the 30-day all-in spend (made-up numbers)
   spend30: () => (
     <div style={{ padding: '12px 12px 10px', borderRadius: 12, border: '1px solid var(--border-color)', background: 'var(--bg-card)' }}>

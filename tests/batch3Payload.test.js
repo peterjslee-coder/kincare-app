@@ -32,7 +32,8 @@ describe("P1 — images travel as URLs, not as JSON", () => {
 
   test("the dashboard no longer spreads visit-photo bytes into its response", () => {
     const d = code("src/routes/dashboard.js");
-    expect(d).toMatch(/photoUrl: storedImageUrl\("\/api\/photos", p\)/);
+    // v1.137.0 — care photos saved from Messages stream from their own route.
+    expect(d).toMatch(/photoUrl: storedImageUrl\(p\.kind === 'care' \? "\/api\/care-photos" : "\/api\/photos", p\)/);
     expect(d).not.toMatch(/photoUrl: p\.photo_url/);
   });
 
