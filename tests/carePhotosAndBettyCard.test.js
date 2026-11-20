@@ -36,3 +36,12 @@ describe("v1.137.0 — Save to care photos", () => {
     expect(suggestVisit(visits, "tina", "2026-11-10T15:14:00Z")).toBe(null);
   });
 });
+
+describe("v1.138.1 — the meds line stays after a dose is checked off", () => {
+  test("done doses are not filtered out of the line, they get a check", () => {
+    const src = code("public/js/components/CareTasks.js");
+    const line = src.slice(src.indexOf("const MedsLine"), src.indexOf("const CareTaskNextUpRow"));
+    expect(line).not.toMatch(/o\.status === 'done' \|\| o\.status === 'skipped'\) continue/);
+    expect(line).toMatch(/\\u2713/);
+  });
+});

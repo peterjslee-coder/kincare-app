@@ -64,12 +64,15 @@ const MedsLine = window.MedsLine = ({ groups, onlyMine, style }) => {
   const doses = [];
   for (const g of groups || []) {
     for (const o of g.occurrences || []) {
-      if (o.task_type !== 'medication' || o.status === 'done' || o.status === 'skipped') continue;
+      // v1.138.1 — done doses stay on the line with a check (Pete, 11/20: the line vanished once
+      // Tina checked off the only dose of the day, so it looked like it wasn't there at all).
+      if (o.task_type !== 'medication') continue;
       if (onlyMine && o.assigned_user_id !== meId) continue;
       doses.push(o);
     }
   }
   if (doses.length === 0) return null;
+  const isDone = (o) => o.status === 'done' || o.status === 'skipped';
   doses.sort((a, b) => String(a.occ_time || a.due_time || '').localeCompare(String(b.occ_time || b.due_time || '')));
   const fmt = (t) => {
     const [h, m] = String(t || '').split(':').map(Number);
@@ -79,12 +82,15 @@ const MedsLine = window.MedsLine = ({ groups, onlyMine, style }) => {
     return m ? `${hh}:${String(m).padStart(2, '0')} ${ap}` : `${hh} ${ap}`;
   };
   const jump = () => {
-    const el = document.querySelector(`[data-occ-id="${doses[0].id}"]`);
+    const target = doses.find((o) => !isDone(o)) || doses[0];
+    const el = document.querySelector(`[data-occ-id="${target.id}"]`);
     if (el && el.scrollIntoView) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
   };
   const parts = doses.slice(0, 4).map((o) => {
     const who = onlyMine ? '' : ` ${medOwnerLabel(o)}`;
-    return { key: o.id, text: `${fmt(o.occ_time || o.due_time)}${who}`, uncovered: !o.assigned_user_id && o.on_shift === false };
+    const done = isDone(o);
+    const mark = o.status === 'done' ? ' \u2713' : o.status === 'skipped' ? ' skipped' : '';
+    return { key: o.id, text: `${fmt(o.occ_time || o.due_time)}${who}${mark}`, done, uncovered: !done && !o.assigned_user_id && o.on_shift === false };
   });
   return (
     <button type="button" data-testid="meds-line" onClick={jump}
@@ -97,7 +103,7 @@ const MedsLine = window.MedsLine = ({ groups, onlyMine, style }) => {
         {parts.map((p, i) => (
           <React.Fragment key={p.key}>
             {i > 0 ? ' \u00b7 ' : ''}
-            <span style={p.uncovered ? { color: 'var(--color-warning)', fontWeight: 600 } : null}>{p.text}</span>
+            <span style={p.uncovered ? { color: 'var(--color-warning)', fontWeight: 600 } : p.done ? { color: 'var(--color-success)' } : null}>{p.text}</span>
           </React.Fragment>
         ))}
         {doses.length > 4 ? ` +${doses.length - 4}` : ''}
