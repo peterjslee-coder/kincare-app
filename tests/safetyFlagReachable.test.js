@@ -54,7 +54,7 @@ describe("and it does not depend on the tap", () => {
   });
 
   test("it is in the total, so the app icon and the card agree", () => {
-    expect(attention).toMatch(/\+ safetyRows\.length( \+ holdDeclinedRows\.length)?(\s*\+ checkinOverdueRows\.length)?( \+ medUncoveredRows\.length)?,/); // v1.117.0, v1.128.0
+    expect(attention).toMatch(/\+ safetyRows\.length( \+ holdDeclinedRows\.length)?(\s*\+ checkinOverdueRows\.length)?( \+ medUncoveredRows\.length)?( \+ seriesChangeRows\.length)?,/); // v1.117.0, v1.128.0
     expect(attention).toMatch(/safetyFlags: safetyRows\.length,/);
     expect(attention).toMatch(/careTasks: 0, approvals: 0, safetyFlags: 0,/); // the EMPTY shape
   });

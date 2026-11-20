@@ -7,9 +7,9 @@ build red.
 
 Hand-written sections (§3 "Where is…") are preserved across regeneration; edit those freely.
 
-Structure at last generation: 625 HTTP routes across 65 mounts ·
-119 `CREATE TABLE` statements · 16 background jobs · 42 socket events
-(17 with no client listener) · 75 push event types · 66 `window.__*` globals.
+Structure at last generation: 630 HTTP routes across 66 mounts ·
+120 `CREATE TABLE` statements · 16 background jobs · 42 socket events
+(17 with no client listener) · 76 push event types · 66 `window.__*` globals.
 
 ---
 
@@ -98,6 +98,7 @@ JSX is *not* compiled in the browser; Babel-standalone is not loaded. Editing an
 | `/api/safety` | `src/routes/safety.js` | 6 |  |
 | `/api/scheduling` | `src/routes/nlScheduling.js` | 1 |  |
 | `/api/self-onboarding` | `src/routes/selfOnboarding.js` | 3 |  |
+| `/api/series-changes` | `src/routes/seriesChanges.js` | 5 |  |
 | `/api/sessions` | `src/routes/sessions.js` **+** `src/routes/offers.js` | 50 | ⚠️ **multi-file mount — routes for this prefix live in more than one file** |
 | `/api/sms` | `src/routes/smsWebhooks.js` | 13 |  |
 | `/api/video` | `src/routes/videoCall.js` | 1 |  |
@@ -204,22 +205,22 @@ Every job runs through `guardedPoller` → `withPollerLock` (`src/models/databas
 
 | Lock | Job | Interval | Declared |
 |---:|---|---|---|
-| 101 | Daily demo data refresh | 24 h | `src/server.js:1098` |
-| 102 | Session notification poller (every 60s) | 1 min | `src/server.js:1191` |
-| 103 | Session Accountability Poller | 1 min | `src/server.js:1474` |
-| 104 | Reimbursement push digest sweeper (v1.98.15) | 30 s | `src/server.js:1491` |
-| 105 | Auto-pay cron: charge overdue sessions | 5 min | `src/server.js:1583` |
-| 106 | Recurring reimbursements: generate due occurrences (v1.74.0) | 1 h | `src/server.js:1690` |
-| 107 | Care Tasks poller (v1.99.0) | 1 min | `src/server.js:1715` |
-| 108 | Care Events poller (v1.100.0) | 1 min | `src/server.js:1731` |
-| 109 | Kindred Reminder Delivery Poller | 1 min | `src/server.js:1505` |
-| 110 | Retention (v1.106.9, poller 110) | 24 h | `src/server.js:1768` |
-| 111 | (see src/server.js:1666) | 1 h | `src/server.js:1666` |
-| 112 | v1.106.13 — poller 112: proposals that nobody answered | 10 min | `src/server.js:1797` |
-| 113 | (see src/server.js:1840) | 1 min | `src/server.js:1840` |
-| 114 | Quiet hours summary (v1.107.3, poller 114) | 5 min | `src/server.js:1859` |
-| 115 | Recurring reimbursements: generate due occurrences (v1.74.0) | 1 h | `src/server.js:1703` |
-| 116 | Visit mileage: charge what is owed once the visit itself is paid (v1.126.1, poller 116) | 5 min | `src/server.js:1876` |
+| 101 | Daily demo data refresh | 24 h | `src/server.js:1099` |
+| 102 | Session notification poller (every 60s) | 1 min | `src/server.js:1192` |
+| 103 | Session Accountability Poller | 1 min | `src/server.js:1475` |
+| 104 | Reimbursement push digest sweeper (v1.98.15) | 30 s | `src/server.js:1492` |
+| 105 | Auto-pay cron: charge overdue sessions | 5 min | `src/server.js:1584` |
+| 106 | Recurring reimbursements: generate due occurrences (v1.74.0) | 1 h | `src/server.js:1691` |
+| 107 | Care Tasks poller (v1.99.0) | 1 min | `src/server.js:1716` |
+| 108 | Care Events poller (v1.100.0) | 1 min | `src/server.js:1732` |
+| 109 | Kindred Reminder Delivery Poller | 1 min | `src/server.js:1506` |
+| 110 | Retention (v1.106.9, poller 110) | 24 h | `src/server.js:1769` |
+| 111 | (see src/server.js:1667) | 1 h | `src/server.js:1667` |
+| 112 | v1.106.13 — poller 112: proposals that nobody answered | 10 min | `src/server.js:1798` |
+| 113 | (see src/server.js:1841) | 1 min | `src/server.js:1841` |
+| 114 | Quiet hours summary (v1.107.3, poller 114) | 5 min | `src/server.js:1860` |
+| 115 | Recurring reimbursements: generate due occurrences (v1.74.0) | 1 h | `src/server.js:1704` |
+| 116 | Visit mileage: charge what is owed once the visit itself is paid (v1.126.1, poller 116) | 5 min | `src/server.js:1877` |
 
 ---
 
@@ -317,9 +318,9 @@ Opt-out key is `notification_prefs["push_" + eventType]`. Capability gating live
 
 `review` · `safety_flag` · `session_cancelled` · `session_complete`
 
-`session_in_progress` · `team_join` · `time_proposal` · `unblocked`
+`session_in_progress` · `team_join` · `time_change` · `time_proposal`
 
-`upload_authority_confirmed` · `uploaded` · `waitlist_signup`
+`unblocked` · `upload_authority_confirmed` · `uploaded` · `waitlist_signup`
 
 ---
 

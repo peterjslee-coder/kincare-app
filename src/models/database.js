@@ -3644,6 +3644,31 @@ async function initializeDatabase() {
         `CREATE INDEX IF NOT EXISTS idx_care_photos_session ON care_photos(session_id)`,
       ],
     },
+    {
+      // v1.139.0 — Pete, 11/18 (feedback 316aeee2): change a whole series — time, length, pay,
+      // instructions — including visits a caregiver has already accepted. Those are a request
+      // to her (one per caregiver); she accepts or keeps them as they are, at the old rate.
+      // `changes` is JSON {time, durationHours, rate, instructions}; `session_ids` the visits
+      // it covers, frozen when it was asked.
+      id: "090_series_change_requests",
+      statements: [
+        `CREATE TABLE IF NOT EXISTS series_change_requests (
+           id TEXT PRIMARY KEY,
+           recurrence_group_id TEXT NOT NULL,
+           care_recipient_id TEXT REFERENCES care_recipients(id),
+           caregiver_id TEXT REFERENCES caregiver_profiles(id),
+           caregiver_user_id TEXT REFERENCES users(id),
+           proposed_by_user_id TEXT REFERENCES users(id),
+           changes TEXT NOT NULL,
+           session_ids TEXT NOT NULL,
+           status TEXT NOT NULL DEFAULT 'pending',
+           created_at TIMESTAMPTZ DEFAULT NOW(),
+           responded_at TIMESTAMPTZ
+         )`,
+        `CREATE INDEX IF NOT EXISTS idx_series_change_cg ON series_change_requests(caregiver_user_id, status)`,
+        `CREATE INDEX IF NOT EXISTS idx_series_change_group ON series_change_requests(recurrence_group_id, status)`,
+      ],
+    },
   ];
   for (const m of MIGRATIONS_V2) {
     if (applied.has(m.id)) continue;
