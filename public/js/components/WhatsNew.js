@@ -83,6 +83,15 @@ const WN_PREVIEWS = {
     );
   },
   // v1.134.0 — the caregiver home's optional sections close
+  // v1.138.0 — the thin meds line (made-up names)
+  medsLine: () => (
+    <div style={{ padding: 12, borderRadius: 12, border: '1px solid var(--border-color)', background: 'var(--bg-card)' }}>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '6px 10px', borderRadius: 10, border: '1px solid var(--border-color)', borderLeft: '3px solid var(--role-color)', fontSize: 12.5, color: 'var(--text-secondary)' }}>
+        <span>{'\u{1F48A}'}</span><span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>Meds today</span>
+        <span>12 PM Sam{'\u2019'}s {'\u00b7'} <span style={{ color: 'var(--color-warning)', fontWeight: 600 }}>9 PM no caregiver on shift</span></span>
+      </div>
+    </div>
+  ),
   // v1.137.0 — Save to care photos (made-up names)
   carePhotoSave: () => (
     <div style={{ padding: '12px 12px 10px', borderRadius: 12, border: '1px solid var(--border-color)', background: 'var(--bg-card)' }}>

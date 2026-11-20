@@ -93,6 +93,7 @@ describe("the count means: you are the blocker", () => {
       // v1.112.0 — "Verify your ID by <date>" for someone in the identity gate's grace period.
       // Zero here: this stub's user is verified.
       identity: 0,
+      medUncovered: 0,
       // v1.117.0 — a declined card hold the family can retry. Zero here: none.
       holdDeclined: 0,
       checkinOverdue: 0, // v1.128.0
@@ -122,7 +123,7 @@ describe("the count means: you are the blocker", () => {
     }) };
     const r = await attentionCountFor(brokenDb, "pete");
     expect(r.total).toBe(0);
-    expect(r).toEqual({ total: 0, reimbursements: 0, timeChanges: 0, timeChangeSessionId: null, careTasks: 0, approvals: 0, bgCheckRequests: 0, safetyFlags: 0, financialConcerns: 0, messages: 0, emptyWeeks: 0, paymentChecks: 0, unpaidReimbursements: 0, cancelFees: 0, identity: 0, holdDeclined: 0, checkinOverdue: 0 });
+    expect(r).toEqual({ total: 0, reimbursements: 0, timeChanges: 0, timeChangeSessionId: null, careTasks: 0, approvals: 0, bgCheckRequests: 0, safetyFlags: 0, financialConcerns: 0, messages: 0, emptyWeeks: 0, paymentChecks: 0, unpaidReimbursements: 0, cancelFees: 0, identity: 0, holdDeclined: 0, checkinOverdue: 0, medUncovered: 0 });
   });
 });
 

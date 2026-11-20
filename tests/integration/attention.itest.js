@@ -352,7 +352,7 @@ describe("the shape the badge relies on", () => {
     // v1.112.0 — `identity` ("Verify your ID by <date>"). Zero: this user is verified.
     // v1.117.0 — `holdDeclined` (a declined card hold). Zero: this user booked nothing.
     // v1.128.0 — `checkinOverdue` ("Tina hasn't checked in"). Zero: this user booked nothing.
-    expect(r).toEqual({ total: 0, reimbursements: 0, timeChanges: 0, timeChangeSessionId: null, careTasks: 0, approvals: 0, bgCheckRequests: 0, safetyFlags: 0, financialConcerns: 0, messages: 0, emptyWeeks: 0, paymentChecks: 0, unpaidReimbursements: 0, cancelFees: 0, identity: 0, holdDeclined: 0, checkinOverdue: 0 });
+    expect(r).toEqual({ total: 0, reimbursements: 0, timeChanges: 0, timeChangeSessionId: null, careTasks: 0, approvals: 0, bgCheckRequests: 0, safetyFlags: 0, financialConcerns: 0, messages: 0, emptyWeeks: 0, paymentChecks: 0, unpaidReimbursements: 0, cancelFees: 0, identity: 0, holdDeclined: 0, checkinOverdue: 0, medUncovered: 0 });
     expect(Number.isFinite(r.total)).toBe(true);
   });
 });

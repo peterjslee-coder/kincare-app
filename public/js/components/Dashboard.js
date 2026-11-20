@@ -1702,6 +1702,8 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
             onOpenEvent={(ev) => setEventSheet(ev)} />
         );
       })()}
+      {/* v1.138.0 — today's doses and whose they are, one thin line (Pete, 81c2b623) */}
+      {typeof MedsLine !== 'undefined' && <MedsLine groups={careTasksToday && careTasksToday.groups} />}
 
       {/* Open Requests — unclaimed jobs the family posted */}
       {(() => {

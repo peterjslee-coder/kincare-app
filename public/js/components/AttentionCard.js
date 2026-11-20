@@ -68,6 +68,7 @@ const ATTENTION_PAST = {
   Skip: 'Skipped for today.',
   'Try the card again': 'The card went through.',
   'Got it': 'Marked paid.',
+  'Leave unassigned': 'Left unassigned \u2014 anyone on the team can take it.', // v1.138.0
 };
 
 const ATTENTION_KINDS = {
@@ -92,6 +93,8 @@ const ATTENTION_KINDS = {
   paymentArrived: { icon: '💵', chip: 'DID IT ARRIVE?' },
   // v1.120.1 — an approved reimbursement the payer hasn't paid. Hard: it counts, no "Not now".
   reimbursementUnpaid: { icon: '💵', chip: 'TO PAY' },
+  // v1.138.0 — a dose time no caregiver is on shift for (3ba9c4f5).
+  medUncovered: { icon: '💊', chip: 'MEDS NOT COVERED' },
 };
 
 // "14:30" → "2:30 PM". The server sends wall-clock times in the care recipient's zone; they
@@ -288,7 +291,7 @@ const AttentionCard = window.AttentionCard = ({ onNavigate, only }) => {
   // tap to confirm would be ceremony over an action that can be taken back.
   const dismiss = React.useCallback((item) => {
     if (!item.dismiss || busy[item.id]) return;
-    send({ ...item, action: item.dismiss, verb: 'Skip' });
+    send({ ...item, action: item.dismiss, verb: item.kind === 'medUncovered' ? 'Leave unassigned' : 'Skip' });
   }, [send, busy]);
 
   const act = React.useCallback((item) => {

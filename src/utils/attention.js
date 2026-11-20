@@ -80,7 +80,7 @@ const name = (first, last) => [first, last].filter(Boolean).join(" ").trim() || 
 
 const EMPTY = {
   total: 0, reimbursements: 0, timeChanges: 0, timeChangeSessionId: null,
-  careTasks: 0, approvals: 0, safetyFlags: 0, messages: 0, emptyWeeks: 0, cancelFees: 0, financialConcerns: 0, identity: 0, holdDeclined: 0, checkinOverdue: 0, items: [],
+  careTasks: 0, approvals: 0, safetyFlags: 0, messages: 0, emptyWeeks: 0, medUncovered: 0, cancelFees: 0, financialConcerns: 0, identity: 0, holdDeclined: 0, checkinOverdue: 0, items: [],
 };
 
 /**
@@ -484,6 +484,57 @@ async function attentionItemsFor(db, userId) {
          LIMIT 1
       `).get(r.id, from, until);
       if (!booked) out.push({ id: r.id, first_name: r.first_name, tz: r.tz, from, until });
+    }
+    return out;
+  });
+
+  // ── v1.138.0 — a dose time with no caregiver on shift (feedback 3ba9c4f5) ──
+  //
+  // Pete, 11/20: doses follow the caregiver on shift (src/utils/medShift.js). When nobody is on
+  // shift at a dose's time, "it either goes unassigned or someone takes it. it just needs to be
+  // highlighted that we either have to change the meds time where someone can cover, or it goes
+  // unassigned." So: the next 7 days, every medication time no caregiver covers and no one was
+  // given, one row per task-and-time with the days it falls on. "Leave unassigned" puts that
+  // task-and-time away (90 days); "Change time" opens the task's form on her page.
+  const medUncoveredRows = await safeRows("medUncovered", async () => {
+    const { isDueOn, taskTimes } = require("./careTaskSchedule");
+    const { shiftSessions, coveringSession } = require("./medShift");
+    const mine = await db.prepare(`
+      SELECT DISTINCT cr.id, cr.first_name, cr.timezone AS tz
+        FROM care_recipients cr
+        LEFT JOIN care_teams ct ON ct.care_recipient_id = cr.id
+        LEFT JOIN care_team_members ctm
+          ON ctm.care_team_id = ct.id AND ctm.user_id = ? AND ctm.role = 'leader'
+       WHERE cr.family_user_id = ? OR ctm.user_id IS NOT NULL
+    `).all(userId, userId);
+    const out = [];
+    for (const r of mine) {
+      const tasks = await db.prepare(`
+        SELECT * FROM care_tasks
+         WHERE care_recipient_id = ? AND is_active = 1 AND archived_at IS NULL
+           AND task_type = 'medication' AND assigned_user_id IS NULL
+      `).all(r.id);
+      if (tasks.length === 0) continue;
+      const from = getTodayStringInZone(r.tz || DEFAULT_TIMEZONE);
+      const until = addDays(from, 6);
+      const sessions = await shiftSessions(db, r.id, from, until);
+      for (const t of tasks) {
+        for (const time of taskTimes(t)) {
+          const ref = `${t.id}|${time}`.slice(0, 64);
+          const snoozed = await db.prepare(`
+            SELECT 1 AS x FROM nudge_snoozes
+             WHERE user_id = ? AND kind = 'medUncovered' AND ref = ? AND snoozed_until > NOW()
+          `).get(userId, ref);
+          if (snoozed) continue;
+          const days = [];
+          for (let i = 0; i < 7; i += 1) {
+            const d = addDays(from, i);
+            if (!isDueOn(t, d)) continue;
+            if (!coveringSession(sessions, d, time)) days.push(d);
+          }
+          if (days.length) out.push({ task_id: t.id, title: t.title, time, days, ref, recipient_first: r.first_name, tz: r.tz });
+        }
+      }
     }
     return out;
   });
@@ -962,6 +1013,32 @@ async function attentionItemsFor(db, userId) {
             : "Approved, but not marked paid yet. Pay them, then mark it paid.",
       };
     }),
+    ...medUncoveredRows.map((r) => {
+      const [h, m] = String(r.time).split(":").map(Number);
+      const clock = `${h % 12 || 12}${m ? ":" + String(m).padStart(2, "0") : ""} ${h >= 12 ? "PM" : "AM"}`;
+      const DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+      const dayNames = r.days.map((d) => DOW[new Date(`${d}T12:00:00Z`).getUTCDay()]);
+      const when = r.days.length === 7 ? "every day this week" : dayNames.join(", ");
+      return {
+        kind: "medUncovered",
+        id: `medUncovered:${r.ref}`,
+        title: `No caregiver on shift for ${r.title} at ${clock}`,
+        detail: when,
+        forWhom: r.recipient_first || null,
+        when: null,
+        verb: "Change time",
+        action: null,
+        page: "care-profile",
+        focus: `careTaskEdit:${r.task_id}`,
+        note: "Move the dose to a time someone's there, or leave it unassigned so anyone on the team can take it.",
+        dismiss: {
+          method: "POST",
+          path: "/api/push/attention/snooze",
+          body: { kind: "medUncovered", ref: r.ref, days: 90 },
+          label: "Leave unassigned",
+        },
+      };
+    }),
     ...emptyWeekRows.map((r) => ({
       kind: "emptyWeek",
       // `soft` is the whole contract: the card draws it quietly and leaves it out of its own
@@ -1011,12 +1088,13 @@ async function attentionItemsFor(db, userId) {
     total: reimbursementRows.length + timeChanges + taskRows.length + approvalRows.length
       // v1.120.1 — unpaidRows: an approved reimbursement still to pay; the payer is the blocker.
       + unpaidRows.length + cancelFeeRows.length + financialConcernRows.length + safetyRows.length + holdDeclinedRows.length
-      + checkinOverdueRows.length, // v1.128.0
+      + checkinOverdueRows.length + medUncoveredRows.length, // v1.128.0; v1.138.0 medUncovered — a dose time nobody is on shift for
     cancelFees: cancelFeeRows.length,
     holdDeclined: holdDeclinedRows.length, // v1.117.0
     checkinOverdue: checkinOverdueRows.length, // v1.128.0
     financialConcerns: financialConcernRows.length,
     emptyWeeks: emptyWeekRows.length,
+    medUncovered: medUncoveredRows.length, // v1.138.0
     paymentChecks: paymentArrivedRows.length, // v1.120.0, soft
     unpaidReimbursements: unpaidRows.length, // v1.120.1, counts
     reimbursements: reimbursementRows.length,
