@@ -50,6 +50,32 @@ const ComingUpSpine = window.ComingUpSpine = ({ hero, events, onOpenVisit, onOpe
   }
   points.sort((a, b) => (a.ms - b.ms) || (a.order - b.order));
 
+  // ─── v1.140.0 — the day stays on the card until midnight (Pete, 11/20) ───
+  // "the today bar which Tina showing up a doctors appointment and lunch should stay there maybe
+  // with a progress marker through the day so that anyone who opens the app can look at the
+  // appointment, click on it and see what was said." What's over fades and gets a ✓; an
+  // appointment with notes keeps a "Notes from Tina" line; an orange NOW line marks the time.
+  const nowMs = TimezoneHelper.realNowMs();
+  const evEndMs = (p) => {
+    const ev = p.ev;
+    if (ev && ev.end_time) {
+      const t = TimezoneHelper.buildDateTime(p.date, ev.end_time, ev.timezone || TimezoneHelper.DEFAULT_TZ).getTime();
+      if (t > p.ms) return t;
+    }
+    return p.ms + 60 * 60000;
+  };
+  for (const p of points) {
+    if (p.kind === 'event') { p.endMs = evEndMs(p); p.done = p.endMs <= nowMs; p.started = p.ms <= nowMs; }
+    else p.done = p.ms <= nowMs;
+  }
+  const before = points.some((p) => p.ms <= nowMs);
+  const after = points.some((p) => p.ms > nowMs);
+  if (before && after) {
+    const at = points.findIndex((p) => p.ms > nowMs);
+    points.splice(at, 0, { kind: 'now', ms: nowMs, order: 1.5 });
+  }
+  const doneCount = points.filter((p) => p.kind === 'event' && p.done).length + (hero && hero.isDone ? 1 : 0);
+
   const inVisit = (ms) => !!hero && ms >= hero.startMs && ms <= hero.endMs;
   const tz = hero?.tz || evs[0]?.ev?.timezone || TimezoneHelper.DEFAULT_TZ;
 
@@ -70,13 +96,17 @@ const ComingUpSpine = window.ComingUpSpine = ({ hero, events, onOpenVisit, onOpe
   const allInside = !!hero && evs.length > 0 && evs.every(({ startMs }) => inVisit(startMs));
   const subtitle = `${count} ${count === 1 ? 'thing' : 'things'}`
     + (recipients.length === 1 ? ` for ${recipients[0]}` : '')
-    + (allInside ? ` · all during ${cgFirst}'s visit` : '');
+    + (doneCount ? ` · ${doneCount} done` : allInside ? ` · all during ${cgFirst}'s visit` : '');
 
-  const label = hero?.hasPendingTC ? 'Time change proposed' : hero?.isActive ? 'In progress now' : 'Coming up';
-  const labelColor = hero?.hasPendingTC ? 'var(--color-purple)' : hero?.isActive ? 'var(--color-warning)' : 'var(--accent-color)';
-  const soonMs = Math.min(...points.filter(p => p.kind !== 'end').map(p => p.ms)) - TimezoneHelper.realNowMs();
+  const allDone = points.filter((p) => p.kind !== 'now').every((p) => p.done);
+  const label = hero?.hasPendingTC ? 'Time change proposed' : hero?.isActive ? 'In progress now'
+    : allDone ? 'Today · done' : before ? 'Today' : 'Coming up';
+  const labelColor = hero?.hasPendingTC ? 'var(--color-purple)' : hero?.isActive ? 'var(--color-warning)'
+    : allDone ? 'var(--color-success)' : 'var(--accent-color)';
+  const ahead = points.filter(p => p.kind !== 'end' && p.kind !== 'now' && !p.done).map(p => p.ms);
+  const soonMs = ahead.length ? Math.min(...ahead) - nowMs : Infinity;
   const borderColor = hero?.hasPendingTC ? 'var(--color-purple)' : hero?.isActive ? 'var(--color-warning)'
-    : soonMs <= 3600000 ? 'var(--accent-color)' : 'var(--role-color)';
+    : allDone ? 'var(--border-color)' : soonMs <= 3600000 ? 'var(--accent-color)' : 'var(--role-color)';
 
   const lineSolid = 'var(--role-color)';
   const RAIL = 30;
@@ -144,13 +174,41 @@ const ComingUpSpine = window.ComingUpSpine = ({ hero, events, onOpenVisit, onOpe
         )}
       </div>
 
+      {/* v1.140.0 — how far through the visit we are */}
+      {hero && (hero.isActive || hero.isDone) && hero.endMs > hero.startMs && (() => {
+        const frac = Math.max(0, Math.min(1, (nowMs - hero.startMs) / (hero.endMs - hero.startMs)));
+        return (
+          <div data-testid="spine-progress" style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '-4px 0 14px' }}>
+            <div style={{ flex: 1, height: 6, borderRadius: 3, background: 'var(--border-light)', position: 'relative' }}>
+              <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${frac * 100}%`, borderRadius: 3, background: 'var(--role-color)' }}></div>
+              {frac < 1 && <div style={{ position: 'absolute', left: `${frac * 100}%`, top: -4, width: 14, height: 14, marginLeft: -7, borderRadius: '50%', background: 'var(--accent-color)', boxShadow: '0 0 0 2px var(--bg-card)' }}></div>}
+            </div>
+            <span style={{ fontSize: 11, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{TimezoneHelper.formatTime(hero.time)}{'\u2013'}{TimezoneHelper.formatTime(hero.endTime)}</span>
+          </div>
+        );
+      })()}
+
       {points.map((p, i) => {
+        if (p.kind === 'now') {
+          return (
+            <div key="now" data-testid="spine-now" style={{ display: 'flex', alignItems: 'center', margin: '0 0 10px' }}>
+              <div style={{ width: RAIL, minWidth: RAIL, display: 'flex', justifyContent: 'center' }}>
+                <span style={{ fontSize: 9, fontWeight: 800, color: 'var(--text-on-primary)', background: 'var(--accent-color)', borderRadius: 10, padding: '3px 4px', letterSpacing: 0.3 }}>NOW</span>
+              </div>
+              <div style={{ flex: 1, height: 2, background: 'var(--accent-color)', marginLeft: 4 }}></div>
+              <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--accent-color)', marginLeft: 8 }}>
+                {new Date(nowMs).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: tz })}
+              </span>
+            </div>
+          );
+        }
         if (p.kind === 'start') {
           return (
             <div key="visit-start" style={{ display: 'flex', alignItems: 'stretch' }}>
               {rail(i, { top: 17, size: 18, color: lineSolid })}
               <button type="button" onClick={() => onOpenVisit && onOpenVisit(hero.id)} style={{
                 ...rowBase, background: 'var(--bg-highlight)', border: `1px solid ${lineSolid}`,
+                opacity: hero.isDone ? 0.7 : 1,
               }}>
                 <div style={{
                   width: 38, height: 38, minWidth: 38, borderRadius: '50%', background: lineSolid,
@@ -164,7 +222,7 @@ const ComingUpSpine = window.ComingUpSpine = ({ hero, events, onOpenVisit, onOpe
                         <span style={{ textDecoration: 'line-through', opacity: 0.6 }}>{timeFor(hero.date, hero.time)}</span>{' '}
                         <span style={{ color: 'var(--color-purple)' }}>{TimezoneHelper.formatTime(hero.tcProposedTime)} proposed</span>
                       </>
-                    ) : `${timeFor(hero.date, hero.time)} – ${TimezoneHelper.formatTime(hero.endTime)}`}
+                    ) : `${timeFor(hero.date, hero.time)} – ${TimezoneHelper.formatTime(hero.endTime)}${hero.isDone ? ' \u00b7 \u2713 done' : ''}`}
                   </div>
                   <div style={{ fontSize: 16, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 1 }}>
                     {hero.caregiverName}
@@ -188,19 +246,23 @@ const ComingUpSpine = window.ComingUpSpine = ({ hero, events, onOpenVisit, onOpe
             <div key="visit-end" style={{ display: 'flex', alignItems: 'stretch' }}>
               {rail(i, { top: 10, size: 14, color: lineSolid, hollow: true })}
               <div style={{ flex: 1, padding: '7px 4px 14px', fontSize: 13, color: 'var(--text-secondary)' }}>
-                {oneDay ? '' : `${TimezoneHelper.getDateLabel(hero.endDate, tz)} · `}{TimezoneHelper.formatTime(hero.endTime)} · {cgFirst}'s visit ends
+                {oneDay ? '' : `${TimezoneHelper.getDateLabel(hero.endDate, tz)} · `}{TimezoneHelper.formatTime(hero.endTime)} · {cgFirst}'s visit {p.done ? 'ended \u2713' : 'ends'}
               </div>
             </div>
           );
         }
         const ev = p.ev;
         const inside = inVisit(p.ms);
-        const started = p.ms <= TimezoneHelper.realNowMs();
+        const started = p.started;
+        const done = p.done;
+        const notes = Number(ev.notes_count) || 0;
         return (
           <div key={`ev-${ev.id}`} style={{ display: 'flex', alignItems: 'stretch' }}>
-            {rail(i, { top: 20, size: 14, color: 'var(--accent-color)' })}
-            <button type="button" onClick={() => onOpenEvent && onOpenEvent(ev)} style={{
-              ...rowBase, background: 'var(--bg-secondary, var(--bg-card))', border: '1px solid var(--border-color)',
+            {rail(i, { top: 20, size: 14, color: done ? 'var(--color-success)' : 'var(--accent-color)' })}
+            <button type="button" data-testid={done ? 'spine-event-done' : 'spine-event'} onClick={() => onOpenEvent && onOpenEvent(ev)} style={{
+              ...rowBase, flexWrap: 'wrap', background: 'var(--bg-secondary, var(--bg-card))',
+              border: `1px solid ${done && notes ? 'var(--color-success)' : 'var(--border-color)'}`,
+              opacity: done && !notes ? 0.7 : 1,
             }}>
               <div style={{
                 width: 38, height: 38, minWidth: 38, borderRadius: 10, background: 'var(--border-light)',
@@ -208,7 +270,7 @@ const ComingUpSpine = window.ComingUpSpine = ({ hero, events, onOpenVisit, onOpe
               }} aria-hidden="true">{careEventIcon(ev.category)}</div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--accent-color)' }}>
-                  {started ? 'Happening now' : timeFor(p.date, ev.event_time)}{ev.end_time ? ` – ${TimezoneHelper.formatTime(ev.end_time)}` : ''}
+                  {done ? `${timeFor(p.date, ev.event_time)} \u00b7 \u2713 done` : started ? 'Happening now' : `${timeFor(p.date, ev.event_time)}${ev.end_time ? ` – ${TimezoneHelper.formatTime(ev.end_time)}` : ''}`}
                 </div>
                 <div style={{
                   fontSize: 16, fontWeight: 700, lineHeight: 1.25, marginTop: 1,
@@ -224,6 +286,14 @@ const ComingUpSpine = window.ComingUpSpine = ({ hero, events, onOpenVisit, onOpe
                 )}
               </div>
               <div style={{ fontSize: 20, color: 'var(--text-tertiary)' }} aria-hidden="true">›</div>
+              {notes > 0 && (
+                <div data-testid="spine-notes" style={{ flexBasis: '100%', display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 8,
+                  background: 'var(--role-color)', color: 'var(--text-on-primary)', fontSize: 13, fontWeight: 600 }}>
+                  <span aria-hidden="true">{'\u{1F4DD}'}</span>
+                  <span style={{ flex: 1 }}>{notes === 1 ? `Notes from ${ev.notes_first_author || 'the team'}` : `${notes} notes`} {'\u00b7'} tap to read</span>
+                  <span aria-hidden="true">{'\u203A'}</span>
+                </div>
+              )}
             </button>
           </div>
         );

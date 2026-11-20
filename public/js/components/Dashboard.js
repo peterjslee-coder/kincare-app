@@ -282,6 +282,9 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
       // Same 24h window the session hero uses. The lower bound keeps something that began an
       // hour ago on screen (you may still be at it) and drops what is properly over.
       if (msUntil <= 24 * 3600000 && msUntil > -60 * 60000) ids.add(ev.id);
+      // v1.140.0 — and anything from TODAY stays until midnight, done or not, so what was said
+      // at this morning's appointment is still one tap from Home (Pete, 11/20).
+      else if ((ev.event_date || '').split('T')[0] === TimezoneHelper.getToday(tz) && msUntil <= 0) ids.add(ev.id);
     }
     return ids;
   }, [careEventsUpcoming]);
@@ -1622,7 +1625,30 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
             const bk = ((b.date || '').split('T')[0]) + (b.time || '');
             return ak.localeCompare(bk);
           });
-          const hero = sorted[0];
+          let hero = sorted[0];
+          // v1.140.0 — the visit that already happened today stays on the card until midnight,
+          // unless today still has one to come or under way.
+          const todayStr = TimezoneHelper.getToday(tz);
+          const heroIsToday = hero && ((hero.date || '').split('T')[0] === todayStr || hero.status === 'in_progress');
+          if (!heroIsToday) {
+            const doneToday = (data?.recentlyCompleted || [])
+              .filter((s) => s.caregiverName && (s.date || '').split('T')[0] === todayStr)
+              .sort((a, b) => String(b.time || '').localeCompare(String(a.time || '')))[0];
+            if (doneToday) {
+              if (imminentId) setTimeout(() => setImminentId(null), 0); // tomorrow's visit stays in Next Up
+              const dStart = TimezoneHelper.buildDateTime(todayStr, doneToday.time || '00:00', tz).getTime();
+              const dEnd = dStart + ((doneToday.durationHours || 2) * 3600000);
+              const endT = (() => { const [hh, mm] = String(doneToday.time || '00:00').split(':').map(Number); const t = (hh || 0) * 60 + (mm || 0) + Math.round((doneToday.durationHours || 2) * 60); return `${String(Math.floor(t / 60) % 24).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`; })();
+              return {
+                id: doneToday.id, date: todayStr, time: doneToday.time, endTime: endT, endDate: todayStr, tz,
+                startMs: dStart, endMs: dEnd, msUntil: dStart - nowMs, isActive: false, isDone: true,
+                countdownStr: '\u2713 Visit done', countdownColor: 'var(--color-success)',
+                caregiverName: doneToday.caregiverName, recipientName: doneToday.recipientName,
+                durationHours: doneToday.durationHours, serviceType: doneToday.serviceType ? formatServiceType(doneToday.serviceType) : '',
+                onMyWay: false, hasPendingTC: false,
+              };
+            }
+          }
           if (!hero) { if (imminentId) setImminentId(null); return null; }
           const sDate = (hero.date || '').split('T')[0];
           const sessionDT = TimezoneHelper.buildDateTime(sDate, hero.time || '00:00', tz);

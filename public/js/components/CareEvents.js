@@ -521,6 +521,25 @@ const CareEventSheet = window.CareEventSheet = ({ ev, canManage, onClose, onEdit
           <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 8 }}>
             What happened
           </div>
+          {/* v1.140.0 — say plainly that it's already filed. Pete read Tina's dental transcript
+              here, saw a grey "Add to the care record" button under it, and took it to mean the
+              notes still needed adding — they were in the record the moment she stopped. */}
+          {Array.isArray(notes) && notes.length > 0 && (() => {
+            const first = notes[0];
+            const at = first.created_at ? new Date(String(first.created_at).replace(' ', 'T')).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: ev.timezone || undefined }) : '';
+            return (
+              <div data-testid="event-notes-filed" style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '10px 12px', marginBottom: 10, borderRadius: 10,
+                background: 'var(--color-success-bg)', border: '1px solid var(--color-success)' }}>
+                <span aria-hidden="true" style={{ color: 'var(--color-success)', fontWeight: 800 }}>{'\u2713'}</span>
+                <span style={{ fontSize: 13, color: 'var(--text-primary)', lineHeight: 1.4 }}>
+                  <b>In {ev.recipientFirstName || 'their'}{ev.recipientFirstName ? '\u2019s' : ''} care record</b><br />
+                  <span style={{ color: 'var(--text-secondary)' }}>
+                    Filed by {first.author_first_name || 'the team'}{at ? ` at ${at}` : ''}{notes.length > 1 ? ` \u00b7 ${notes.length} notes` : ''} {'\u00b7'} the team was told
+                  </span>
+                </span>
+              </div>
+            );
+          })()}
           {notes === null ? (
             <div style={{ fontSize: 13, color: 'var(--text-tertiary)' }}>Loading{'\u2026'}</div>
           ) : notes.length === 0 ? (
@@ -531,9 +550,31 @@ const CareEventSheet = window.CareEventSheet = ({ ev, canManage, onClose, onEdit
             <div style={{ marginBottom: 10 }}>
               {notes.map((n) => (
                 <div key={n.id} style={{ padding: '8px 0', borderBottom: '1px solid var(--border-light)' }}>
-                  <div style={{ fontSize: 13.5, color: 'var(--text-primary)', lineHeight: 1.5, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-                    {linkify(n.content)}
-                  </div>
+                  {/* v1.140.0 — a recording's note is summary, then "— Transcript —", then every
+                      word. The summary reads first; the transcript opens on a tap. */}
+                  {(() => {
+                    const c = String(n.content || '');
+                    const cut = c.indexOf('\u2014 Transcript \u2014');
+                    const head = cut >= 0 ? c.slice(0, cut).trim() : c;
+                    const rest = cut >= 0 ? c.slice(cut + '\u2014 Transcript \u2014'.length).trim() : '';
+                    return (
+                      <React.Fragment>
+                        <div style={{ fontSize: 13.5, color: 'var(--text-primary)', lineHeight: 1.5, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                          {linkify(head)}
+                        </div>
+                        {rest && (
+                          <details data-testid="event-transcript" style={{ marginTop: 8 }}>
+                            <summary style={{ cursor: 'pointer', fontSize: 13.5, fontWeight: 600, color: 'var(--role-color)', minHeight: 32, display: 'flex', alignItems: 'center' }}>
+                              Read the full transcript
+                            </summary>
+                            <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5, whiteSpace: 'pre-wrap', wordBreak: 'break-word', marginTop: 6 }}>
+                              {linkify(rest)}
+                            </div>
+                          </details>
+                        )}
+                      </React.Fragment>
+                    );
+                  })()}
                   {/* v1.106.38 — a note filed against an appointment is the same row in the
                       same table as any other note, photo included. This list read has_photo
                       off the wire and dropped it, so the picture of the discharge sheet went
@@ -689,15 +730,20 @@ const CareEventSheet = window.CareEventSheet = ({ ev, canManage, onClose, onEdit
             </div>
           )}
 
+          {/* v1.140.0 — this box is for a NEW note of your own. Labelled as such, and its button
+              appears only once there is something to add. */}
+          <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', margin: '6px 0 6px' }}>
+            {Array.isArray(notes) && notes.length ? 'Add your own note' : 'Add a note'}
+          </div>
           <textarea value={newNote} onChange={(e) => setNewNote(e.target.value)}
-            placeholder={`e.g. "Dr. Lambert started a new blood-pressure tablet, mornings. Back in six weeks."`}
+            placeholder={Array.isArray(notes) && notes.length ? 'Anything the notes above missed\u2026' : `e.g. "Dr. Lambert started a new blood-pressure tablet, mornings. Back in six weeks."`}
             rows={3}
             style={{
               width: '100%', padding: '10px 12px', border: '1px solid var(--border-color)', borderRadius: 8,
               fontSize: 14, fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box',
               background: 'var(--bg-surface)', color: 'var(--text-primary)',
             }} />
-          <button onClick={addNote} disabled={addingNote || !newNote.trim()}
+          {!!newNote.trim() && <button onClick={addNote} disabled={addingNote || !newNote.trim()}
             style={{
               marginTop: 8, minHeight: 44, padding: '0 18px', borderRadius: 10, border: 'none',
               background: (addingNote || !newNote.trim()) ? 'var(--border-light)' : 'var(--role-color)',
@@ -705,7 +751,7 @@ const CareEventSheet = window.CareEventSheet = ({ ev, canManage, onClose, onEdit
               cursor: (addingNote || !newNote.trim()) ? 'not-allowed' : 'pointer',
             }}>
             {addingNote ? '\u2026' : 'Add to the care record'}
-          </button>
+          </button>}
           <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>
             Goes in {ev.recipientFirstName || 'their'} care notes, and the team is told.
           </div>
@@ -993,6 +1039,7 @@ const CareEventsSection = window.CareEventsSection = ({ recipientId, recipientFi
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
   const [sheet, setSheet] = useState(null);
+  const [showPast, setShowPast] = useState(false); // v1.140.0 — Coming up | Past
 
   const load = async () => {
     try {
@@ -1005,7 +1052,15 @@ const CareEventsSection = window.CareEventsSection = ({ recipientId, recipientFi
   if (!data) return null;
   const { events, canManage, today } = data;
   const upcoming = events.filter(ev => ev.event_date >= today);
-  const past = events.filter(ev => ev.event_date < today);
+  const past = events.filter(ev => ev.event_date < today)
+    .sort((a, b) => `${b.event_date}${b.event_time || ''}`.localeCompare(`${a.event_date}${a.event_time || ''}`));
+  const notesLine = (ev) => (Number(ev.notes_count) > 0 ? (
+    <div style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--color-success)', marginTop: 4 }}>
+      {'\u{1F4DD}'} {Number(ev.notes_count) === 1 ? `Notes from ${ev.notes_first_author || 'the team'}` : `${ev.notes_count} notes`} {'\u00b7'} in the care record {'\u203A'}
+    </div>
+  ) : null);
+  const tabBtn = (on) => ({ padding: '7px 14px', minHeight: 36, borderRadius: 18, fontSize: 13, fontWeight: on ? 700 : 500, cursor: 'pointer',
+    border: on ? 'none' : '1px solid var(--border-color)', background: on ? 'var(--role-color)' : 'var(--bg-surface)', color: on ? 'var(--text-on-primary)' : 'var(--text-primary)' });
 
   return (
     <div className="card">
@@ -1043,7 +1098,16 @@ const CareEventsSection = window.CareEventsSection = ({ recipientId, recipientFi
         </div>
       ) : (
         <>
-          {upcoming.map(ev => (
+          {past.length > 0 && (
+            <div style={{ display: 'flex', gap: 6, marginBottom: 6 }}>
+              <button type="button" onClick={() => setShowPast(false)} style={tabBtn(!showPast)}>Coming up</button>
+              <button type="button" data-testid="events-past-tab" onClick={() => setShowPast(true)} style={tabBtn(showPast)}>Past</button>
+            </div>
+          )}
+          {!showPast && upcoming.length === 0 && (
+            <div style={{ fontSize: 13, color: 'var(--text-tertiary)', padding: '8px 0' }}>Nothing coming up.</div>
+          )}
+          {(showPast ? past : upcoming).map(ev => (
             <div key={ev.id} onClick={() => setSheet(ev)}
               style={{ padding: '10px 0', borderBottom: '1px solid var(--border-light)', cursor: 'pointer' }}>
               <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-primary)' }}>
@@ -1052,13 +1116,9 @@ const CareEventsSection = window.CareEventsSection = ({ recipientId, recipientFi
               <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>
                 {careEventWhen(ev)}{ev.location ? ` · ${ev.location}` : ''}
               </div>
+              {notesLine(ev)}
             </div>
           ))}
-          {past.length > 0 && (
-            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 8 }}>
-              {past.length} recent past event{past.length > 1 ? 's' : ''}
-            </div>
-          )}
         </>
       )}
       </div>

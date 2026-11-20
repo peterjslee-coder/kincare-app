@@ -31,6 +31,23 @@ const WINDOW_DAYS = 45;
 
 const ENTRIES = [
   {
+    id: "day-card-stays",
+    version: "1.140.0",
+    date: "2026-11-20",
+    audience: ["family", "caregiver"],
+    title: "Today's card stays all day, notes and all",
+    body: "The Today card on Home now keeps the whole day until midnight, with a NOW marker and a progress bar through the visit. A finished appointment gets a check, and if someone recorded or wrote notes there's a Notes line to tap; the appointment says plainly that they're already in the care record.",
+    howTo: [
+      "On Home, find the Today card",
+      "Tap Notes from Sam under a finished appointment to read what was said",
+      "Tap Read the full transcript for every word",
+      "Later on: Loved One, Events, Past",
+    ],
+    examples: ["What did the dentist say this morning?"],
+    preview: "dayCardStays",
+    action: { label: "Show me", page: "dashboard" },
+  },
+  {
     id: "change-the-series",
     version: "1.139.0",
     date: "2026-11-20",

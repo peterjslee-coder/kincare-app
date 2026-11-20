@@ -83,6 +83,22 @@ const WN_PREVIEWS = {
     );
   },
   // v1.134.0 — the caregiver home's optional sections close
+  // v1.140.0 — the day card stays (made-up names)
+  dayCardStays: () => (
+    <div style={{ padding: 12, borderRadius: 12, border: '1px solid var(--border-color)', background: 'var(--bg-card)', fontSize: 12.5 }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent-color)' }}>TODAY</div>
+      <div style={{ ...wnCard, color: 'var(--text-secondary)', opacity: 0.75 }}>9:00 AM {'\u00b7'} {'\u2713'} Sam arrived</div>
+      <div style={{ ...wnCard, color: 'var(--text-primary)', border: '1px solid var(--color-success)' }}>
+        <div>10:30 AM {'\u00b7'} {'\u2713'} done {'\u00b7'} <b>Dentist</b></div>
+        <div style={{ marginTop: 4, padding: '4px 8px', borderRadius: 6, background: 'var(--role-color)', color: 'var(--text-on-primary)', fontWeight: 600 }}>{'\u{1F4DD}'} Notes from Sam {'\u00b7'} tap to read</div>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '6px 0' }}>
+        <span style={{ fontSize: 9, fontWeight: 800, background: 'var(--accent-color)', color: 'var(--text-on-primary)', borderRadius: 8, padding: '2px 4px' }}>NOW</span>
+        <span style={{ flex: 1, height: 2, background: 'var(--accent-color)' }}></span>
+      </div>
+      <div style={{ ...wnCard, color: 'var(--text-secondary)' }}>5:00 PM {'\u00b7'} Sam{'\u2019'}s visit ends</div>
+    </div>
+  ),
   // v1.139.0 — change the series (made-up names)
   changeSeries: () => (
     <div style={{ padding: 12, borderRadius: 12, border: '1px solid var(--border-color)', background: 'var(--bg-card)', fontSize: 12.5 }}>
