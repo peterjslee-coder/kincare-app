@@ -25,6 +25,18 @@ const wnHead = { fontSize: 10.5, fontWeight: 700, color: 'var(--text-muted)', te
 const wnPill = (bg, fg) => ({ padding: '4px 10px', borderRadius: 8, background: bg, color: fg, fontSize: 11, fontWeight: 700 });
 
 const WN_PREVIEWS = {
+  // v1.144.0 — the plainer visit summary with its "since recent visits" line (made-up names)
+  plainSummary: () => (
+    <div style={{ padding: 12, borderRadius: 12, border: '1px solid var(--border-color)', background: 'var(--bg-card)' }}>
+      <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 6 }}>Visit report</div>
+      <div style={{ fontSize: 12.5, color: 'var(--text-secondary)', lineHeight: 1.45 }}>
+        Ate all of breakfast and about half of lunch. Long nap after lunch. Walked to the mailbox with Sam.
+      </div>
+      <div style={{ fontSize: 12.5, color: 'var(--text-primary)', lineHeight: 1.45, marginTop: 6 }}>
+        <span style={{ fontWeight: 700 }}>Since recent visits:</span> lunch has been half or less three visits in a row.
+      </div>
+    </div>
+  ),
   // v1.133.0 — the + in the bottom bar and its four choices
   quickAdd: () => (
     <div style={{ padding: '12px 10px 10px', borderRadius: 12, border: '1px solid var(--border-color)', background: 'var(--bg-card)' }}>

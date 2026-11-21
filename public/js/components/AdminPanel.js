@@ -54,6 +54,18 @@ const FamilyCompPanel = ({ userId }) => {
   const { showToast } = useToast();
   const [rows, setRows] = React.useState(null);
   const [busy, setBusy] = React.useState(null);
+  // v1.144.0 — the loved one's own phone (Kit, 11/21: typed his dad's number wrong).
+  const [phoneEdit, setPhoneEdit] = React.useState(null); // { id, value }
+  const savePhone = async (r) => {
+    setBusy(r.id + 'phone');
+    try {
+      const res = await apiFetch(`/api/admin/care-recipients/${r.id}/phone`, { method: 'PUT', body: JSON.stringify({ phone: phoneEdit.value }) });
+      const d = res ? await res.json().catch(() => ({})) : {};
+      if (res?.ok) { showToast(`${r.name || 'Loved one'}'s phone is now ${d.phone}`, 'success'); setPhoneEdit(null); await load(); }
+      else showToast(d.error || "Couldn't change the phone", 'error');
+    } catch { showToast('Network error', 'error'); }
+    setBusy(null);
+  };
   const load = React.useCallback(async () => {
     try {
       const res = await apiFetch(`/api/admin/users/${userId}/family-comp`);
@@ -84,6 +96,26 @@ const FamilyCompPanel = ({ userId }) => {
           <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{r.name || 'Unnamed'}</div>
           <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>
             {r.members} on the team · {r.pendingInvites} invite{r.pendingInvites === 1 ? '' : 's'} pending{r.timezone ? ` · ${r.timezone}` : ''}
+          </div>
+          <div data-testid="family-comp-phone" style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', fontSize: 12, color: 'var(--text-secondary)', marginBottom: 8 }}>
+            {phoneEdit && phoneEdit.id === r.id ? (
+              <>
+                <input type="tel" value={phoneEdit.value} autoFocus
+                  onChange={e => setPhoneEdit({ id: r.id, value: e.target.value.trim().startsWith('+') ? e.target.value : formatPhone(e.target.value) })}
+                  placeholder="(540) 555-1234 or +44…"
+                  style={{ width: 170, padding: '5px 8px', borderRadius: 6, border: '1px solid var(--border-color)', fontSize: 13 }} />
+                <button disabled={busy === r.id + 'phone'} onClick={() => savePhone(r)} style={btn}>Save</button>
+                <button onClick={() => setPhoneEdit(null)} style={{ ...btn, fontWeight: 500 }}>Cancel</button>
+                <span style={{ flexBasis: '100%', fontSize: 11, color: 'var(--text-muted)' }}>A new number has to say yes to texts again before any are sent.</span>
+              </>
+            ) : (
+              <>
+                <span>📱 {r.phone || 'No phone on file'}</span>
+                <button onClick={() => setPhoneEdit({ id: r.id, value: r.phone || '' })} style={{ ...btn, padding: '3px 10px', fontWeight: 500 }}>
+                  {r.phone ? 'Change' : 'Add'}
+                </button>
+              </>
+            )}
           </div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <button disabled={busy === r.id + 'comp'} onClick={() => flip(r, 'comp', !r.compedAt)} style={btn}>

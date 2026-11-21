@@ -133,7 +133,7 @@ const VisitReportCard = window.VisitReportCard = ({ report, summaryText }) => {
         )}
       </div>
       {summaryText && (
-        <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.45, marginBottom: 10 }}>{summaryText}</div>
+        <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.45, marginBottom: 10, whiteSpace: 'pre-line' }}>{summaryText}</div>
       )}
       {report && report.groups.map((g) => (
         <div key={g.id} style={{ marginBottom: 10 }}>
