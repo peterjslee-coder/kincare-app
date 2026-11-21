@@ -51,6 +51,7 @@ const SPECIAL_FEE_FLOOR = 5;
 // rule. Fast-track = the ID gate waived for the team AND anyone invited to it (recorded as
 // waived, never verified). Both apply to people added later, and both undo.
 const FamilyCompPanel = ({ userId }) => {
+  const { showToast } = useToast();
   const [rows, setRows] = React.useState(null);
   const [busy, setBusy] = React.useState(null);
   const load = React.useCallback(async () => {
