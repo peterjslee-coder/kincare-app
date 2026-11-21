@@ -58,3 +58,8 @@ describe("v1.141.0 — the next day's rows: overlaps and gaps", () => {
     expect(rows[1]).toMatchObject({ from: 720, to: 780 });
   });
 });
+
+test("v1.141.1 — no escape sequence sits in bare JSX text (it renders as the six characters)", () => {
+  const src = raw("public/js/components/ComingUpSpine.js");
+  expect(src).not.toMatch(/\}\\u00b7 \{today/);
+});
