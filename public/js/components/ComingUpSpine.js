@@ -35,6 +35,157 @@ const _spineInitials = (name) => String(name || '?').trim().split(/\s+/).slice(0
 
 const _spineFirst = (name) => String(name || '').trim().split(/\s+/)[0] || '';
 
+// ─── v1.141.0 — finished things are one line (Pete, 11/20) ───
+const DoneLine = window.SpineDoneLine = ({ time, label, notes, onOpen }) => (
+  <button type="button" data-testid="spine-done-line" onClick={onOpen} style={{
+    flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 8, padding: '6px 4px', minHeight: 36, marginBottom: 2,
+    background: 'none', border: 'none', textAlign: 'left', cursor: onOpen ? 'pointer' : 'default', fontSize: 13.5, color: 'var(--text-secondary)',
+  }}>
+    <span aria-hidden="true" style={{ color: 'var(--color-success)', fontWeight: 800 }}>{'\u2713'}</span>
+    <span style={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{time}</span>
+    <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: notes ? 'var(--text-primary)' : 'var(--text-secondary)' }}>{label}</span>
+    {notes > 0 && (
+      <span data-testid="spine-notes" style={{ fontSize: 12, fontWeight: 700, color: 'var(--role-color)', background: 'var(--bg-highlight)', padding: '4px 9px', borderRadius: 12, whiteSpace: 'nowrap' }}>
+        {'\u{1F4DD}'} {notes > 1 ? `${notes} notes` : 'Notes'} {'\u203A'}
+      </span>
+    )}
+  </button>
+);
+
+const _hm = (t) => { const [h, m] = String(t || '0:0').split(':').map(Number); return (h || 0) * 60 + (m || 0); };
+const _clock = (min) => {
+  const m = ((min % 1440) + 1440) % 1440;
+  const h = Math.floor(m / 60); const mm = m % 60;
+  return `${h % 12 || 12}${mm ? ':' + String(mm).padStart(2, '0') : ''} ${h >= 12 ? 'PM' : 'AM'}`;
+};
+// "8 AM–2 PM", "3–9 PM": drop the first AM/PM when both share it.
+const _range = (a, b) => {
+  const A = _clock(a); const B = _clock(b);
+  const sa = A.slice(-2); const sb = B.slice(-2);
+  return sa === sb ? `${A.slice(0, -3)}\u2013${B}` : `${A}\u2013${B}`;
+};
+
+/**
+ * Pure: the next day's visits as rows, with what sits between two of them — an overlap
+ * ("both there") or a gap ("nobody there") — and the appointments that fall inside each visit.
+ * visits: [{id, name, start, end}] in minutes from that day's midnight; events: [{ev, at}].
+ */
+function nextDayRows(visits, events) {
+  const vs = [...visits].sort((a, b) => a.start - b.start);
+  const rows = [];
+  const loose = [];
+  const riders = new Map();
+  for (const e of events) {
+    const host = vs.find((v) => e.at >= v.start && e.at < v.end);
+    if (host) { if (!riders.has(host.id)) riders.set(host.id, []); riders.get(host.id).push(e); }
+    else loose.push(e);
+  }
+  vs.forEach((v, i) => {
+    if (i > 0) {
+      const prevEnd = Math.max(...vs.slice(0, i).map((x) => x.end));
+      if (v.start < prevEnd) rows.push({ kind: 'overlap', from: v.start, to: Math.min(prevEnd, v.end) });
+      else if (v.start > prevEnd) rows.push({ kind: 'gap', from: prevEnd, to: v.start });
+    }
+    rows.push({ kind: 'visit', v, riders: riders.get(v.id) || [] });
+  });
+  for (const e of loose) rows.push({ kind: 'event', e });
+  rows.sort((a, b) => {
+    const ka = a.kind === 'visit' ? a.v.start : a.kind === 'event' ? a.e.at : a.from;
+    const kb = b.kind === 'visit' ? b.v.start : b.kind === 'event' ? b.e.at : b.from;
+    return ka - kb;
+  });
+  return rows;
+}
+window.nextDayRows = nextDayRows;
+
+/**
+ * v1.141.0 — when nothing is left today (Pete chose C on the 11/20 canvas): today folds into
+ * one green line — notes still a tap away — and the next day's caregivers lead, one short row
+ * each. Overlaps get a gold band ("Both there"), gaps a grey one ("Nobody there").
+ */
+const DayFoldCard = window.DayFoldCard = ({ today, next, onOpenVisit, onOpenEvent }) => {
+  const [open, setOpen] = useState(false);
+  const notes = (today?.items || []).reduce((n, it) => n + (Number(it.notes) || 0), 0);
+  const who = [...new Set((today?.items || []).filter((it) => it.kind === 'visit').map((it) => _spineFirst(it.name)))].join(', ');
+  const rows = next ? nextDayRows(next.visits, next.events) : [];
+  const band = (key, color, bg, icon, text) => (
+    <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 12px', margin: '0 0', borderLeft: '1px solid var(--border-color)', borderRight: '1px solid var(--border-color)',
+      background: bg, fontSize: 12, fontWeight: 600, color }}>
+      <span aria-hidden="true">{icon}</span><span>{text}</span>
+    </div>
+  );
+  return (
+    <div data-testid="day-fold" style={{ background: 'var(--bg-card)', border: '2px solid var(--role-color)', borderRadius: 16, padding: 14, marginBottom: 16 }}>
+      {today && today.items.length > 0 && (
+        <React.Fragment>
+          <button type="button" data-testid="day-fold-today" onClick={() => setOpen(!open)} aria-expanded={open} style={{
+            width: '100%', display: 'flex', alignItems: 'center', gap: 8, padding: '9px 10px', minHeight: 44, borderRadius: 10, border: 'none',
+            background: 'var(--color-success-bg)', color: 'var(--text-primary)', fontSize: 13.5, textAlign: 'left', cursor: 'pointer',
+          }}>
+            <span aria-hidden="true" style={{ color: 'var(--color-success)', fontWeight: 800 }}>{'\u2713'}</span>
+            <span style={{ flex: 1, minWidth: 0 }}><b>Today</b> <span style={{ color: 'var(--text-secondary)' }}>{who ? `\u00b7 ${who} ` : ''}\u00b7 {today.items.length} done</span></span>
+            {notes > 0 && <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--role-color)' }}>{'\u{1F4DD}'} {notes} {notes === 1 ? 'note' : 'notes'}</span>}
+            <span aria-hidden="true" style={{ color: 'var(--text-tertiary)', transform: open ? 'rotate(90deg)' : 'none', transition: 'transform 0.2s' }}>{'\u203A'}</span>
+          </button>
+          {open && (
+            <div style={{ padding: '4px 2px 0' }}>
+              {today.items.map((it) => (
+                <DoneLine key={it.key} time={it.time} label={it.label} notes={it.notes}
+                  onOpen={it.kind === 'event' ? () => onOpenEvent && onOpenEvent(it.ev) : () => onOpenVisit && onOpenVisit(it.id)} />
+              ))}
+            </div>
+          )}
+        </React.Fragment>
+      )}
+      {next && rows.length > 0 && (
+        <React.Fragment>
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent-color)', letterSpacing: '0.5px', textTransform: 'uppercase', margin: today && today.items.length ? '14px 0 6px' : '0 0 6px' }}>
+            Next {'\u00b7'} {next.label}
+          </div>
+          <div>
+            {rows.map((r, i) => {
+              const first = i === 0; const last = i === rows.length - 1;
+              const radius = `${first ? 10 : 0}px ${first ? 10 : 0}px ${last ? 10 : 0}px ${last ? 10 : 0}px`;
+              if (r.kind === 'overlap') return band(`o${i}`, 'var(--color-warning)', 'var(--color-warning-bg)', '\u21C5', `Both there ${_range(r.from, r.to)} \u00b7 ${r.to - r.from} min hand-off`);
+              if (r.kind === 'gap') return band(`g${i}`, 'var(--text-secondary)', 'var(--bg-elevated)', '\u2013', `Nobody there ${_range(r.from, r.to)}`);
+              if (r.kind === 'event') {
+                return (
+                  <button key={`e${r.e.ev.id}`} type="button" onClick={() => onOpenEvent && onOpenEvent(r.e.ev)} style={{
+                    width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', minHeight: 44, borderRadius: radius,
+                    border: '1px solid var(--border-color)', background: 'none', color: 'var(--text-primary)', fontSize: 14, textAlign: 'left', cursor: 'pointer',
+                  }}>
+                    <span aria-hidden="true" style={{ width: 30, textAlign: 'center', fontSize: 16 }}>{careEventIcon(r.e.ev.category)}</span>
+                    <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      <span style={{ color: 'var(--text-secondary)' }}>{_clock(r.e.at)}</span> {r.e.ev.title}
+                    </span>
+                  </button>
+                );
+              }
+              const v = r.v;
+              return (
+                <div key={`v${v.id}`} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', minHeight: 44, borderRadius: radius,
+                  border: '1px solid var(--border-color)', borderTop: first || rows[i - 1].kind === 'overlap' || rows[i - 1].kind === 'gap' ? '1px solid var(--border-color)' : 'none' }}>
+                  <button type="button" data-testid="day-fold-visit" onClick={() => onOpenVisit && onOpenVisit(v.id)} style={{
+                    flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 10, background: 'none', border: 'none', padding: 0, textAlign: 'left', cursor: 'pointer', color: 'var(--text-primary)',
+                  }}>
+                    <span aria-hidden="true" style={{ width: 30, height: 30, minWidth: 30, borderRadius: '50%', background: 'var(--role-color)', color: 'var(--text-on-primary)', fontSize: 12, fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>{_spineInitials(v.name)}</span>
+                    <span style={{ fontSize: 14 }}><b>{_spineFirst(v.name)}</b> <span style={{ color: 'var(--text-secondary)' }}>{_range(v.start, v.end)}</span></span>
+                  </button>
+                  {r.riders.map((e) => (
+                    <button key={e.ev.id} type="button" onClick={() => onOpenEvent && onOpenEvent(e.ev)} style={{
+                      background: 'none', border: 'none', padding: '4px 0', fontSize: 11.5, fontWeight: 600, color: 'var(--accent-color)', cursor: 'pointer', whiteSpace: 'nowrap', maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis',
+                    }}>+ {e.ev.title.split(/\s+/).slice(0, 2).join(' ')} {_clock(e.at)}</button>
+                  ))}
+                </div>
+              );
+            })}
+          </div>
+        </React.Fragment>
+      )}
+    </div>
+  );
+};
+
 const ComingUpSpine = window.ComingUpSpine = ({ hero, events, onOpenVisit, onOpenEvent }) => {
   const evs = events || [];
   if (!hero && !evs.length) return null;
@@ -256,6 +407,17 @@ const ComingUpSpine = window.ComingUpSpine = ({ hero, events, onOpenVisit, onOpe
         const started = p.started;
         const done = p.done;
         const notes = Number(ev.notes_count) || 0;
+        // v1.141.0 — Pete, 11/20: "As the appointments pass, let's minimize what they look
+        // like." A finished appointment is one line: ✓, time, name, and Notes if there are any.
+        if (done) {
+          return (
+            <div key={`ev-${ev.id}`} style={{ display: 'flex', alignItems: 'stretch' }}>
+              {rail(i, { top: 12, size: 10, color: 'var(--color-success)' })}
+              <DoneLine time={ev.event_time ? TimezoneHelper.formatTime(ev.event_time) : 'All day'} label={ev.title} notes={notes}
+                onOpen={() => onOpenEvent && onOpenEvent(ev)} />
+            </div>
+          );
+        }
         return (
           <div key={`ev-${ev.id}`} style={{ display: 'flex', alignItems: 'stretch' }}>
             {rail(i, { top: 20, size: 14, color: done ? 'var(--color-success)' : 'var(--accent-color)' })}
