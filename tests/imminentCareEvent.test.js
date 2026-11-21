@@ -131,7 +131,8 @@ describe("I3 — promoted means moved, not copied", () => {
     const block = dash.slice(i, i + 1200);
     expect(block).toMatch(/\.sort\(\(a, b\) => a\.startMs - b\.startMs\)/);
     expect(block).not.toMatch(/\.slice\(0,/);
-    expect(block).toMatch(/<ComingUpSpine hero=\{heroInfo\} events=\{eventRows\}/);
+    // v1.141.0 — the folded-day branch now sits between the list and the render.
+    expect(dash).toMatch(/<ComingUpSpine hero=\{heroInfo\} events=\{eventRows\}/);
   });
 
   test("it sits above Next Up, one card for the visit and the appointments", () => {

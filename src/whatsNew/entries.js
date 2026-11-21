@@ -31,6 +31,22 @@ const WINDOW_DAYS = 45;
 
 const ENTRIES = [
   {
+    id: "day-folds",
+    version: "1.141.0",
+    date: "2026-11-20",
+    audience: ["family", "caregiver"],
+    title: "A shorter Today card, and who's next",
+    body: "Finished appointments shrink to one line, with their notes still a tap away. Once nothing is left today, the day folds into one green line and the next day's caregivers lead, one row each, with any overlap or gap between them called out.",
+    howTo: [
+      "On Home, tap the green Today line to see what happened",
+      "Read the Next rows for who is coming, and when",
+      "A gold band means two caregivers overlap; a grey one means nobody is there",
+    ],
+    examples: ["Who's with Mom tomorrow?"],
+    preview: "dayFolds",
+    action: { label: "Show me", page: "dashboard" },
+  },
+  {
     id: "day-card-stays",
     version: "1.140.0",
     date: "2026-11-20",

@@ -83,6 +83,16 @@ const WN_PREVIEWS = {
     );
   },
   // v1.134.0 — the caregiver home's optional sections close
+  // v1.141.0 — today folds, the next day leads (made-up names)
+  dayFolds: () => (
+    <div style={{ padding: 12, borderRadius: 12, border: '1px solid var(--border-color)', background: 'var(--bg-card)', fontSize: 12.5 }}>
+      <div style={{ ...wnCard, background: 'var(--color-success-bg)', color: 'var(--text-primary)' }}>{'\u2713'} <b>Today</b> {'\u00b7'} Sam {'\u00b7'} 3 done</div>
+      <div style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--accent-color)', margin: '8px 0 4px' }}>NEXT {'\u00b7'} TOMORROW, SUN</div>
+      <div style={{ ...wnCard, color: 'var(--text-primary)', marginBottom: 0 }}><b>Jo</b> 8 AM{'\u2013'}2 PM</div>
+      <div style={{ padding: '3px 10px', fontSize: 11.5, fontWeight: 600, color: 'var(--color-warning)', background: 'var(--color-warning-bg)' }}>{'\u21C5'} Both there 1:30{'\u2013'}2 PM</div>
+      <div style={{ ...wnCard, color: 'var(--text-primary)' }}><b>Sam</b> 1:30{'\u2013'}5:30 PM</div>
+    </div>
+  ),
   // v1.140.0 — the day card stays (made-up names)
   dayCardStays: () => (
     <div style={{ padding: 12, borderRadius: 12, border: '1px solid var(--border-color)', background: 'var(--bg-card)', fontSize: 12.5 }}>

@@ -1625,30 +1625,7 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
             const bk = ((b.date || '').split('T')[0]) + (b.time || '');
             return ak.localeCompare(bk);
           });
-          let hero = sorted[0];
-          // v1.140.0 — the visit that already happened today stays on the card until midnight,
-          // unless today still has one to come or under way.
-          const todayStr = TimezoneHelper.getToday(tz);
-          const heroIsToday = hero && ((hero.date || '').split('T')[0] === todayStr || hero.status === 'in_progress');
-          if (!heroIsToday) {
-            const doneToday = (data?.recentlyCompleted || [])
-              .filter((s) => s.caregiverName && (s.date || '').split('T')[0] === todayStr)
-              .sort((a, b) => String(b.time || '').localeCompare(String(a.time || '')))[0];
-            if (doneToday) {
-              if (imminentId) setTimeout(() => setImminentId(null), 0); // tomorrow's visit stays in Next Up
-              const dStart = TimezoneHelper.buildDateTime(todayStr, doneToday.time || '00:00', tz).getTime();
-              const dEnd = dStart + ((doneToday.durationHours || 2) * 3600000);
-              const endT = (() => { const [hh, mm] = String(doneToday.time || '00:00').split(':').map(Number); const t = (hh || 0) * 60 + (mm || 0) + Math.round((doneToday.durationHours || 2) * 60); return `${String(Math.floor(t / 60) % 24).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`; })();
-              return {
-                id: doneToday.id, date: todayStr, time: doneToday.time, endTime: endT, endDate: todayStr, tz,
-                startMs: dStart, endMs: dEnd, msUntil: dStart - nowMs, isActive: false, isDone: true,
-                countdownStr: '\u2713 Visit done', countdownColor: 'var(--color-success)',
-                caregiverName: doneToday.caregiverName, recipientName: doneToday.recipientName,
-                durationHours: doneToday.durationHours, serviceType: doneToday.serviceType ? formatServiceType(doneToday.serviceType) : '',
-                onMyWay: false, hasPendingTC: false,
-              };
-            }
-          }
+          const hero = sorted[0];
           if (!hero) { if (imminentId) setImminentId(null); return null; }
           const sDate = (hero.date || '').split('T')[0];
           const sessionDT = TimezoneHelper.buildDateTime(sDate, hero.time || '00:00', tz);
@@ -1656,7 +1633,8 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
           const isActive = hero.status === 'in_progress';
           // Show hero if within 24h OR currently in progress
           if (!isActive && msUntil > 24 * 3600000) { if (imminentId) setImminentId(null); return null; }
-          if (imminentId !== hero.id) setTimeout(() => setImminentId(hero.id), 0);
+          // (v1.141.0 — which visit Next Up hides is decided below, once we know whether the card
+          // is the spine or the folded day.)
 
           // Build countdown string
           let countdownStr = '';
@@ -1721,6 +1699,58 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
           // No cap: Next Up drops every imminent event (imminentEventIds), so anything cut here
           // would vanish from the dashboard altogether — which the old three-hero slice did.
           .sort((a, b) => a.startMs - b.startMs);
+        // ─── v1.141.0 — once today has nothing left, fold it (Pete chose C, 11/20) ───
+        // v1.140.0 kept the finished visit as the card's visit until midnight, and that pushed
+        // tomorrow's caregivers off the card entirely. Now: while today still has something
+        // ahead, the spine as before (finished things one line each). When nothing is left,
+        // DayFoldCard: today as one green line, and the next day's caregivers one row each.
+        const ftz = heroInfo?.tz || upcoming[0]?.timezone || TimezoneHelper.DEFAULT_TZ;
+        const todayStr = TimezoneHelper.getToday(ftz);
+        const dOf = (x) => String(x || '').split('T')[0];
+        const hm = (t) => { const [h, m] = String(t || '0:0').split(':').map(Number); return (h || 0) * 60 + (m || 0); };
+        const evEnd = (r) => {
+          if (r.ev.end_time) { const e = TimezoneHelper.buildDateTime(dOf(r.ev.event_date), r.ev.end_time, r.ev.timezone || ftz).getTime(); if (e > r.startMs) return e; }
+          return r.startMs + 3600000;
+        };
+        const heroToday = heroInfo && (heroInfo.isActive || heroInfo.date === todayStr);
+        const todayLeft = heroToday || eventRows.some((r) => dOf(r.ev.event_date) === todayStr && evEnd(r) > nowMsEv);
+        if (!todayLeft) {
+          const todayItems = [
+            ...(data?.recentlyCompleted || []).filter((s) => s.caregiverName && dOf(s.date) === todayStr).map((s) => ({
+              kind: 'visit', key: `v${s.id}`, id: s.id, name: s.caregiverName, sort: hm(s.time),
+              time: TimezoneHelper.formatTime(s.time), label: `${String(s.caregiverName).split(' ')[0]}${'\u2019'}s visit`,
+            })),
+            ...eventRows.filter((r) => dOf(r.ev.event_date) === todayStr).map((r) => ({
+              kind: 'event', key: `e${r.ev.id}`, ev: r.ev, sort: hm(r.ev.event_time),
+              time: r.ev.event_time ? TimezoneHelper.formatTime(r.ev.event_time) : 'All day', label: r.ev.title, notes: Number(r.ev.notes_count) || 0,
+            })),
+          ].sort((a, b) => a.sort - b.sort);
+          const nextVisitsAll = upcoming.filter((s) => s.caregiverName && ['confirmed', 'in_progress'].includes(s.status) && dOf(s.date) > todayStr);
+          const nextEventsAll = (careEventsUpcoming?.events || []).filter((ev) => dOf(ev.event_date) > todayStr);
+          const nextDate = [...nextVisitsAll.map((s) => dOf(s.date)), ...nextEventsAll.map((ev) => dOf(ev.event_date))].sort()[0] || null;
+          let next = null;
+          if (nextDate) {
+            const tomorrow = (() => { const [y, m, d] = todayStr.split('-').map(Number); return new Date(Date.UTC(y, m - 1, d + 1)).toISOString().slice(0, 10); })();
+            const wk = new Date(nextDate + 'T12:00:00Z').toLocaleDateString('en-US', { weekday: 'short', timeZone: 'UTC' });
+            const md = new Date(nextDate + 'T12:00:00Z').toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+            next = {
+              date: nextDate,
+              label: nextDate === tomorrow ? `Tomorrow, ${wk}` : `${wk}, ${md}`,
+              visits: nextVisitsAll.filter((s) => dOf(s.date) === nextDate).map((s) => ({
+                id: s.id, name: s.caregiverName, start: hm(s.time), end: hm(s.time) + Math.round((s.durationHours || 2) * 60),
+              })),
+              events: nextEventsAll.filter((ev) => dOf(ev.event_date) === nextDate).map((ev) => ({ ev, at: ev.event_time ? hm(ev.event_time) : 0 })),
+            };
+          }
+          if (imminentId) setTimeout(() => setImminentId(null), 0); // fold mode: Next Up keeps every visit
+          if (!todayItems.length && !next) return null;
+          return (
+            <DayFoldCard today={{ items: todayItems }} next={next}
+              onOpenVisit={(id) => id && setVisitDetailSessionId(id)}
+              onOpenEvent={(ev) => setEventSheet(ev)} />
+          );
+        }
+        if ((heroInfo?.id || null) !== imminentId) setTimeout(() => setImminentId(heroInfo?.id || null), 0);
         if (!heroInfo && !eventRows.length) return null;
         return (
           <ComingUpSpine hero={heroInfo} events={eventRows}
