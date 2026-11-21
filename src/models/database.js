@@ -3669,6 +3669,28 @@ async function initializeDatabase() {
         `CREATE INDEX IF NOT EXISTS idx_series_change_group ON series_change_requests(recurrence_group_id, status)`,
       ],
     },
+    {
+      // v1.143.0 — Pete, 11/21: a friend's family whose dad went into hospice. "They don't pay
+      // anything. I want buttons in admin that I can fast track any of that."
+      //   care_recipients.comped_at          — InPlace pays: everyone on this loved one's team
+      //                                         gets the care tools, and caregivers on it are not
+      //                                         held to the paid-visit rule (utils/careTools.js)
+      //   care_recipients.ids_fast_tracked_at — the ID gate is waived for everyone on this
+      //                                         loved one's team AND anyone with a pending invite
+      //                                         to it (utils/careAccess.js)
+      //   users.id_gate_waived_at            — the same waiver for one person, so a leader can
+      //                                         create the profile before there is one to fast-track
+      // Recorded as WAIVED, never as verified: nobody looked at an ID.
+      id: "091_family_comp_and_id_waivers",
+      statements: [
+        `ALTER TABLE care_recipients ADD COLUMN IF NOT EXISTS comped_at TIMESTAMPTZ`,
+        `ALTER TABLE care_recipients ADD COLUMN IF NOT EXISTS comped_by TEXT`,
+        `ALTER TABLE care_recipients ADD COLUMN IF NOT EXISTS ids_fast_tracked_at TIMESTAMPTZ`,
+        `ALTER TABLE care_recipients ADD COLUMN IF NOT EXISTS ids_fast_tracked_by TEXT`,
+        `ALTER TABLE users ADD COLUMN IF NOT EXISTS id_gate_waived_at TIMESTAMPTZ`,
+        `ALTER TABLE users ADD COLUMN IF NOT EXISTS id_gate_waived_by TEXT`,
+      ],
+    },
   ];
   for (const m of MIGRATIONS_V2) {
     if (applied.has(m.id)) continue;

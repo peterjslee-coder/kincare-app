@@ -12,6 +12,7 @@
 //   - exempt: his own family (Betty's team), caregivers included. Caregivers never pay a fee;
 //     their tools ride on paid visits instead (below)
 //   - friends on a special rate are NOT exempt; at 7% they need ~$286 of care in 30 days
+//   - v1.143.0: a family Pete COMPS (care_recipients.comped_at) is exempt, caregivers included
 //
 // What stays free for everyone: messaging, the family visit log, booking care, care team and
 // caregiver invites, medication tasks and their check-offs, medical records, legal documents,
@@ -129,6 +130,11 @@ async function careToolsFor(db, userId) {
       LIMIT 1
     `).get(...recipients, ...recipients);
     if (adminTeam) return { ...base, status: "exempt", reason: "founder_family" };
+    // v1.143.0 — Pete comped this family (Admin → People → Family comp): InPlace pays.
+    const comped = await db.prepare(
+      `SELECT 1 AS x FROM care_recipients WHERE id IN (${ph}) AND comped_at IS NOT NULL LIMIT 1`
+    ).get(...recipients);
+    if (comped) return { ...base, status: "exempt", reason: "comped_family" };
   }
 
   let cents = await commissionCents(db, recipients);
@@ -289,6 +295,13 @@ async function founderFamilyRecipient(db, recipientId) {
   return !!r;
 }
 
+/** v1.143.0 — has Pete comped this loved one (care_recipients.comped_at)? */
+async function compedRecipient(db, recipientId) {
+  if (!recipientId) return false;
+  const r = await db.prepare("SELECT 1 AS x FROM care_recipients WHERE id = ? AND comped_at IS NOT NULL").get(recipientId);
+  return !!r;
+}
+
 /**
  * { feature, refusal } for a request. feature is null when the request is not a care tool;
  * refusal is the 403 body when this person may not use it right now. Called from
@@ -324,6 +337,10 @@ async function careToolsCheck(db, req) {
       const familySide = rid ? (await familyRecipientIds(db, userId)).includes(rid) : false;
       if (!familySide) {
         if (await founderFamilyRecipient(db, rid)) return { feature: cgFeature, refusal: null };
+        // v1.143.0 — a comped family's caregivers are not held to the paid-visit rule either:
+        // nothing is booked through InPlace, so a visit could never open them. What she may DO
+        // there is still the leader's call, per person (utils/capabilities.js — write_notes).
+        if (await compedRecipient(db, rid)) return { feature: cgFeature, refusal: null };
         const ok = await caregiverVisitWindow(db, userId, rid);
         return {
           feature: cgFeature,
@@ -371,6 +388,6 @@ function refusalBody(feature, state) {
 }
 
 module.exports = {
-  careToolsFor, careToolsRefusal, careToolsCheck, recordToolUse, featureFor, caregiverVisitWindow, familyRecipientIds, commissionCents,
+  careToolsFor, careToolsRefusal, careToolsCheck, recordToolUse, featureFor, caregiverVisitWindow, familyRecipientIds, commissionCents, compedRecipient,
   THRESHOLD_CENTS, WINDOW_DAYS, FEATURES, COMMISSION_KINDS,
 };

@@ -324,3 +324,57 @@ describe("migration 056 against realistic rows", () => {
     expect((await careAccessFor(db, stranger.id)).status).toBe("grace");
   });
 });
+
+// ─── v1.143.0 — Pete's fast-track: waived, never verified ───
+describe("ID waivers", () => {
+  test("one person waived: allowed, status 'waived', and the ID itself is NOT reported verified", async () => {
+    const { user, token } = await h.createUser({ idVerified: false });
+    const { recipientId, teamId } = await teamWith(user);
+    expect((await h.request.get(`/api/care-teams/${teamId}`).set(h.auth(token))).status).toBe(403);
+    await db.prepare("UPDATE users SET id_gate_waived_at = NOW() WHERE id = ?").run(user.id);
+    expect((await h.request.get(`/api/care-recipients/${recipientId}`).set(h.auth(token))).status).toBe(200);
+    const { careAccessFor } = require("../../src/utils/careAccess");
+    const a = await careAccessFor(db, user.id);
+    expect(a).toMatchObject({ status: "waived", allowed: true, waived: "person" });
+    expect(a.identityStatus).not.toBe("verified");
+    await db.prepare("UPDATE users SET id_gate_waived_at = NULL WHERE id = ?").run(user.id);
+    expect((await h.request.get(`/api/care-teams/${teamId}`).set(h.auth(token))).status).toBe(403);
+  });
+
+  test("a fast-tracked team: a member is let in, and an INVITEE can accept and join", async () => {
+    const { user: member, token: memberToken } = await h.createUser({ idVerified: false });
+    const { leader, recipientId, teamId } = await teamWith(member);
+    await db.prepare("UPDATE care_recipients SET ids_fast_tracked_at = NOW() WHERE id = ?").run(recipientId);
+    expect((await h.request.get(`/api/care-teams/${teamId}`).set(h.auth(memberToken))).status).toBe(200);
+
+    const { user, token } = await h.createUser({ idVerified: false });
+    const inviteToken = `tok-${uuid()}`;
+    await db.prepare(
+      "INSERT INTO care_team_invites (id, care_team_id, invited_email, invited_by, role, token, status, expires_at) VALUES (?, ?, ?, ?, 'member', ?, 'pending', NOW() + INTERVAL '7 days')"
+    ).run(uuid(), teamId, user.email, leader.id, inviteToken);
+    const ok = await h.request.post("/api/care-teams/accept-invite").set(h.auth(token)).send({ token: inviteToken });
+    expect(ok.status).toBe(200);
+    const joined = await db.prepare("SELECT 1 FROM care_team_members WHERE care_team_id = ? AND user_id = ?").get(teamId, user.id);
+    expect(joined).toBeTruthy();
+  });
+
+  test("fast-track does not reach a stranger, an expired invite, or an untrusted 'own account' link", async () => {
+    const { user: leader } = await h.createUser();
+    const { recipientId, teamId } = await h.createCareTeam({ familyUserId: leader.id });
+    await db.prepare("UPDATE care_recipients SET ids_fast_tracked_at = NOW() WHERE id = ?").run(recipientId);
+    const { careAccessFor } = require("../../src/utils/careAccess");
+
+    const { user: stranger } = await h.createUser({ idVerified: false });
+    expect((await careAccessFor(db, stranger.id)).allowed).toBe(false);
+
+    const { user: late } = await h.createUser({ idVerified: false });
+    await db.prepare(
+      "INSERT INTO care_team_invites (id, care_team_id, invited_email, invited_by, role, token, status, expires_at) VALUES (?, ?, ?, ?, 'member', ?, 'pending', NOW() - INTERVAL '1 day')"
+    ).run(uuid(), teamId, late.email, leader.id, `tok-${uuid()}`);
+    expect((await careAccessFor(db, late.id)).allowed).toBe(false);
+
+    const { user: linked } = await h.createUser({ idVerified: false });
+    await db.prepare("UPDATE care_recipients SET linked_user_id = ? WHERE id = ?").run(linked.id, recipientId);
+    expect((await careAccessFor(db, linked.id)).allowed).toBe(false);
+  });
+});

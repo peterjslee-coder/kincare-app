@@ -25,7 +25,10 @@
 //   pending_review  submitted, waiting on a person. Not allowed.
 //   needs_id        nothing submitted, or the last one was rejected. Not allowed.
 //
-// allowed = exempt | verified | grace.
+//   waived          v1.143.0 — Pete waived it: users.id_gate_waived_at, or the person is on /
+//                   invited to a loved one with care_recipients.ids_fast_tracked_at. NOT verified.
+//
+// allowed = exempt | verified | waived | grace.
 //
 // ── Where it is enforced (ONE choke point, plus the paths that do not go through it) ──
 //   1. middleware/auth.js authenticate() → careGateRefusal() below. Every authenticated request
@@ -45,16 +48,16 @@ const { captureException } = require("./sentry");
 
 const GRACE_DAYS = 14;
 
-const ALLOWED = new Set(["exempt", "verified", "grace"]);
+const ALLOWED = new Set(["exempt", "verified", "waived", "grace"]);
 
 /**
- * @returns {Promise<{status: 'exempt'|'verified'|'grace'|'pending_review'|'needs_id',
+ * @returns {Promise<{status: 'exempt'|'verified'|'waived'|'grace'|'pending_review'|'needs_id',
  *                    allowed: boolean, graceUntil: string|null, identityStatus: string|null}>}
  */
 async function careAccessFor(db, userId) {
   if (!userId) return { status: "needs_id", allowed: false, graceUntil: null, identityStatus: null };
   const u = await db.prepare(
-    "SELECT is_admin, is_demo, id_gate_grace_until, id_verified_in_person_at FROM users WHERE id = ?"
+    "SELECT is_admin, is_demo, id_gate_grace_until, id_verified_in_person_at, id_gate_waived_at FROM users WHERE id = ?"
   ).get(userId);
   if (!u) return { status: "needs_id", allowed: false, graceUntil: null, identityStatus: null };
   if (u.is_admin || u.is_demo) return { status: "exempt", allowed: true, graceUntil: null, identityStatus: null };
@@ -68,6 +71,15 @@ async function careAccessFor(db, userId) {
     return { status: "verified", allowed: true, graceUntil: null, identityStatus };
   }
 
+  // v1.143.0 — Pete waived the gate (Admin → People). WAIVED, not verified: nobody saw an ID,
+  // so identityStatus stays whatever the documents say and nothing may display a check for it.
+  if (u.id_gate_waived_at) {
+    return { status: "waived", allowed: true, graceUntil: null, identityStatus, waived: "person" };
+  }
+  if (await onFastTrackedTeam(db, userId)) {
+    return { status: "waived", allowed: true, graceUntil: null, identityStatus, waived: "team" };
+  }
+
   const graceMs = u.id_gate_grace_until ? new Date(u.id_gate_grace_until).getTime() : NaN;
   if (Number.isFinite(graceMs) && graceMs > Date.now()) {
     return { status: "grace", allowed: true, graceUntil: new Date(graceMs).toISOString(), identityStatus };
@@ -75,6 +87,46 @@ async function careAccessFor(db, userId) {
   const graceUntil = Number.isFinite(graceMs) ? new Date(graceMs).toISOString() : null;
   if (identityStatus === "pending") return { status: "pending_review", allowed: false, graceUntil, identityStatus };
   return { status: "needs_id", allowed: false, graceUntil, identityStatus };
+}
+
+/**
+ * v1.143.0 — is this person on, or invited to, a loved one whose team Pete fast-tracked?
+ * Owner, care-team member, share, an active caregiver assignment, or a PENDING unexpired
+ * invite (care team or known-caregiver) to that email. The invite case is the point: without
+ * it an invitee is refused at accept-invite, before the handler runs, and never joins.
+ * Deliberately NOT linked_user_id — an untrusted "own account" link is exactly how an
+ * unrelated account was once treated as Betty (see utils/linkedAccount.js).
+ */
+async function onFastTrackedTeam(db, userId) {
+  try {
+    const r = await db.prepare(`
+      SELECT 1 AS x
+        FROM care_recipients cr
+        JOIN users me ON me.id = ?
+       WHERE cr.ids_fast_tracked_at IS NOT NULL
+         AND (
+           cr.family_user_id = me.id
+           OR EXISTS (SELECT 1 FROM care_teams ct JOIN care_team_members m ON m.care_team_id = ct.id
+                       WHERE ct.care_recipient_id = cr.id AND m.user_id = me.id)
+           OR EXISTS (SELECT 1 FROM care_recipient_shares s
+                       WHERE s.care_recipient_id = cr.id AND s.shared_with_user_id = me.id)
+           OR EXISTS (SELECT 1 FROM caregiver_assignments ca JOIN caregiver_profiles cp ON cp.id = ca.caregiver_profile_id
+                       WHERE ca.care_recipient_id = cr.id AND cp.user_id = me.id AND COALESCE(ca.is_active, 1) = 1)
+           OR EXISTS (SELECT 1 FROM care_teams ct JOIN care_team_invites i ON i.care_team_id = ct.id
+                       WHERE ct.care_recipient_id = cr.id AND i.status = 'pending' AND i.expires_at > NOW()
+                         AND LOWER(i.invited_email) = LOWER(me.email))
+           OR EXISTS (SELECT 1 FROM platform_invites pi
+                       WHERE pi.care_recipient_id = cr.id AND pi.status = 'pending' AND pi.expires_at > NOW()
+                         AND LOWER(pi.invited_email) = LOWER(me.email))
+         )
+       LIMIT 1
+    `).get(userId);
+    return !!r;
+  } catch (e) {
+    // Fail CLOSED: a lookup error must never open the gate. The person is simply not waived.
+    captureException(e, { where: "careAccess: onFastTrackedTeam", userId });
+    return false;
+  }
 }
 
 async function careAccessAllowed(db, userId) {
