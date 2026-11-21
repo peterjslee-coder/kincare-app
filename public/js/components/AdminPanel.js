@@ -45,6 +45,59 @@ const DocThumbnail = ({ docId, label }) => {
 // at 5%." The server enforces both; this only collects the number. Applies to visits for every
 // care recipient the account owns, from the next time money moves on each visit.
 const SPECIAL_FEE_FLOOR = 5;
+// ─── v1.143.0 — Family comp + team ID fast-track, per loved one this person owns or leads ───
+// Pete, 11/21: "They don't pay anything. I want buttons in admin that I can fast track any of
+// that." Comp = InPlace pays: care tools for the whole team, caregivers off the paid-visit
+// rule. Fast-track = the ID gate waived for the team AND anyone invited to it (recorded as
+// waived, never verified). Both apply to people added later, and both undo.
+const FamilyCompPanel = ({ userId }) => {
+  const [rows, setRows] = React.useState(null);
+  const [busy, setBusy] = React.useState(null);
+  const load = React.useCallback(async () => {
+    try {
+      const res = await apiFetch(`/api/admin/users/${userId}/family-comp`);
+      if (res?.ok) { const d = await res.json(); setRows(d.recipients || []); } else setRows([]);
+    } catch { setRows([]); }
+  }, [userId]);
+  React.useEffect(() => { load(); }, [load]);
+  const flip = async (r, kind, on) => {
+    const label = kind === 'comp' ? 'comp' : 'ID fast-track';
+    if (on && !window.confirm(kind === 'comp'
+      ? `Comp ${r.name || 'this loved one'}? Everyone on the team gets the care tools free, and caregivers can use them without a paid visit.`
+      : `Waive the ID check for everyone on ${r.name || 'this loved one'}'s team, and for anyone invited to it? Recorded as waived by you, not verified.`)) return;
+    setBusy(r.id + kind);
+    try {
+      const res = await apiFetch(`/api/admin/care-recipients/${r.id}/${kind}`, { method: 'PUT', body: JSON.stringify({ on }) });
+      if (res?.ok) { showToast(on ? `${label} on for ${r.name}` : `${label} off for ${r.name}`, 'success'); await load(); }
+      else showToast(`Couldn't change the ${label}`, 'error');
+    } catch { showToast('Network error', 'error'); }
+    setBusy(null);
+  };
+  if (rows === null) return <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Loading…</div>;
+  if (!rows.length) return <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Owns or leads no loved one yet. Waive this person's ID in the People list so they can create one, then come back here.</div>;
+  const btn = { padding: '5px 12px', borderRadius: 6, border: '1px solid var(--border-color)', background: 'var(--bg-surface)', color: 'var(--text-primary)', fontSize: 12, fontWeight: 600, cursor: 'pointer' };
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      {rows.map(r => (
+        <div key={r.id} style={{ padding: 10, border: '1px solid var(--border-color)', borderRadius: 8 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{r.name || 'Unnamed'}</div>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>
+            {r.members} on the team · {r.pendingInvites} invite{r.pendingInvites === 1 ? '' : 's'} pending{r.timezone ? ` · ${r.timezone}` : ''}
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <button disabled={busy === r.id + 'comp'} onClick={() => flip(r, 'comp', !r.compedAt)} style={btn}>
+              {r.compedAt ? '✓ Comped — undo' : 'Comp this family'}
+            </button>
+            <button disabled={busy === r.id + 'fast-track-ids'} onClick={() => flip(r, 'fast-track-ids', !r.idsFastTrackedAt)} style={btn}>
+              {r.idsFastTrackedAt ? '✓ Team ID fast-tracked — undo' : 'Fast-track team ID'}
+            </button>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+};
+
 const SpecialFeeEditor = ({ user, onSaved }) => {
   const { showToast } = useToast();
   const current = user && user.special_fee_percent != null ? Number(user.special_fee_percent) : null;
@@ -2983,6 +3036,8 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                             const look = {
                               exempt: ['Exempt', 'var(--bg-primary)', 'var(--text-muted)'],
                               verified: ['Verified', 'var(--color-success-bg)', 'var(--role-color)'],
+                              // v1.143.0 — let in by Pete without an ID check. Never styled as verified.
+                              waived: [ca.waived === 'team' ? 'ID waived (team)' : 'ID waived', 'var(--color-info-bg)', 'var(--color-info)'],
                               grace: [`Grace until ${until || '?'}`, 'var(--color-info-bg)', 'var(--color-info)'],
                               pending_review: ['Blocked \u2014 ID in review', 'var(--color-warning-bg)', 'var(--color-warning)'],
                               needs_id: ['Blocked \u2014 no ID', 'var(--color-warning-bg)', 'var(--color-warning)'],
@@ -3014,6 +3069,21 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                                 )}
                                 {ca.inPerson && (
                                   <button onClick={() => setInPerson(false)} style={{ fontSize: 11, padding: '2px 8px', borderRadius: 10, border: '1px solid var(--border-color)', background: 'var(--bg-surface)', cursor: 'pointer' }}>Undo</button>
+                                )}
+                                {/* v1.143.0 — fast-track one person past the ID gate without seeing an ID */}
+                                {(ca.status === 'needs_id' || ca.status === 'pending_review' || ca.status === 'grace' || ca.waived === 'person') && (
+                                  <button onClick={async () => {
+                                    const on = ca.waived !== 'person';
+                                    if (on && !window.confirm(`Let ${u.first_name || 'this person'} into care without an ID check? It is recorded as waived by you, not verified.`)) return;
+                                    try {
+                                      const res = await apiFetch(`/api/admin/users/${u.id}/id-gate-waived`, { method: 'PUT', body: JSON.stringify({ on }) });
+                                      const data = res ? await res.json().catch(() => ({})) : {};
+                                      if (res?.ok) {
+                                        if (data.careAccess) setUsers(prev => prev.map(usr => usr.id === u.id ? { ...usr, careAccess: data.careAccess } : usr));
+                                        showToast(on ? 'ID waived — care access open' : 'ID waiver removed', 'success');
+                                      } else { showToast(data.error || "Couldn't change the ID waiver", 'error'); }
+                                    } catch { showToast("Couldn't change the ID waiver", 'error'); }
+                                  }} style={{ fontSize: 11, padding: '2px 8px', borderRadius: 10, border: '1px solid var(--border-color)', background: 'var(--bg-surface)', cursor: 'pointer' }}>{ca.waived === 'person' ? 'Undo waiver' : 'Waive ID'}</button>
                                 )}
                               </span>
                             );
@@ -7434,9 +7504,9 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                     <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 8 }}>
                       {userDrawer.careTools.status === 'locked' && <span><strong>Locked</strong> — InPlace earned ${(userDrawer.careTools.commission30d || 0).toFixed(2)} from this family in 30 days (opens at ${userDrawer.careTools.thresholdDollars}). Messages, visit log, meds, records and legal docs still work.</span>}
                       {userDrawer.careTools.status === 'unlocked' && <span><strong>Open</strong> — ${(userDrawer.careTools.commission30d || 0).toFixed(2)} earned in 30 days.</span>}
-                      {userDrawer.careTools.status === 'exempt' && <span><strong>Open</strong> — {({ admin: 'admin', demo: 'demo account', founder_family: "your family's team", admin_opened: 'you turned them on' })[userDrawer.careTools.reason] || 'exempt'}.</span>}
+                      {userDrawer.careTools.status === 'exempt' && <span><strong>Open</strong> — {({ admin: 'admin', demo: 'demo account', founder_family: "your family's team", admin_opened: 'you turned them on', comped_family: 'family comped' })[userDrawer.careTools.reason] || 'exempt'}.</span>}
                     </div>
-                    {userDrawer.careTools.reason !== 'admin' && userDrawer.careTools.reason !== 'demo' && userDrawer.careTools.reason !== 'founder_family' && (
+                    {userDrawer.careTools.reason !== 'admin' && userDrawer.careTools.reason !== 'demo' && userDrawer.careTools.reason !== 'founder_family' && userDrawer.careTools.reason !== 'comped_family' && (
                       <button onClick={async () => {
                         const open = !userDrawer.careTools.openedAt;
                         try {
@@ -7452,6 +7522,14 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                         color: 'var(--text-primary)', fontSize: 12, fontWeight: 600, cursor: 'pointer',
                       }}>{userDrawer.careTools.openedAt ? 'Back to the normal rule' : 'Turn care tools on anyway'}</button>
                     )}
+                  </div>
+                )}
+
+                {/* v1.143.0 — Family comp + team ID fast-track */}
+                {userDrawer.user && userDrawer.user.role === 'family' && (
+                  <div style={{ marginBottom: 22 }}>
+                    <h4 style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5, color: 'var(--text-secondary)', marginBottom: 8, paddingBottom: 6, borderBottom: '1px solid var(--border-color)' }}>Family Comp</h4>
+                    <FamilyCompPanel key={userDrawer.user.id} userId={userDrawer.user.id} />
                   </div>
                 )}
 

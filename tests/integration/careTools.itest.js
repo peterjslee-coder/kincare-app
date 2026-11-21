@@ -140,6 +140,27 @@ describe("exemptions", () => {
     expect((await note(fam.token, recipientId)).status).toBeLessThan(300);
   });
 
+  // v1.143.0 — Pete, 11/21: "They don't pay anything." Family comp is per loved one, so a
+  // sibling added later is covered without another click.
+  test("a comped family: the leader AND a sibling on the team get the tools", async () => {
+    const { fam, recipientId, teamId } = await lockedFamily("CompFam");
+    expect((await note(fam.token, recipientId)).status).toBe(403);
+    await db.prepare("UPDATE care_recipients SET comped_at = NOW() WHERE id = ?").run(recipientId);
+    expect((await note(fam.token, recipientId)).status).toBeLessThan(300);
+    const sib = await h.createUser({ firstName: "CompSib", lastName: "Fam", careToolsOpen: false });
+    await h.addTeamMember(teamId, sib.user.id, "member");
+    expect((await note(sib.token, recipientId)).status).toBeLessThan(300);
+    const { careToolsFor } = require("../../src/utils/careTools");
+    expect(await careToolsFor(db, sib.user.id)).toMatchObject({ status: "exempt", reason: "comped_family" });
+  });
+
+  test("comp for one loved one does not open a different family", async () => {
+    const a = await lockedFamily("CompA");
+    const b = await lockedFamily("CompB");
+    await db.prepare("UPDATE care_recipients SET comped_at = NOW() WHERE id = ?").run(a.recipientId);
+    expect((await note(b.fam.token, b.recipientId)).status).toBe(403);
+  });
+
   test("the admin switch opens a family by hand", async () => {
     const { fam, recipientId } = await lockedFamily("Comped");
     await db.prepare("UPDATE users SET care_tools_open_at = NOW() WHERE id = ?").run(fam.user.id);
@@ -182,6 +203,13 @@ describe("caregivers — tools ride on a paid visit", () => {
   test("during a paid visit: yes", async () => {
     const f = await teamWithCaregiver("PaidVisit");
     await visit(f, { status: "in_progress", paid: true });
+    expect((await note(f.cg.token, f.recipientId)).status).toBeLessThan(300);
+  });
+
+  test("a comped family's caregiver writes notes with no paid visit", async () => {
+    const f = await teamWithCaregiver("CompCg");
+    expect((await note(f.cg.token, f.recipientId)).status).toBe(403);
+    await db.prepare("UPDATE care_recipients SET comped_at = NOW() WHERE id = ?").run(f.recipientId);
     expect((await note(f.cg.token, f.recipientId)).status).toBeLessThan(300);
   });
 

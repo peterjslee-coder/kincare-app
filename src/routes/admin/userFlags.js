@@ -384,6 +384,102 @@ router.put("/users/:id/verified-in-person", async (req, res) => {
   }
 });
 
+// ─── v1.143.0 — Family comp + ID fast-track ───────────────────────────────────────────────
+//
+// Pete, 11/21, for a friend's family whose dad went into hospice: "They don't pay anything. I
+// want buttons in admin that I can fast track any of that." Three switches, all audited, all
+// reversible, none of which pretends anything was checked:
+//
+//   PUT /users/:id/id-gate-waived            { on }  — one person past the ID gate
+//   GET /users/:id/family-comp                       — the loved ones this person owns or leads
+//   PUT /care-recipients/:id/comp            { on }  — InPlace pays: care tools for the whole
+//                                                      team, caregivers off the paid-visit rule
+//   PUT /care-recipients/:id/fast-track-ids  { on }  — ID gate waived for the team and anyone
+//                                                      with a pending invite to it
+//
+// A waiver is recorded as WAIVED, never as verified (utils/careAccess.js). It does NOT run
+// onIdentityApproved: no ID was approved, so no self-signup profile is materialized from it.
+
+router.put("/users/:id/id-gate-waived", async (req, res) => {
+  try {
+    const db = await getDb();
+    if (typeof req.body?.on !== "boolean") return res.status(400).json({ error: "on must be true or false" });
+    const on = req.body.on;
+    const user = await db.prepare("SELECT id, email, id_gate_waived_at FROM users WHERE id = ?").get(req.params.id);
+    if (!user) return res.status(404).json({ error: "User not found" });
+    await db.prepare(
+      `UPDATE users SET id_gate_waived_at = ${on ? "COALESCE(id_gate_waived_at, NOW())" : "NULL"}, id_gate_waived_by = ? WHERE id = ?`
+    ).run(on ? req.user.id : null, user.id);
+    await logAdminAction(req, on ? "id_gate_waived" : "id_gate_waiver_removed", "user", user.id, { email: user.email });
+    res.json({ on, careAccess: await careAccessFor(db, user.id) });
+  } catch (err) {
+    captureException(err, { where: "PUT /api/admin/users/:id/id-gate-waived" });
+    res.status(500).json({ error: "Failed to update the ID waiver" });
+  }
+});
+
+router.get("/users/:id/family-comp", async (req, res) => {
+  try {
+    const db = await getDb();
+    const rows = await db.prepare(`
+      SELECT cr.id, cr.first_name, cr.last_name, cr.timezone, cr.comped_at, cr.ids_fast_tracked_at,
+             (cr.family_user_id = ?) AS is_owner
+        FROM care_recipients cr
+       WHERE cr.family_user_id = ?
+          OR EXISTS (SELECT 1 FROM care_teams ct JOIN care_team_members m ON m.care_team_id = ct.id
+                      WHERE ct.care_recipient_id = cr.id AND m.user_id = ? AND m.role = 'leader')
+       ORDER BY cr.created_at
+    `).all(req.params.id, req.params.id, req.params.id);
+    const out = [];
+    for (const r of rows || []) {
+      const members = await db.prepare(`
+        SELECT COUNT(DISTINCT m.user_id) AS n FROM care_teams ct JOIN care_team_members m ON m.care_team_id = ct.id
+         WHERE ct.care_recipient_id = ?
+      `).get(r.id);
+      const invites = await db.prepare(`
+        SELECT (SELECT COUNT(*) FROM care_teams ct JOIN care_team_invites i ON i.care_team_id = ct.id
+                 WHERE ct.care_recipient_id = ? AND i.status = 'pending' AND i.expires_at > NOW())
+             + (SELECT COUNT(*) FROM platform_invites pi
+                 WHERE pi.care_recipient_id = ? AND pi.status = 'pending' AND pi.expires_at > NOW()) AS n
+      `).get(r.id, r.id);
+      out.push({
+        id: r.id, name: `${r.first_name || ""} ${r.last_name || ""}`.trim(), timezone: r.timezone || null,
+        isOwner: !!r.is_owner, compedAt: r.comped_at || null, idsFastTrackedAt: r.ids_fast_tracked_at || null,
+        members: Number(members?.n) || 0, pendingInvites: Number(invites?.n) || 0,
+      });
+    }
+    res.json({ recipients: out });
+  } catch (err) {
+    captureException(err, { where: "GET /api/admin/users/:id/family-comp" });
+    res.status(500).json({ error: "Failed to load family comp" });
+  }
+});
+
+for (const [suffix, col, byCol, action] of [
+  ["comp", "comped_at", "comped_by", "family_comp"],
+  ["fast-track-ids", "ids_fast_tracked_at", "ids_fast_tracked_by", "ids_fast_tracked"],
+]) {
+  router.put(`/care-recipients/:id/${suffix}`, async (req, res) => {
+    try {
+      const db = await getDb();
+      if (typeof req.body?.on !== "boolean") return res.status(400).json({ error: "on must be true or false" });
+      const on = req.body.on;
+      const cr = await db.prepare("SELECT id, first_name, last_name FROM care_recipients WHERE id = ?").get(req.params.id);
+      if (!cr) return res.status(404).json({ error: "Care recipient not found" });
+      await db.prepare(
+        `UPDATE care_recipients SET ${col} = ${on ? `COALESCE(${col}, NOW())` : "NULL"}, ${byCol} = ? WHERE id = ?`
+      ).run(on ? req.user.id : null, cr.id);
+      await logAdminAction(req, on ? action : `${action}_removed`, "care_recipient", cr.id, {
+        name: `${cr.first_name || ""} ${cr.last_name || ""}`.trim(),
+      });
+      res.json({ on });
+    } catch (err) {
+      captureException(err, { where: `PUT /api/admin/care-recipients/:id/${suffix}` });
+      res.status(500).json({ error: "Failed to update" });
+    }
+  });
+}
+
 // ─── PUT /api/admin/users/:id/special-fee — per-family service fee (v1.111.0) ───
 //
 // Pete, 10/12: friends who bring their own caregivers pay a reduced service fee. "It's 20% as
