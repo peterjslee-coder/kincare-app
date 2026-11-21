@@ -123,7 +123,7 @@ const DayFoldCard = window.DayFoldCard = ({ today, next, onOpenVisit, onOpenEven
             background: 'var(--color-success-bg)', color: 'var(--text-primary)', fontSize: 13.5, textAlign: 'left', cursor: 'pointer',
           }}>
             <span aria-hidden="true" style={{ color: 'var(--color-success)', fontWeight: 800 }}>{'\u2713'}</span>
-            <span style={{ flex: 1, minWidth: 0 }}><b>Today</b> <span style={{ color: 'var(--text-secondary)' }}>{who ? `\u00b7 ${who} ` : ''}\u00b7 {today.items.length} done</span></span>
+            <span style={{ flex: 1, minWidth: 0 }}><b>Today</b> <span style={{ color: 'var(--text-secondary)' }}>{who ? `\u00b7 ${who} ` : ''}{'\u00b7'} {today.items.length} done</span></span>
             {notes > 0 && <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--role-color)' }}>{'\u{1F4DD}'} {notes} {notes === 1 ? 'note' : 'notes'}</span>}
             <span aria-hidden="true" style={{ color: 'var(--text-tertiary)', transform: open ? 'rotate(90deg)' : 'none', transition: 'transform 0.2s' }}>{'\u203A'}</span>
           </button>
