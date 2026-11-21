@@ -1820,7 +1820,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
               const hasPendingTimeChange = !!s.pendingTimeChangeId;
               const borderColor = hasPendingTimeChange ? 'var(--color-purple)' : isActive ? 'var(--color-warning)' : isReady ? 'var(--accent-color)' : isUpcoming ? 'var(--accent-color)' : noAddress ? 'var(--color-error)' : 'var(--role-color)';
               const borderWidth = hasPendingTimeChange ? 3 : isActive || isReady ? 3 : isUpcoming ? 2 : 2;
-              const bgStyle = hasPendingTimeChange ? 'linear-gradient(135deg, var(--color-purple-bg) 0%, var(--bg-card) 100%)' : isActive ? 'linear-gradient(135deg, #fffde7 0%, #fff 100%)' : isReady ? 'linear-gradient(135deg, #fff3e0 0%, #fff 100%)' : 'var(--text-on-primary)';
+              const bgStyle = hasPendingTimeChange ? 'linear-gradient(135deg, var(--color-purple-bg) 0%, var(--bg-card) 100%)' : isActive ? 'linear-gradient(135deg, var(--color-warning-bg) 0%, var(--bg-card) 100%)' : isReady ? 'linear-gradient(135deg, var(--color-warning-bg) 0%, var(--bg-card) 100%)' : 'var(--bg-card)'; // v1.141.2 — theme colours (was white in dark mode)
               const shadow = hasPendingTimeChange ? '0 2px 12px rgba(123, 31, 162, 0.15)' : (isReady || isActive) ? '0 2px 12px rgba(232, 114, 74, 0.15)' : '0 1px 4px rgba(0,0,0,0.06)';
 
               return (
@@ -2149,7 +2149,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                           <div style={{ fontSize: 12, lineHeight: 1.5 }}>
                             {pb.isExperienced && <div style={{ fontSize: 11, color: 'var(--role-color)', fontWeight: 600, marginBottom: 6 }}>{'\u2705'} You've cared for {pb.recipientName} {pb.visitCount} time{pb.visitCount != 1 ? 's' : ''}</div>}
                             {pb.caregiverBriefing && (
-                              <div style={{ padding: '8px 10px', background: '#f8f8f8', borderLeft: '3px solid #e8724a', borderRadius: 4, marginBottom: 8, color: 'var(--text-secondary)', whiteSpace: 'pre-line' }}>
+                              <div style={{ padding: '8px 10px', background: 'var(--bg-elevated)', borderLeft: '3px solid #e8724a', borderRadius: 4, marginBottom: 8, color: 'var(--text-secondary)', whiteSpace: 'pre-line' }}>
                                 {pb.caregiverBriefing}
                               </div>
                             )}
@@ -2401,7 +2401,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
         return (
           <div style={{
             marginBottom: 16, padding: '18px 20px',
-            background: 'linear-gradient(135deg, #fff8e1 0%, #fff3e0 100%)',
+            background: 'var(--color-warning-bg)',
             border: '2px solid #ffa726', borderRadius: 14,
             boxShadow: '0 2px 12px rgba(255,167,38,0.2)',
             textAlign: 'center',
@@ -3135,7 +3135,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
               const timeLeftLabel = minsLeft !== null ? (hrsLeft > 0 ? `${hrsLeft}h ${minsRemainder}m` : `${minsLeft}m`) : null;
               return (
                 <div key={p.id} className="card" style={{
-                  marginBottom: 10, padding: '14px 16px', border: '2px solid #7b61ff', borderRadius: 12, background: '#f5f0ff',
+                  marginBottom: 10, padding: '14px 16px', border: '2px solid #7b61ff', borderRadius: 12, background: 'var(--color-purple-bg)',
                 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
                     <div>
@@ -3166,7 +3166,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                     </div>
                   </div>
                   {p.message && (
-                    <div style={{ fontSize: 12, color: 'var(--text-secondary)', fontStyle: 'italic', background: '#ede7f6', padding: '4px 8px', borderRadius: 6 }}>
+                    <div style={{ fontSize: 12, color: 'var(--text-secondary)', fontStyle: 'italic', background: 'var(--color-purple-bg)', padding: '4px 8px', borderRadius: 6 }}>
                       "{p.message}"
                     </div>
                   )}
@@ -3259,7 +3259,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                   return (
                     <div key={job.id} style={{
                       marginBottom: 8, padding: '14px 16px',
-                      background: (isDirectOffer && !exclusiveExpired) ? 'linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%)' : job.hasConflict ? '#fffbf0' : 'var(--bg-card)',
+                      background: (isDirectOffer && !exclusiveExpired) ? 'linear-gradient(135deg, var(--color-purple-bg) 0%, var(--bg-card) 100%)' : job.hasConflict ? 'var(--color-warning-bg)' : 'var(--bg-card)',
                       borderRadius: 0,
                       border: (isDirectOffer && !exclusiveExpired) ? '2px solid #7c3aed' : job.hasConflict ? '1px solid #ffd89b' : (!job.hasConflict && job.matchQuality === 'great') ? '2px solid #1b6b5a' : hasBonus ? '1px solid #e8724a' : '1px solid #f0f0f0',
                       borderTop: (isDirectOffer && !exclusiveExpired) ? '2px solid #7c3aed' : job.hasConflict ? '1px solid #ffd89b' : '1px solid #f0f0f0',
@@ -3312,7 +3312,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                           </div>
                         )}
                         {job.careSummary && (
-                          <div style={{ marginTop: 6, padding: '6px 8px', background: '#f8f8f8', borderLeft: '3px solid #e8724a', borderRadius: 4, fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.4 }}>
+                          <div style={{ marginTop: 6, padding: '6px 8px', background: 'var(--bg-elevated)', borderLeft: '3px solid #e8724a', borderRadius: 4, fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.4 }}>
                             {'\uD83D\uDCCB'} {expandedSummaryJobId === job.id || job.careSummary.length <= 150
                             ? job.careSummary
                             : job.careSummary.substring(0, 150) + '\u2026'}
@@ -3497,12 +3497,12 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                               showToast && showToast(err.error || 'Could not request interview', 'error');
                             }
                           } catch (err) { console.error('Interview request error:', err); }
-                        }} style={{ padding: '6px 12px', background: '#faf5ff', color: 'var(--color-purple)', border: '1px solid #e1bee7', borderRadius: 8, fontSize: 12, fontWeight: 500, cursor: 'pointer' }}>
+                        }} style={{ padding: '6px 12px', background: 'var(--color-purple-bg)', color: 'var(--color-purple)', border: '1px solid var(--color-purple)', borderRadius: 8, fontSize: 12, fontWeight: 500, cursor: 'pointer' }}>
                           {'\uD83C\uDFA5'} Request Interview
                         </button>
                       )}
                       {s.interviewStatus === 'pending' && (
-                        <span style={{ padding: '6px 12px', background: '#faf5ff', color: 'var(--color-purple)', borderRadius: 8, fontSize: 12, fontWeight: 500 }}>{'\uD83C\uDFA5'} Interview pending</span>
+                        <span style={{ padding: '6px 12px', background: 'var(--color-purple-bg)', color: 'var(--color-purple)', borderRadius: 8, fontSize: 12, fontWeight: 500 }}>{'\uD83C\uDFA5'} Interview pending</span>
                       )}
                       {s.interviewStatus === 'accepted' && (
                         <span style={{ padding: '6px 12px', background: 'var(--color-success-bg)', color: 'var(--color-success)', borderRadius: 8, fontSize: 12, fontWeight: 500 }}>{'\u2713'} Interview set</span>
@@ -3776,7 +3776,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
           <div style={{ background: 'var(--bg-surface)', border: '1px solid #e0e0e0', borderTop: 'none', borderRadius: '0 0 12px 12px', padding: '18px' }}>
             {/* Referral link */}
             {referralData && (
-              <div style={{ marginBottom: 16, padding: '12px 14px', background: '#f8fdf8', border: '1px solid #c8e6c9', borderRadius: 10 }}>
+              <div style={{ marginBottom: 16, padding: '12px 14px', background: 'var(--color-success-bg)', border: '1px solid var(--color-success)', borderRadius: 10 }}>
                 <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--role-color)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6 }}>Your Referral Link</div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <input type="text" readOnly value={referralData.referralLink || ''} style={{
@@ -3912,8 +3912,8 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
           <div onClick={() => setShowTipsSection(!showTipsSection)} style={{
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
             cursor: 'pointer', padding: '14px 18px',
-            background: showTipsSection ? 'linear-gradient(135deg, #FFF8E1 0%, #FFF3E0 100%)' : 'var(--bg-card)',
-            border: '1px solid #FFE0B2', borderRadius: 12,
+            background: showTipsSection ? 'var(--color-warning-bg)' : 'var(--bg-card)',
+            border: '1px solid var(--border-color)', borderRadius: 12,
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <span style={{ fontSize: 22 }}>{'\uD83D\uDC9B'}</span>
@@ -4287,10 +4287,13 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                         : null,
 
                       // ── iPAi synthesis (or fallback to raw notes) ──
+                      // v1.141.2 — theme colours only. This box was a hard-coded pale green with
+                      // var(--text-primary) text: in dark mode that's near-white on near-white, and
+                      // Kay's Samsung (dark mode) showed a blank grey panel at her first check-in.
                       bd?.notesSynthesis
                         ? React.createElement('div', { style: {
-                            padding: 14, background: 'linear-gradient(135deg, #f0f7f5, #e8f4f0)', borderRadius: 10,
-                            border: '1px solid #b2dfdb', marginBottom: 14,
+                            padding: 14, background: 'var(--bg-highlight)', borderRadius: 10,
+                            border: '1px solid var(--border-color)', marginBottom: 14,
                           }},
                             React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 } },
                               React.createElement('span', { style: { fontSize: 14 } }, '\u{1F9E0}'),
@@ -4300,13 +4303,13 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                           )
                         : (bd?.recentNotes && bd.recentNotes.length > 0)
                           ? React.createElement('div', { style: {
-                              padding: 12, background: '#f8f4ff', borderRadius: 8, border: '1px solid #e8daff', marginBottom: 14,
+                              padding: 12, background: 'var(--color-purple-bg)', borderRadius: 8, border: '1px solid var(--border-color)', marginBottom: 14,
                             }},
                               React.createElement('div', { style: { fontSize: 12, fontWeight: 600, color: 'var(--color-purple)', marginBottom: 8 } }, 'Recent Care Notes'),
                               bd.recentNotes.map((n, i) =>
                                 React.createElement('div', { key: i, style: {
                                   fontSize: 12, color: 'var(--text-primary)', lineHeight: 1.5,
-                                  padding: '8px 0', borderBottom: i < bd.recentNotes.length - 1 ? '1px solid #f0e8ff' : 'none',
+                                  padding: '8px 0', borderBottom: i < bd.recentNotes.length - 1 ? '1px solid var(--border-light)' : 'none',
                                 }},
                                   React.createElement('div', { style: { fontSize: 10, color: 'var(--text-muted)', marginBottom: 3, fontWeight: 600 } },
                                     n.createdAt ? TimezoneHelper.formatTimestamp(n.createdAt, checkInSession.timezone, { month: 'short', day: 'numeric' }) : ''

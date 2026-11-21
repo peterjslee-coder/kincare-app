@@ -314,7 +314,7 @@ const CaregiverCalendar = window.CaregiverCalendar = ({ caregiverId, sessions, a
       {/* Care request alert banner with previews */}
       {careRequests.length > 0 && (
         <div style={{
-          background: 'linear-gradient(135deg, #fff3e0, #ffe0b2)', border: '1px solid #ffb74d',
+          background: 'var(--color-warning-bg)', border: '1px solid var(--color-warning)', // v1.141.2 — theme colours
           borderRadius: 10, padding: '12px 16px', marginBottom: 14,
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: careRequests.length > 0 ? 8 : 0 }}>
