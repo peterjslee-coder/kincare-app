@@ -186,6 +186,114 @@ const DayFoldCard = window.DayFoldCard = ({ today, next, onOpenVisit, onOpenEven
   );
 };
 
+/**
+ * v1.142.0 — Pete chose E on the 11/21 canvas: today in the same shape as the folded day.
+ * "I don't see that Ryan shows up after Kay. For the sake of space, I prefer that we see what
+ * time Ryan shows up and less about the pizza." One short row per caregiver today — the one
+ * there now marked HERE NOW — appointments as a tag on the visit they fall in, finished things
+ * one line each, and overlaps/gaps between visits called out like tomorrow's.
+ * visits: [{id, name, start, end, state:'done'|'now'|'next'}] (minutes from today's midnight);
+ * events: [{ev, at, done}].
+ */
+const TodayRowsCard = window.TodayRowsCard = ({ hero, visits, events, nowMin, tz, onOpenVisit, onOpenEvent }) => {
+  const doneLines = [
+    ...visits.filter((v) => v.state === 'done').map((v) => ({ key: `v${v.id}`, at: v.start, time: _clock(v.start), label: `${_spineFirst(v.name)}${'\u2019'}s visit`, onOpen: () => onOpenVisit && onOpenVisit(v.id) })),
+    ...events.filter((e) => e.done).map((e) => ({ key: `e${e.ev.id}`, at: e.at, time: e.ev.event_time ? _clock(e.at) : 'All day', label: e.ev.title, notes: Number(e.ev.notes_count) || 0, onOpen: () => onOpenEvent && onOpenEvent(e.ev) })),
+  ].sort((a, b) => a.at - b.at);
+  const live = visits.filter((v) => v.state !== 'done');
+  const rows = nextDayRows(live, events.filter((e) => !e.done));
+  const active = hero && hero.isActive;
+  const label = hero?.hasPendingTC ? 'Time change proposed' : active ? 'In progress now' : 'Today';
+  const labelColor = hero?.hasPendingTC ? 'var(--color-purple)' : active ? 'var(--color-warning)' : 'var(--accent-color)';
+  const band = (key, color, bg, icon, text) => (
+    <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 12px', borderLeft: '1px solid var(--border-color)', borderRight: '1px solid var(--border-color)', background: bg, fontSize: 12, fontWeight: 600, color }}>
+      <span aria-hidden="true">{icon}</span><span>{text}</span>
+    </div>
+  );
+  return (
+    <div data-testid="today-rows" style={{ background: 'var(--bg-card)', border: `3px solid ${active ? 'var(--color-warning)' : 'var(--role-color)'}`, borderRadius: 16, padding: 14, marginBottom: 16 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
+        <div>
+          <div style={{ fontSize: 11, fontWeight: 700, color: labelColor, letterSpacing: '0.5px', textTransform: 'uppercase' }}>{label}</div>
+          <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', marginTop: 2 }}>Today</div>
+        </div>
+        {hero && hero.countdownStr && (
+          <div style={{ fontSize: 13, fontWeight: 700, color: hero.countdownColor, whiteSpace: 'nowrap', background: 'var(--color-warning-bg)', padding: '5px 10px', borderRadius: 14 }}>
+            {hero.isActive || hero.msUntil <= 0 ? hero.countdownStr : `in ${hero.countdownStr}`}
+          </div>
+        )}
+      </div>
+      {active && hero.endMs > hero.startMs && (() => {
+        const nowMs = TimezoneHelper.realNowMs();
+        const frac = Math.max(0, Math.min(1, (nowMs - hero.startMs) / (hero.endMs - hero.startMs)));
+        return (
+          <div data-testid="spine-progress" style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '12px 0 4px' }}>
+            <div style={{ flex: 1, height: 6, borderRadius: 3, background: 'var(--border-light)', position: 'relative' }}>
+              <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${frac * 100}%`, borderRadius: 3, background: 'var(--role-color)' }}></div>
+              <div style={{ position: 'absolute', left: `${frac * 100}%`, top: -4, width: 14, height: 14, marginLeft: -7, borderRadius: '50%', background: 'var(--accent-color)', boxShadow: '0 0 0 2px var(--bg-card)' }}></div>
+            </div>
+            <span style={{ fontSize: 11, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{_range(_hm(hero.time), _hm(hero.time) + Math.round((hero.durationHours || 0) * 60))}</span>
+          </div>
+        );
+      })()}
+      {doneLines.length > 0 && (
+        <div style={{ marginTop: 8 }}>
+          {doneLines.map((d) => <DoneLine key={d.key} time={d.time} label={d.label} notes={d.notes} onOpen={d.onOpen} />)}
+          {rows.length > 0 && (
+            <div data-testid="spine-now" style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '6px 0 8px' }}>
+              <span style={{ fontSize: 9, fontWeight: 800, color: 'var(--text-on-primary)', background: 'var(--accent-color)', borderRadius: 10, padding: '3px 5px' }}>NOW</span>
+              <span style={{ flex: 1, height: 2, background: 'var(--accent-color)' }}></span>
+              <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--accent-color)' }}>{_clock(nowMin)}</span>
+            </div>
+          )}
+        </div>
+      )}
+      <div style={{ marginTop: doneLines.length ? 0 : 12 }}>
+        {rows.map((r, i) => {
+          const first = i === 0; const last = i === rows.length - 1;
+          const radius = `${first ? 10 : 0}px ${first ? 10 : 0}px ${last ? 10 : 0}px ${last ? 10 : 0}px`;
+          if (r.kind === 'overlap') return band(`o${i}`, 'var(--color-warning)', 'var(--color-warning-bg)', '\u21C5', `Both there ${_range(r.from, r.to)} \u00b7 ${r.to - r.from} min hand-off`);
+          if (r.kind === 'gap') return band(`g${i}`, 'var(--text-secondary)', 'var(--bg-elevated)', '\u2013', `Nobody there ${_range(r.from, r.to)}`);
+          if (r.kind === 'event') {
+            return (
+              <button key={`e${r.e.ev.id}`} type="button" onClick={() => onOpenEvent && onOpenEvent(r.e.ev)} style={{
+                width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', minHeight: 44, borderRadius: radius,
+                border: '1px solid var(--border-color)', background: 'none', color: 'var(--text-primary)', fontSize: 14, textAlign: 'left', cursor: 'pointer',
+              }}>
+                <span aria-hidden="true" style={{ width: 30, textAlign: 'center', fontSize: 16 }}>{careEventIcon(r.e.ev.category)}</span>
+                <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  <span style={{ color: 'var(--text-secondary)' }}>{_clock(r.e.at)}</span> {r.e.ev.title}
+                </span>
+              </button>
+            );
+          }
+          const v = r.v; const here = v.state === 'now';
+          return (
+            <div key={`v${v.id}`} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', minHeight: 44, borderRadius: radius,
+              border: `1px solid ${here ? 'var(--role-color)' : 'var(--border-color)'}`, background: here ? 'var(--bg-highlight)' : 'none',
+              borderTop: first || rows[i - 1].kind !== 'visit' ? undefined : 'none' }}>
+              <button type="button" data-testid="today-visit" onClick={() => onOpenVisit && onOpenVisit(v.id)} style={{
+                flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 10, background: 'none', border: 'none', padding: 0, textAlign: 'left', cursor: 'pointer', color: 'var(--text-primary)',
+              }}>
+                <span aria-hidden="true" style={{ width: 30, height: 30, minWidth: 30, borderRadius: '50%', background: 'var(--role-color)', color: 'var(--text-on-primary)', fontSize: 12, fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>{_spineInitials(v.name)}</span>
+                <span style={{ fontSize: 14 }}>
+                  <b>{_spineFirst(v.name)}</b> <span style={{ color: 'var(--text-secondary)' }}>{_range(v.start, v.end)}</span>
+                  {here && <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-warning)', marginLeft: 6 }}>{'\u00b7'} HERE NOW</span>}
+                </span>
+              </button>
+              {r.riders.map((e) => (
+                <button key={e.ev.id} type="button" onClick={() => onOpenEvent && onOpenEvent(e.ev)} style={{
+                  background: 'none', border: 'none', padding: '4px 0', fontSize: 11.5, fontWeight: 600, color: 'var(--accent-color)', cursor: 'pointer', whiteSpace: 'nowrap', maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis',
+                }}>+ {e.ev.title.split(/\s+/).slice(0, 2).join(' ')} {_clock(e.at)}</button>
+              ))}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
 const ComingUpSpine = window.ComingUpSpine = ({ hero, events, onOpenVisit, onOpenEvent }) => {
   const evs = events || [];
   if (!hero && !evs.length) return null;
