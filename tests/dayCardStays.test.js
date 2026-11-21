@@ -63,3 +63,18 @@ test("v1.141.1 — no escape sequence sits in bare JSX text (it renders as the s
   const src = raw("public/js/components/ComingUpSpine.js");
   expect(src).not.toMatch(/\}\\u00b7 \{today/);
 });
+
+describe("v1.142.0 — today in short rows (Pete chose E)", () => {
+  const dash = code("public/js/components/Dashboard.js");
+  const spine = code("public/js/components/ComingUpSpine.js");
+  test("with caregivers on today, the card is one row each, the next one named", () => {
+    expect(dash).toMatch(/<TodayRowsCard hero=\{heroToday \? heroInfo : null\} visits=\{visitsToday\}/);
+    expect(spine).toMatch(/data-testid="today-visit"/);
+    expect(spine).toMatch(/HERE NOW/);
+  });
+  test("appointments ride as a tag, not a full card with an address", () => {
+    const card = spine.slice(spine.indexOf("const TodayRowsCard"), spine.indexOf("const ComingUpSpine"));
+    expect(card).toMatch(/r\.riders\.map/);
+    expect(card).not.toMatch(/ev\.location/);
+  });
+});

@@ -42,7 +42,7 @@ describe("who sees what", () => {
     expect(got).not.toContain("todos-caregiver");
   });
   test("a caregiver sees the caregiver one", () => {
-    expect(ids({ roles: ["caregiver"], createdAt: "2026-01-01" }).sort()).toEqual(["calendar-whole-month", "cancel-one-or-series", "caregiver-get-ready", "caregiver-home-tidy", "change-the-series", "change-visit-day", "checkr-inplace-pays", "day-card-stays", "day-folds", "iphone-uploads", "meds-follow-the-shift", "mileage-caregiver", "mileage-legs", "place-search-google", "quiet-hours-what-happened", "recording-pause", "time-change-in-words", "todos-caregiver", "todos-folded-bar"]);
+    expect(ids({ roles: ["caregiver"], createdAt: "2026-01-01" }).sort()).toEqual(["calendar-whole-month", "cancel-one-or-series", "caregiver-get-ready", "caregiver-home-tidy", "change-the-series", "change-visit-day", "checkr-inplace-pays", "day-card-stays", "day-folds", "iphone-uploads", "meds-follow-the-shift", "mileage-caregiver", "mileage-legs", "place-search-google", "quiet-hours-what-happened", "recording-pause", "time-change-in-words", "today-short-rows", "todos-caregiver", "todos-folded-bar"]);
   });
   test("seen entries do not come back, and a second entry on the same day still does", () => {
     const got = ids({ roles: ["family"], createdAt: "2026-01-01", seenIds: ["todos-next-visit"] });

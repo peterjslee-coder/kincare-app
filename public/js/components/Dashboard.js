@@ -1751,6 +1751,28 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
           );
         }
         if ((heroInfo?.id || null) !== imminentId) setTimeout(() => setImminentId(heroInfo?.id || null), 0);
+        // ─── v1.142.0 — today in short rows when caregivers are on today (Pete chose E, 11/21) ───
+        {
+          const nowLocal = (() => { try { const p = new Intl.DateTimeFormat('en-US', { timeZone: ftz, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(new Date(nowMsEv)); const g = (t) => Number((p.find((x) => x.type === t) || {}).value); return g('hour') * 60 + g('minute'); } catch { return 0; } })();
+          const doneToday = (data?.recentlyCompleted || []).filter((s) => s.caregiverName && dOf(s.date) === todayStr);
+          const liveToday = upcoming.filter((s) => s.caregiverName && ['confirmed', 'in_progress'].includes(s.status) && (dOf(s.date) === todayStr || s.status === 'in_progress'));
+          if (liveToday.length) {
+            const mk = (s, state) => ({ id: s.id, name: s.caregiverName, start: hm(s.time), end: hm(s.time) + Math.round((s.durationHours || 2) * 60), state });
+            const visitsToday = [
+              ...doneToday.map((s) => mk(s, 'done')),
+              ...liveToday.map((s) => mk(s, s.status === 'in_progress' ? 'now' : 'next')),
+            ];
+            const eventsToday = (careEventsUpcoming?.events || []).filter((ev) => dOf(ev.event_date) === todayStr).map((ev) => {
+              const startMs = TimezoneHelper.buildDateTime(todayStr, ev.event_time || '00:00', ev.timezone || ftz).getTime();
+              return { ev, at: ev.event_time ? hm(ev.event_time) : 0, done: evEnd({ ev, startMs }) <= nowMsEv };
+            });
+            return (
+              <TodayRowsCard hero={heroToday ? heroInfo : null} visits={visitsToday} events={eventsToday} nowMin={nowLocal} tz={ftz}
+                onOpenVisit={(id) => id && setVisitDetailSessionId(id)}
+                onOpenEvent={(ev) => setEventSheet(ev)} />
+            );
+          }
+        }
         if (!heroInfo && !eventRows.length) return null;
         return (
           <ComingUpSpine hero={heroInfo} events={eventRows}

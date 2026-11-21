@@ -31,6 +31,21 @@ const WINDOW_DAYS = 45;
 
 const ENTRIES = [
   {
+    id: "today-short-rows",
+    version: "1.142.0",
+    date: "2026-11-21",
+    audience: ["family", "caregiver"],
+    title: "Today: who's here, and who's next",
+    body: "On a day with caregivers, the Today card is one short row per caregiver, so you can see when the next one arrives. The one there now is marked, and appointments ride along as a small tag on the visit they fall in.",
+    howTo: [
+      "On Home, read the Today card top to bottom",
+      "Tap a caregiver's row for the visit, or the tag for the appointment",
+    ],
+    examples: ["When does the afternoon caregiver get here?"],
+    preview: "dayFolds",
+    action: { label: "Show me", page: "dashboard" },
+  },
+  {
     id: "day-folds",
     version: "1.141.0",
     date: "2026-11-20",
