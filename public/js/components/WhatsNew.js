@@ -464,6 +464,19 @@ const WN_PREVIEWS = {
       ))}
     </div>
   ),
+  // v1.147.0 — the Undo bar after accepting a visit
+  undoAccept: () => (
+    <div>
+      <div style={wnCard}>
+        <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--text-primary)' }}>Companionship {'\u00b7'} Tue 9:00 AM</div>
+        <div style={{ fontSize: 10.5, color: 'var(--color-success)', fontWeight: 700, marginTop: 2 }}>{'\u2713'} Accepted</div>
+      </div>
+      <div style={{ ...wnCard, display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}>
+        <span style={{ flex: 1, fontSize: 11, color: 'var(--text-primary)' }}>Accepted. Tapped by mistake?</span>
+        <span style={{ fontSize: 10.5, fontWeight: 700, padding: '3px 10px', borderRadius: 7, background: 'var(--role-color)', color: 'var(--text-on-primary)' }}>Undo</span>
+      </div>
+    </div>
+  ),
   // v1.146.0 — the pinned update on a caregiver's Home
   caregiverUpdate: () => (
     <div>

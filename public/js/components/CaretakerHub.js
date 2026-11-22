@@ -1204,7 +1204,10 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
       const res = await apiFetch(`/api/sessions/${jobId}/claim`, { method: 'PUT' });
       if (res?.ok) {
         if (amount > 0 && btnEl) flyMoney(Math.round(amount), btnEl);
-        showToast && showToast('Job accepted!', 'success');
+        // v1.147.0 — the Undo bar replaces the toast: "Accepted. Tapped by mistake? Undo"
+        const refreshDash = async () => { const r = await apiFetch('/api/dashboard'); if (r?.ok) setData(await r.json()); };
+        if (window.offerUndoAccept) window.offerUndoAccept([jobId], { label: 'Job accepted.', onUndone: refreshDash });
+        else showToast && showToast('Job accepted!', 'success');
         // Refresh dashboard
         const dashRes = await apiFetch('/api/dashboard');
         if (dashRes?.ok) setData(await dashRes.json());
@@ -1235,7 +1238,10 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
         const d = await res.json().catch(() => ({}));
         if (amount > 0 && btnEl) flyMoney(Math.round(amount), btnEl);
         const n = d.claimed || sessionIds.length;
-        showToast && showToast(
+        // v1.147.0 — "N visits accepted. Tapped by mistake? Undo"
+        const refreshDash = async () => { const r = await apiFetch('/api/dashboard'); if (r?.ok) setData(await r.json()); };
+        if (window.offerUndoAccept) window.offerUndoAccept(sessionIds, { label: `${n} visit${n === 1 ? '' : 's'} accepted.`, onUndone: refreshDash });
+        if (!window.offerUndoAccept || d.released) showToast && showToast(
           d.released ? `${n} visit${n === 1 ? '' : 's'} accepted — the other ${d.released} went back to the pool.`
                      : `${n} visit${n === 1 ? '' : 's'} accepted!`,
           'success'

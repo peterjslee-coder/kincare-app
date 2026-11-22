@@ -51,7 +51,9 @@ const CancelSessionModal = window.CancelSessionModal = ({
   const sessionDT = TimezoneHelper.buildDateTime((dateISO || '').split('T')[0], time || '00:00', timezone);
   const hoursAway = (sessionDT.getTime() - TimezoneHelper.realNowMs()) / (1000 * 60 * 60);
   const hasCaregiver = !!caregiverName;
-  const isLate = hasCaregiver && hoursAway < 24;
+  // v1.147.0 — she accepted this minutes ago: cancelling is an undo, with no late mark.
+  const mistake = role === 'caregiver' && preview && !preview.unavailable ? preview.mistakeWindow : null;
+  const isLate = hasCaregiver && hoursAway < 24 && !mistake;
 
   const series = preview && !preview.unavailable && preview.series ? preview.series : null;
   const needChoice = !!series && !scope;
@@ -61,7 +63,7 @@ const CancelSessionModal = window.CancelSessionModal = ({
     try {
       const res = await apiFetch(`/api/sessions/${sessionId}/cancel`, {
         method: 'PUT',
-        body: JSON.stringify({ reason: reason || (role === 'caregiver' ? 'Cancelled by caregiver' : 'Cancelled by family'), scope: scope === 'series' ? 'series' : 'one' }),
+        body: JSON.stringify({ reason: reason || (mistake ? 'Accepted by mistake' : role === 'caregiver' ? 'Cancelled by caregiver' : 'Cancelled by family'), scope: scope === 'series' ? 'series' : 'one' }),
       });
       if (res && res.ok) {
         const d = await res.json();
@@ -121,6 +123,11 @@ const CancelSessionModal = window.CancelSessionModal = ({
                 : <span>Checking whether a cancellation fee applies&hellip;</span>}
           </div>
         )}
+        {mistake && (
+          <div data-testid="accept-mistake" style={{ padding: '10px 14px', background: 'var(--color-success-bg)', borderRadius: 8, marginBottom: 12, fontSize: 13, color: 'var(--color-success)', lineHeight: 1.5 }}>
+            Accepted this by mistake? You just accepted it, so undoing it now leaves no late-cancel mark. The family is told it was a mistake.
+          </div>
+        )}
         {role === 'caregiver' && (
           // Carried over from Find Work's own cancel box, which this screen replaces (v1.125.2).
           <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 12, lineHeight: 1.5 }}>
@@ -147,4 +154,53 @@ const CancelSessionModal = window.CancelSessionModal = ({
       </div>
     </div>
   );
+};
+
+// ─── v1.147.0 — "Accepted. Tapped by mistake? Undo" ───
+//
+// Pete, 11/22: "somebody accidentally accepted the job that they can't do." Right after an
+// accept, a bar at the bottom offers Undo for a minute. After that the same undo is the Cancel
+// button on the visit, which the server treats as a mistake (no late mark) for 30 minutes after
+// accepting (src/utils/acceptMistake.js).
+const UNDO_ACCEPT_MS = 60000;
+const UndoAcceptBar = ({ ids, label, onDone }) => {
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState('');
+  useEffect(() => { const t = setTimeout(() => onDone(false), UNDO_ACCEPT_MS); return () => clearTimeout(t); }, []);
+  const undo = async () => {
+    if (busy) return;
+    setBusy(true);
+    let ok = 0;
+    for (const id of ids) {
+      try {
+        const res = await apiFetch(`/api/sessions/${id}/cancel`, { method: 'PUT', body: JSON.stringify({ reason: 'Accepted by mistake', scope: 'one' }) });
+        if (res && res.ok) ok += 1;
+      } catch { /* counted below */ }
+    }
+    if (ok === ids.length) { setMsg('Undone. It\u2019s open again for another caregiver.'); setTimeout(() => onDone(true), 2500); }
+    else { setMsg(ok ? `Undid ${ok} of ${ids.length}. Cancel the rest from the visit.` : 'That didn\u2019t go through. Cancel it from the visit.'); setBusy(false); setTimeout(() => onDone(ok > 0), 4000); }
+  };
+  return (
+    <div role="status" data-testid="undo-accept-bar" style={{ position: 'fixed', left: 12, right: 12, bottom: 'calc(84px + env(safe-area-inset-bottom, 0px))', zIndex: 1002, maxWidth: 480, margin: '0 auto', display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', borderRadius: 12, background: 'var(--bg-elevated)', border: '1px solid var(--border-color)', boxShadow: '0 6px 20px rgba(0,0,0,0.18)', color: 'var(--text-primary)', fontSize: 14 }}>
+      <span style={{ flex: 1 }}>{msg || (label || 'Accepted.') + ' Tapped by mistake?'}</span>
+      {!msg && (
+        <button type="button" onClick={undo} disabled={busy} style={{ minHeight: 40, padding: '0 16px', borderRadius: 10, border: 'none', background: 'var(--role-color)', color: 'var(--text-on-primary)', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
+          {busy ? 'Undoing\u2026' : 'Undo'}
+        </button>
+      )}
+      {!msg && (
+        <button type="button" aria-label="Dismiss" onClick={() => onDone(false)} style={{ background: 'none', border: 'none', color: 'var(--text-tertiary)', fontSize: 18, cursor: 'pointer', padding: 4 }}>{'\u00d7'}</button>
+      )}
+    </div>
+  );
+};
+/** Show the Undo bar for visits she just accepted. onUndone() runs after a successful undo. */
+window.offerUndoAccept = (ids, { label, onUndone } = {}) => {
+  const list = (ids || []).filter(Boolean);
+  if (!list.length || typeof ReactDOM === 'undefined') return;
+  let host = document.getElementById('undo-accept-host');
+  if (!host) { host = document.createElement('div'); host.id = 'undo-accept-host'; document.body.appendChild(host); }
+  ReactDOM.unmountComponentAtNode(host);
+  const done = (undone) => { ReactDOM.unmountComponentAtNode(host); if (undone && onUndone) onUndone(); };
+  ReactDOM.render(<UndoAcceptBar key={list.join(',') + Date.now()} ids={list} label={label} onDone={done} />, host);
 };
