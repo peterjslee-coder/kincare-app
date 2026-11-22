@@ -413,42 +413,18 @@ IMPORTANT: Return ONLY the JSON object, no markdown formatting or code blocks.`;
 /**
  * Generate a post-session summary for the family
  * Called after caregiver checkout
- *
- * v1.144.0 (Pete, 11/21): "a little more summary and a little less 'looks like they had a
- * special day' stuff… string data a little more between visits." The summary is now a plain
- * handoff note: what the report and the note say about today, then — only when the data shows
- * one — what changed against her last few visits. It reads raw caregiver input only (visit
- * logs and report taps), never an earlier AI summary (iPAi cardinal rule), and it observes, it
- * never advises (feedback_ai_medical_guidance_rule).
  */
-const SUMMARY_HISTORY_VISITS = 6;
+async function generateSessionSummary(sessionId) {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) return null;
 
-/** "Breakfast: All of it; Rest: Long nap (1h+) (note)" from reportForDisplay's groups. */
-function reportLine(display) {
-  if (!display || !display.groups) return "";
-  return display.groups
-    .flatMap((g) => g.items)
-    .filter((i) => !i.skipped)
-    .map((i) => `${i.label}: ${i.answer}${i.note ? ` (${i.note})` : ""}`)
-    .join("; ");
-}
+  const db = await getDb();
 
-/** One visit as the prompt reads it. Raw caregiver input only. */
-function visitLines(v) {
-  const lines = [`${v.date} · ${v.caregiver || "caregiver"}`];
-  if (v.arrival || v.departure) lines.push(`  Mood: arrived ${v.arrival || "not recorded"}; left ${v.departure || "not recorded"}`);
-  if (v.report) lines.push(`  Report: ${v.report}`);
-  if (v.note) lines.push(`  Caregiver's note: "${v.note}"`);
-  return lines.join("\n");
-}
-
-/** Today's visit and up to SUMMARY_HISTORY_VISITS before it, oldest first. */
-async function sessionSummaryInputs(db, sessionId) {
-  const s = await db.prepare(`
-    SELECT cs.id, cs.care_recipient_id, cs.scheduled_date, cs.scheduled_time, cs.duration_hours,
-      cs.service_type, cr.first_name AS recipient_name, u.first_name AS caregiver_name,
-      vl.arrival_mood, vl.departure_mood, vl.condition_tags, vl.care_feedback,
-      vl.service_feedback, vl.summary
+  const session = await db.prepare(`
+    SELECT cs.*, cr.first_name AS recipient_name, cr.health_conditions,
+      u.first_name AS caregiver_name,
+      vl.arrival_mood, vl.departure_mood, vl.condition_tags,
+      vl.care_feedback, vl.service_feedback, vl.summary
     FROM care_sessions cs
     JOIN care_recipients cr ON cs.care_recipient_id = cr.id
     JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
@@ -456,126 +432,78 @@ async function sessionSummaryInputs(db, sessionId) {
     LEFT JOIN visit_logs vl ON vl.session_id = cs.id
     WHERE cs.id = ?
   `).get(sessionId);
-  if (!s) return null;
 
-  const { reportForDisplay } = require("./visitReport");
-  const displayOf = async (id) => { try { return await reportForDisplay(db, id); } catch { return null; } };
-  const tags = (() => { try { return JSON.parse(s.condition_tags || "[]"); } catch { return []; } })();
-
-  const visit = {
-    date: String(s.scheduled_date).slice(0, 10),
-    time: String(s.scheduled_time || "").slice(0, 5),
-    hours: s.duration_hours,
-    service: s.service_type,
-    recipient: s.recipient_name,
-    caregiver: s.caregiver_name,
-    arrival: parseMoodDisplay(s.arrival_mood),
-    departure: parseMoodDisplay(s.departure_mood),
-    tags,
-    // Care Notes from checkout first; care_feedback for legacy visits.
-    note: (s.summary || s.care_feedback || "").trim(),
-    serviceNote: (s.service_feedback || "").trim(),
-    report: reportLine(await displayOf(sessionId)),
-  };
-
-  // Earlier completed visits for the same person, any caregiver. Scheduled date/time are
-  // care-local TEXT, so they sort correctly as text.
-  let history = [];
-  try {
-    const prior = await db.prepare(`
-      SELECT cs.id, cs.scheduled_date, u.first_name AS caregiver_name,
-        vl.arrival_mood, vl.departure_mood, vl.summary, vl.care_feedback
-      FROM care_sessions cs
-      JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
-      JOIN users u ON cp.user_id = u.id
-      JOIN visit_logs vl ON vl.session_id = cs.id
-      WHERE cs.care_recipient_id = ? AND cs.id <> ? AND cs.status = 'completed'
-        AND (cs.scheduled_date || ' ' || COALESCE(cs.scheduled_time, '')) < (? || ' ' || ?)
-      ORDER BY cs.scheduled_date DESC, cs.scheduled_time DESC
-      LIMIT ${SUMMARY_HISTORY_VISITS}
-    `).all(s.care_recipient_id, s.id, visit.date, visit.time);
-    for (const p of prior.reverse()) {
-      history.push({
-        date: String(p.scheduled_date).slice(0, 10),
-        caregiver: p.caregiver_name,
-        arrival: parseMoodDisplay(p.arrival_mood),
-        departure: parseMoodDisplay(p.departure_mood),
-        note: (p.summary || p.care_feedback || "").trim().slice(0, 400),
-        report: reportLine(await displayOf(p.id)),
+  // Use summary (Care Notes from checkout form) as primary; fall back to care_feedback for legacy visits
+  const caregiverNotes = session?.summary || session?.care_feedback;
+  // v1.108.0 — the visit report is raw caregiver input (taps, not AI output), so it may feed
+  // this summary. A visit with a report and no free-text note still gets a summary.
+  let reportLines = [];
+  if (session) {
+    try {
+      const { CATALOG, _internal } = require("./visitReport");
+      const rows = await db.prepare("SELECT topic, ref, value, note FROM visit_report_answers WHERE session_id = ?").all(sessionId);
+      reportLines = rows.filter((r) => r.value !== "na").map((r) => {
+        const o = _internal.optionOf(r.topic, r.value);
+        const what = r.topic === "meal" ? r.ref : r.topic === "med" ? "a medication dose" : r.topic === "appt" ? "an appointment" : (CATALOG[r.topic] ? CATALOG[r.topic].short(r.ref, null) : r.topic);
+        return `${what}: ${o ? o.label : r.value}${r.note ? ` (${r.note})` : ""}`;
       });
-    }
-  } catch { history = []; }
+    } catch { reportLines = []; }
+  }
+  if (!session || (!caregiverNotes && reportLines.length === 0)) return null;
 
-  return { visit, history };
-}
+  const conditions = (() => { try { return JSON.parse(session.health_conditions || "[]"); } catch { return []; } })();
+  const tags = (() => { try { return JSON.parse(session.condition_tags || "[]"); } catch { return []; } })();
 
-/** The prompt, built from inputs only — pure, so tests can read it. */
-function buildSessionSummaryPrompt({ visit, history }) {
-  const name = visit.recipient || "the care recipient";
-  const today = [
-    `Date: ${visit.date}${visit.time ? ` at ${visit.time}` : ""}${visit.hours ? `, ${visit.hours} hours` : ""}`,
-    `Caregiver: ${visit.caregiver || "not recorded"}`,
-    `Mood: arrived ${visit.arrival || "not recorded"}; left ${visit.departure || "not recorded"}`,
-    visit.tags && visit.tags.length ? `Tags the caregiver picked: ${visit.tags.join(", ")}` : null,
-    visit.report ? `Visit report (one tap per row): ${visit.report}` : null,
-    visit.note ? `Caregiver's note: "${visit.note}"` : null,
-    visit.serviceNote ? `Service note: "${visit.serviceNote}"` : null,
-  ].filter(Boolean).join("\n");
-
-  const earlier = history.length
-    ? history.map(visitLines).join("\n")
-    : "None — this is the first visit with a record.";
-
-  return `You are iPAi, writing the short visit summary ${name}'s family reads after a caregiver's visit.
-
-Write it like a handoff note from an experienced caregiver: plain, factual, specific. The family wants to know what happened, not how it felt.
-
-TODAY'S VISIT
-${today}
-
-EARLIER VISITS (oldest first — for comparison only)
-${earlier}
-
-RULES
-- Use only the data above. Never add an event, a result or a reason that is not written there. If the note says "dental cleaning went well", do not say what the dentist found.
-- No praise or adjectives about the day or the people ("lovely", "wonderful", "special", "meaningful", "great day", "bright spirits"). No exclamation marks. Never "it sounds like", "we", or "you".
-- The visit report is the record. If the caregiver's note and the report disagree (note says she ate well, report says lunch "Some"), give the report's answer.
-- Use the caregiver's first name. Fix obvious typos silently; never quote them.
-- Anything the family may want to follow up on — pain, a fall or near-fall, confusion, wandering, refusing food, drink or medication, a skin injury — goes in plainly as what was seen. Never advise, never suggest a doctor, a treatment, or anything to do.
-
-WHAT TO WRITE
-1. "today": 2–4 short sentences on this visit — food and drink, rest, getting around, mood on arrival and leaving, what they did, and anything to follow up on.
-2. "sinceRecent": what is different from the earlier visits, with the count or the date ("first visit in 7 with drinks marked Some", "looked for Max on two visits in a row", "shoulder pain — none noted Nov 14 or Nov 17", "third long nap in a row"). Only changes, streaks and repeats the data actually shows. One or two sentences. Use "" when nothing stands out or there are no earlier visits.
-
-Return ONLY this JSON, no markdown:
-{"today": "...", "sinceRecent": "...", "moodChange": "improved|declined|stable|unknown"}`;
-}
-
-/** The family-facing text: today's note, then the comparison on its own line. */
-function composeSummary(parsed) {
-  const today = String(parsed.today || parsed.summary || "").trim();
-  const since = String(parsed.sinceRecent || "").trim();
-  if (!today) return null;
-  return since ? `${today}\nSince recent visits: ${since}` : today;
-}
-
-async function generateSessionSummary(sessionId) {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) return null;
-
-  const db = await getDb();
-  const inputs = await sessionSummaryInputs(db, sessionId);
-  if (!inputs || (!inputs.visit.note && !inputs.visit.report)) return null;
-
-  const prompt = buildSessionSummaryPrompt(inputs);
+  // Also pull recent care notes for this recipient to give AI context (but keep them separate from this visit's notes)
+  let recentCareNotes = [];
   try {
-    const text = await callClaude(apiKey, "claude-haiku-4-5-20251001", 600, [{ role: "user", content: prompt }]);
+    recentCareNotes = await db.prepare(`
+      SELECT content, note_type, created_at FROM recipient_notes
+      WHERE care_recipient_id = ? AND id != ?
+      ORDER BY created_at DESC LIMIT 5
+    `).all(session.care_recipient_id, sessionId);
+  } catch { /* non-critical */ }
+
+  const recentContext = recentCareNotes.length > 0
+    ? `\n\nRECENT CARE HISTORY (for context, do NOT just repeat these — use them to notice trends or changes):\n${recentCareNotes.map(n => `- ${n.created_at}: ${n.content?.substring(0, 150)}`).join("\n")}`
+    : "";
+
+  const prompt = `You are iPAi, writing a warm post-session summary for a family about their loved one's care visit.
+Write only from the visit data below — never add events or background facts that are not in it. Warm interpretation of what IS in it is welcome; write like a caring human, not a report, and never use meta-language like \"based on the data\".
+
+VISIT DETAILS:
+- Care recipient: ${session.recipient_name}
+- Health conditions: ${conditions.join(", ") || "not specified"}
+- Caregiver: ${session.caregiver_name}
+- Date: ${session.scheduled_date} at ${session.scheduled_time}
+- Duration: ${session.duration_hours} hours
+- Service: ${session.service_type}
+- Arrival mood: ${parseMoodDisplay(session.arrival_mood) || "not recorded"}
+- Departure mood: ${parseMoodDisplay(session.departure_mood) || "not recorded"}
+- Condition tags: ${tags.join(", ") || "none"}
+- Caregiver notes: ${caregiverNotes ? `"${caregiverNotes}"` : "none"}
+${reportLines.length ? `- Visit report (what the caregiver recorded): ${reportLines.join("; ")}\n` : ""}${session.service_feedback ? `- Service notes: "${session.service_feedback}"` : ""}${recentContext}
+
+INSTRUCTIONS:
+Write a 3-4 sentence warm summary for the family about THIS visit. Be specific about what happened — reference actual observations from the caregiver's notes above. Do NOT just list or rephrase the care notes — synthesize them into a natural narrative. If the mood changed, note it. If there are concerning observations, state them plainly and kindly — never give medical, health or care advice, and never guess at causes. End on a positive or constructive note. Keep it conversational, like a thoughtful caregiver texting the family.
+
+If recent care history is provided, use it only to note meaningful changes or trends (e.g. "mood has been improving over the last few visits"). Do NOT summarize past visits.
+
+Then provide 1-2 brief actionable suggestions if warranted (e.g., scheduling tips, things to watch for).
+
+Return JSON:
+{
+  "summary": "The warm summary text",
+  "suggestions": ["suggestion 1", "suggestion 2"],
+  "moodChange": "improved|declined|stable|unknown"
+}
+
+Return ONLY the JSON, no markdown.`;
+
+  try {
+    const text = await callClaude(apiKey, "claude-haiku-4-5-20251001", 500, [{ role: "user", content: prompt }]);
     const cleaned = text.replace(/^```json?\n?/, "").replace(/\n?```$/, "").trim();
-    const parsed = JSON.parse(cleaned);
-    const summary = composeSummary(parsed);
-    if (!summary) return null;
-    // "suggestions" stays in the shape for old readers, always empty: the app does not advise.
-    return { summary, today: parsed.today, sinceRecent: parsed.sinceRecent || "", suggestions: [], moodChange: parsed.moodChange || "unknown" };
+    return JSON.parse(cleaned);
   } catch (err) {
     console.error("[iPAi] Session summary error:", err);
     return null;
@@ -854,9 +782,6 @@ module.exports = {
   analyzePatterns,
   generateCareIntelligence,
   generateSessionSummary,
-  buildSessionSummaryPrompt,
-  composeSummary,
-  sessionSummaryInputs,
   generateCaregiverCoaching,
   generateCarePlan,
 };

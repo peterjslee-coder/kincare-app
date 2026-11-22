@@ -199,12 +199,8 @@ router.put("/authorizations/:id", requireAdmin, async (req, res) => {
       const attAdminStatus = action === 'approve' ? 'approved' : 'rejected';
       await db.prepare(`
         UPDATE attestations SET admin_status = ?, admin_notes = ?, admin_reviewed_by = ?, admin_reviewed_at = NOW()
-        WHERE id = (SELECT id FROM attestations WHERE care_recipient_id = ? ORDER BY created_at DESC LIMIT 1)
+        WHERE care_recipient_id = ? ORDER BY created_at DESC LIMIT 1
       `).run(attAdminStatus, notes || null, req.user.id, id);
-      // v1.144.0 — this was an UPDATE with its own ORDER BY + LIMIT, which Postgres rejects. Every
-      // tier-3 approve or reject 500'd here AFTER the consent row above had already changed, so
-      // the family read "verified" while the attestation stayed "pending" (Kit's dad, 11/21).
-      // Pinned by tests/sqlUpdateNoOrderBy.test.js.
 
       // If rejecting, also unpause bookings if they were paused
       if (action === 'reject') {

@@ -6,7 +6,6 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
   const [allRecipients, setAllRecipients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
-  const [phoneIntl, setPhoneIntl] = useState(false);
   const [editData, setEditData] = useState({});
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState('');
@@ -775,11 +774,7 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
       preferences: profile.preferences || '',
       emergency_contact_name: profile.emergency_contact_name || '',
       emergency_contact_phone: formatPhone(profile.emergency_contact_phone) || '',
-      // v1.144.0 — the person's own number (care_recipients.sms_phone). Kit, 11/21: typed his
-      // dad's number wrong at signup and found nowhere to fix it.
-      phone: formatPhone(profile.sms_phone || profile.phone || '', String(profile.sms_phone || '').trim().startsWith('+')) || '',
     });
-    setPhoneIntl(String(profile.sms_phone || '').trim().startsWith('+'));
     setEditing(true);
     setSaveMsg('');
   };
@@ -807,7 +802,6 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
         preferences: editData.preferences,
         emergencyContactName: editData.emergency_contact_name,
         emergencyContactPhone: editData.emergency_contact_phone,
-        phone: (editData.phone || '').trim() || undefined,
       };
       const response = await apiFetch(`/api/care-recipients/${profile.id}`, {
         method: 'PUT',
@@ -830,7 +824,6 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
           preferences: editData.preferences,
           emergency_contact_name: editData.emergency_contact_name,
           emergency_contact_phone: editData.emergency_contact_phone,
-          ...((editData.phone || '').trim() ? { sms_phone: editData.phone.trim() } : {}),
         });
         setEditing(false);
         setSaveMsg('Profile saved successfully!');
@@ -1171,22 +1164,6 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
               <div style={fieldLabel}>Emergency Contact Phone</div>
               <input type="tel" style={inputStyle} value={editData.emergency_contact_phone} onChange={(e) => ed('emergency_contact_phone', formatPhone(e.target.value))} placeholder="(555) 123-4567" />
             </div>
-          </div>
-          <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid #eee' }}>
-            <div style={{ ...fieldLabel, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span>{(editData.first_name || 'Their')}{editData.first_name ? '’s' : ''} own phone</span>
-              <button type="button" data-testid="profile-phone-intl" onClick={() => { setPhoneIntl(!phoneIntl); ed('phone', ''); }}
-                style={{ background: 'none', border: 'none', color: 'var(--role-color)', fontSize: 11, cursor: 'pointer', fontWeight: 600, padding: 0 }}>
-                {phoneIntl ? 'US number' : 'International'}
-              </button>
-            </div>
-            <input type="tel" data-testid="profile-own-phone" style={inputStyle} value={editData.phone || ''}
-              onChange={(e) => ed('phone', formatPhone(e.target.value, phoneIntl))}
-              placeholder={phoneIntl ? '+44 20 7946 0958' : '(540) 555-1234'} />
-            <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 4, lineHeight: 1.4 }}>
-              Used for visit reminder texts. A new number has to say yes to texts again before any are sent.
-            </div>
-            {phoneIntl && typeof INTL_PHONE_DISCLAIMER !== 'undefined' && <div style={{ fontSize: 11, color: 'var(--accent-color)', marginTop: 4, lineHeight: 1.4 }}>{INTL_PHONE_DISCLAIMER}</div>}
           </div>
         </div>
       )}

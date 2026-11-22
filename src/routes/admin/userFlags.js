@@ -422,7 +422,7 @@ router.get("/users/:id/family-comp", async (req, res) => {
   try {
     const db = await getDb();
     const rows = await db.prepare(`
-      SELECT cr.id, cr.first_name, cr.last_name, cr.timezone, cr.comped_at, cr.ids_fast_tracked_at, cr.sms_phone,
+      SELECT cr.id, cr.first_name, cr.last_name, cr.timezone, cr.comped_at, cr.ids_fast_tracked_at,
              (cr.family_user_id = ?) AS is_owner
         FROM care_recipients cr
        WHERE cr.family_user_id = ?
@@ -445,7 +445,6 @@ router.get("/users/:id/family-comp", async (req, res) => {
       out.push({
         id: r.id, name: `${r.first_name || ""} ${r.last_name || ""}`.trim(), timezone: r.timezone || null,
         isOwner: !!r.is_owner, compedAt: r.comped_at || null, idsFastTrackedAt: r.ids_fast_tracked_at || null,
-        phone: r.sms_phone || null,
         members: Number(members?.n) || 0, pendingInvites: Number(invites?.n) || 0,
       });
     }
@@ -453,40 +452,6 @@ router.get("/users/:id/family-comp", async (req, res) => {
   } catch (err) {
     captureException(err, { where: "GET /api/admin/users/:id/family-comp" });
     res.status(500).json({ error: "Failed to load family comp" });
-  }
-});
-
-
-// ─── v1.144.0 — the loved one's own phone, set by an admin ────────────────────────────────
-// Pete, 11/21: Kit typed his dad's number wrong at signup and could not find where to fix it
-// ("I need to be able to update it for him"). This writes care_recipients.sms_phone, the same
-// column the family's own edit writes. Text consent is bound to the number in SQL
-// (utils/smsConsent.js), so a new number has to say YES again before any reminder goes out —
-// this route never carries the old consent over.
-function normalizeRecipientPhone(raw) {
-  const s = String(raw || "").trim();
-  const d = s.replace(/\D/g, "");
-  if (s.startsWith("+") && !s.startsWith("+1")) return d.length >= 8 && d.length <= 15 ? `+${d}` : null;
-  const ten = d.length === 11 && d[0] === "1" ? d.slice(1) : d;
-  return ten.length === 10 ? `(${ten.slice(0, 3)}) ${ten.slice(3, 6)}-${ten.slice(6)}` : null;
-}
-
-router.put("/care-recipients/:id/phone", async (req, res) => {
-  try {
-    const db = await getDb();
-    const phone = normalizeRecipientPhone(req.body?.phone);
-    if (!phone) return res.status(400).json({ error: "Enter a 10-digit US number, or an international number starting with +" });
-    const cr = await db.prepare("SELECT id, first_name, last_name, sms_phone FROM care_recipients WHERE id = ?").get(req.params.id);
-    if (!cr) return res.status(404).json({ error: "Care recipient not found" });
-    await db.prepare("UPDATE care_recipients SET sms_phone = ?, updated_at = NOW() WHERE id = ?").run(phone, cr.id);
-    const last4 = (v) => String(v || "").replace(/\D/g, "").slice(-4) || null;
-    await logAdminAction(req, "recipient_phone_changed", "care_recipient", cr.id, {
-      name: `${cr.first_name || ""} ${cr.last_name || ""}`.trim(), fromLast4: last4(cr.sms_phone), toLast4: last4(phone),
-    });
-    res.json({ phone });
-  } catch (err) {
-    captureException(err, { where: "PUT /api/admin/care-recipients/:id/phone" });
-    res.status(500).json({ error: "Failed to update the phone number" });
   }
 });
 

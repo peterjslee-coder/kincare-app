@@ -31,21 +31,6 @@ const WINDOW_DAYS = 45;
 
 const ENTRIES = [
   {
-    id: "plain-visit-summary",
-    version: "1.144.0",
-    date: "2026-11-22",
-    audience: ["family"],
-    title: "Visit summaries say what happened, and what changed",
-    body: "The summary after each visit is now a short, plain note built from the caregiver's report: meals, rest, getting around, mood, and anything to keep an eye on. A second line compares the visit with the last few, so a pattern shows up without you piecing it together.",
-    howTo: [
-      "Open a finished visit from Home or the Schedule",
-      "Read the summary under Visit report",
-      "Check the \u201cSince recent visits\u201d line for anything that changed",
-    ],
-    examples: ["Has Mom been eating less this week?", "Is this the second time Mom's napped all afternoon?"],
-    preview: "plainSummary",
-  },
-  {
     id: "today-short-rows",
     version: "1.142.0",
     date: "2026-11-21",

@@ -7,7 +7,7 @@ build red.
 
 Hand-written sections (§3 "Where is…") are preserved across regeneration; edit those freely.
 
-Structure at last generation: 634 HTTP routes across 66 mounts ·
+Structure at last generation: 633 HTTP routes across 66 mounts ·
 120 `CREATE TABLE` statements · 16 background jobs · 42 socket events
 (17 with no client listener) · 76 push event types · 66 `window.__*` globals.
 
@@ -40,7 +40,7 @@ JSX is *not* compiled in the browser; Babel-standalone is not loaded. Editing an
 |---|---|---:|---|
 | `/api/accountability` | `src/routes/accountability.js` | 12 |  |
 | `/api/activity` | `src/routes/activity.js` | 4 |  |
-| `/api/admin` | `src/routes/admin/` | 106 |  |
+| `/api/admin` | `src/routes/admin/` | 105 |  |
 | `/api/admin/financials` | `src/routes/financials.js` | 14 |  |
 | `/api/admin/outreach` | `src/routes/outreach.js` | 0 |  |
 | `/api/admin/tickets` | `src/routes/tickets.js` | 7 |  |
@@ -350,7 +350,7 @@ State travels through `window`, not props. This table is the registry.
 | `window.__handlePushNavigate` | app.js | 12 |
 | `window.__hasActiveSession` | app.js | 6 |
 | `window.__inplaceSubPage` | AdminPanel.js | 6 |
-| `window.__isAdmin` | app.js | 2 |
+| `window.__isAdmin` | app.js | 1 |
 | `window.__linkifyTrim` | utils.js | 1 |
 | `window.__loadStripeJs` | — | 1 |
 | `window.__modalBackHandler` | app.js, AdminOutreach.js | 10 |
