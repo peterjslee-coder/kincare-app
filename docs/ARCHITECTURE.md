@@ -350,7 +350,7 @@ State travels through `window`, not props. This table is the registry.
 | `window.__handlePushNavigate` | app.js | 12 |
 | `window.__hasActiveSession` | app.js | 6 |
 | `window.__inplaceSubPage` | AdminPanel.js | 6 |
-| `window.__isAdmin` | app.js | 2 |
+| `window.__isAdmin` | app.js | 1 |
 | `window.__linkifyTrim` | utils.js | 1 |
 | `window.__loadStripeJs` | — | 1 |
 | `window.__modalBackHandler` | app.js, AdminOutreach.js | 10 |

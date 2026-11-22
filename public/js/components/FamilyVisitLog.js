@@ -326,13 +326,6 @@ const recordLastCheck = (ft, name) => {
   lsSet(VISIT_GEO_LAST_KEY, JSON.stringify({ ft, name, at: Date.now() }));
 };
 
-const readLastCheck = () => {
-  try {
-    const v = JSON.parse(lsGet(VISIT_GEO_LAST_KEY) || 'null');
-    return v && Number.isFinite(v.ft) ? v : null;
-  } catch { return null; }
-};
-
 // Can we read the person's location without springing a prompt on them?
 // Opt-in wins — they asked for this, on this device. Otherwise ask the Permissions API
 // where it genuinely works. Never assume.
@@ -468,211 +461,9 @@ const VisitGeoInvite = ({ recipients, onEnabled }) => {
   );
 };
 
-// ─── The quiet status line (v1.105.59) ───
-//
-// Pete, 8/11: "Best I can tell there's no way to know how far I am from Betty's (not that
-// I want to be pushed that info often)."
-//
-// Exactly right on both halves — so this is one muted line, no colour, no card chrome, and
-// it never pushes anything. It shows what the last check found and offers to redo it on
-// demand. It also says out loud that the check happens on open, which is the honest
-// description of what this feature is.
-// v1.105.148 — "It says last check I was 2.3 miles away, but I don't know when that was."
-// The timestamp was being STORED all along (recordLastCheck writes `at`) and never shown, so a
-// reading from three days ago and one from ten seconds ago looked identical.
-const agoLabel = (ts) => {
-  // No timestamp is not "a long time ago" — it is "we do not know". Number(null) is 0, which
-  // would have dated a reading to 1970 and printed "20695 days ago" with total confidence.
-  // Caught by its own test; the line falls back to "at last check" when this returns null.
-  const n = Number(ts);
-  if (!Number.isFinite(n) || n <= 0) return null;
-  const ms = Date.now() - n;
-  if (ms < 0) return null;
-  const mins = Math.round(ms / 60000);
-  if (mins < 1) return 'just now';
-  if (mins < 60) return `${mins} min ago`;
-  const hrs = Math.round(mins / 60);
-  if (hrs < 24) return `${hrs} hour${hrs === 1 ? '' : 's'} ago`;
-  const days = Math.round(hrs / 24);
-  return `${days} day${days === 1 ? '' : 's'} ago`;
-};
+// v1.144.0 — VisitGeoStatus ("8.9 miles from Betty's · check now · pin here") removed at
+// Pete's request, 11/22: a test line from months ago taking space at the top of Home.
 
-const VisitGeoStatus = ({ recipients }) => {
-  const [last, setLast] = useState(readLastCheck);
-  const [busy, setBusy] = useState(false);
-  const [pinState, setPinState] = useState('idle'); // idle → confirming → saving → done/failed
-  const [pinNote, setPinNote] = useState(null);
-
-  // Admin-only (v1.105.169). Not a diagnostic readout this time — Pete asked to keep seeing
-  // it while the distance is wrong and for nobody else to. Hooks are all above this line;
-  // an early return that sits between them is the "late hooks" lint failure.
-  const adminOnly = !!(window.__isAdmin);
-
-  const withCoords = (recipients || []).filter((r) => r.latitude != null && r.longitude != null);
-  if (!adminOnly) return null;
-  if (!withCoords.length) return null;
-
-  const nameOf = (r) => r.first_name || r.firstName || 'them';
-
-  const nearestTo = (latitude, longitude) => {
-    let best = null;
-    for (const r of withCoords) {
-      const ft = haversineFeet(latitude, longitude, r.latitude, r.longitude);
-      if (!best || ft < best.ft) best = { ft, r };
-    }
-    return best;
-  };
-
-  const recheck = async () => {
-    setBusy(true);
-    const { pos } = await getPosition();
-    setBusy(false);
-    if (!pos) return;
-    const { latitude, longitude } = pos.coords;
-    const best = nearestTo(latitude, longitude);
-    recordLastCheck(best.ft, nameOf(best.r));
-    setLast(readLastCheck());
-  };
-
-  // ─── v1.105.148 — when the house is pinned in the wrong place ───
-  //
-  // Pete: "I'm definitely inside of 1000 feet from her house, I've hit check now and it's
-  // tagged my location… but it still doesn't say that I'm at her location."
-  //
-  // Every fix so far has assumed the phone was wrong. The other half of the subtraction is the
-  // HOME point, and it comes from geocoding an address — which can land on a street centroid,
-  // a ZIP centroid, or the wrong side of a rural road, and then no amount of GPS accuracy will
-  // ever close the gap. A stable, confident 2.3 miles while standing in the kitchen is that
-  // shape of wrong.
-  //
-  // So: if you are AT the house, say so and the house moves to where you are. Full precision,
-  // deliberately — this is care_recipients.latitude, the same field the address geocoder
-  // writes, on a record this family owns.
-  const pinHere = async () => {
-    setPinState('saving');
-    setPinNote(null);
-    const { pos } = await getPosition();
-    if (!pos) { setPinState('idle'); setPinNote("Couldn't read your location."); return; }
-    const { latitude, longitude } = pos.coords;
-    const target = nearestTo(latitude, longitude)?.r;
-    if (!target) { setPinState('idle'); return; }
-    try {
-      const res = await apiFetch(`/api/care-recipients/${target.id}`, {
-        method: 'PUT', body: JSON.stringify({ latitude, longitude }),
-      });
-      if (res?.ok) {
-        recordLastCheck(0, nameOf(target));
-        setLast(readLastCheck());
-        setPinState('done');
-        setPinNote(`Saved. ${nameOf(target)}'s home is where you are now.`);
-      } else {
-        const d = await res.json().catch(() => ({}));
-        setPinState('idle');
-        setPinNote(d.error || "Couldn't save that.");
-      }
-    } catch {
-      setPinState('idle');
-      setPinNote("Couldn't save that.");
-    }
-  };
-
-  const when = last ? agoLabel(last.at) : null;
-  const looksWrong = last && last.ft > 1000 && pinState !== 'done';
-
-  // ─── v1.105.169 — one line, and only mine ───
-  //
-  // Pete: "the header about checking in at Betty's. It's not working, takes up critical
-  // space. make it one line. and make it just for me. no one else should see it. it's
-  // distracting."
-  //
-  // Two separate asks, and the second one is the important one. This line explains a
-  // feature that does not yet do what it says — the 2.3-miles-in-the-kitchen bug is still
-  // open — and a broken explanation on every family member's dashboard is worse than no
-  // explanation. It stays for the person debugging it and disappears for everyone else.
-  // When the distance is right, this comes back out from behind the gate.
-  //
-  // It cost three lines: the distance, then the sentence explaining when the nudge fires,
-  // then "Standing at the house and this looks wrong? Pin it here". The explanation goes
-  // (it was answering a question nobody had asked twice), and the pin becomes a word.
-  const row = {
-    display: 'flex', alignItems: 'baseline', gap: 6,
-    fontSize: 11.5, color: 'var(--text-tertiary)', marginBottom: 10, lineHeight: 1.5,
-  };
-  // The guarantee, rather than the hope: the text is what gives way on a narrow screen, and
-  // the actions never do — an ellipsised "check now" is a line that is one line and useless.
-  const text = { flex: '1 1 auto', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' };
-  const link = (colour) => ({
-    flexShrink: 0, background: 'none', border: 'none', padding: 0, font: 'inherit',
-    color: colour, textDecoration: 'underline', cursor: 'pointer', whiteSpace: 'nowrap',
-  });
-
-  // A note replaces the line instead of being added under it, or "one line" lasts until the
-  // first time anything happens.
-  if (pinNote) {
-    return (
-      <div style={row}>
-        <span style={text}>{pinNote}</span>
-        <button onClick={() => { setPinNote(null); setPinState('idle'); }} style={link('var(--text-secondary)')}>ok</button>
-      </div>
-    );
-  }
-
-  if (pinState === 'confirming') {
-    return (
-      <div style={row}>
-        <span style={text}>Standing at {last ? `${last.name}'s` : 'the house'} right now?</span>
-        <button onClick={pinHere} style={{ ...link('var(--accent-color)'), fontWeight: 700 }}>yes, pin it</button>
-        <button onClick={() => setPinState('idle')} style={link('var(--text-tertiary)')}>cancel</button>
-      </div>
-    );
-  }
-
-  return (
-    <div style={row}>
-      <span style={text}>
-        {last
-          ? `${prettyFeet(last.ft)} from ${last.name}'s${when ? ` · ${when}` : ''}`
-          : 'Distance not checked yet'}
-      </span>
-      <button onClick={recheck} disabled={busy} style={{ ...link('var(--text-secondary)'), cursor: busy ? 'default' : 'pointer' }}>
-        {busy ? 'checking…' : 'check now'}
-      </button>
-      {looksWrong && (
-        <button onClick={() => setPinState('confirming')} disabled={pinState === 'saving'} style={link('var(--text-secondary)')}>
-          {pinState === 'saving' ? 'saving…' : 'pin here'}
-        </button>
-      )}
-    </div>
-  );
-};
-
-// ─── v1.106.44 — "it should understand that I've logged a visit" ───
-//
-// Pete: "I hit log this visit when it tagged me at mom's house. I left a note. The log visit
-// option is still remaining at the top of the screen."
-//
-// Two faults, and the second is the one that would have kept nagging him tomorrow:
-//
-//  1. `alreadyLoggedToday` was consulted in the effect and in the two early returns, and NOT
-//     in the branch that actually draws the card. Once `match` was set, logging the visit
-//     flipped the flag and changed nothing on screen — which is precisely the sequence Pete
-//     describes, because the nudge is what he tapped to get there.
-//
-//  2. It was a single boolean that the SERVER never set. It started false on every load and
-//     was only ever flipped by the save handler in the same session, so the nudge returned on
-//     the next open, about a visit already in the record. It is now a list of recipient ids
-//     from /api/dashboard, per person: logging a visit to Betty must not silence the nudge
-//     about someone else.
-//
-// ─── v1.112.4 — the to-dos ride along ───
-//
-// Pete, 10/13: "on the to-dos it would be great if it prompted you when you got to the care
-// location, i.e. Betty's house" — and then: "does the 'to do' also combine with 'wanna leave a
-// note' nudge?" It does now. One card, one location check, the same privacy line: the
-// decision is made on the phone and no position is sent anywhere for it. When you are at the
-// house, the card lists what is waiting ("Water the kitchen plant") with "I did this" right
-// there, above "Log this visit". If the visit is already logged but a to-do is still open, the
-// card stays for the to-dos alone; when both are answered, it goes.
 const VisitNudgeCard = window.VisitNudgeCard = ({ recipients, loggedTodayIds, onLog }) => {
   const [match, setMatch] = useState(null); // { recipient, position }
   const [dismissed, setDismissed] = useState(false);
@@ -773,9 +564,12 @@ const VisitNudgeCard = window.VisitNudgeCard = ({ recipients, loggedTodayIds, on
   // v1.105.59 — opted in, but not near the house (or dismissed). This used to be `null`:
   // the feature was on and looked identical to the feature being broken, which is the
   // whole complaint. One muted line instead.
-  if (allowed === true && (!match || dismissed) && !everyoneLogged) {
-    return <VisitGeoStatus recipients={recipients} />;
-  }
+  // v1.144.0 — Pete, 11/22: "I need the distance from Betty's banner at the top that was there
+  // for a test months ago to be gone. I don't think we're getting anything from it ... it's
+  // taking out too much space at the top." The "8.9 miles from Betty's · check now · pin here"
+  // line is retired; away from the house the card simply draws nothing. VisitGeoStatus stays
+  // defined (and tested) in case the distance is ever worth showing again.
+  if (allowed === true && (!match || dismissed) && !everyoneLogged) return null;
 
   // This is the line that was missing. Every other branch asked whether the visit was
   // already logged; the one that draws the card did not, so tapping "Log this visit" and

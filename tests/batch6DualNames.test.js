@@ -41,9 +41,9 @@ describe("G1 — the gate holds the line", () => {
     const entries = [...block.matchAll(/([a-z_]+):\s*(\d+)/g)];
     expect(entries.length).toBe(36);
     const total = entries.reduce((a, m) => a + Number(m[2]), 0);
-    expect(total).toBe(128); // v1.124.0 — two gone with the old propose sheets
+    expect(total).toBe(127); // v1.124.0 two gone with the old propose sheets; v1.144.0 one with the distance line
     // and the gate's own count agrees with it
-    expect(runGate().out).toMatch(/36 dual-name field\(s\), 128 site\(s\)/);
+    expect(runGate().out).toMatch(/36 dual-name field\(s\), 127 site\(s\)/);
   });
 
   test("it reports a baselined pair that has gone, so the number gets lowered", () => {

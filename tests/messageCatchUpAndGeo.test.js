@@ -46,83 +46,12 @@ describe("messages: it is a gap, not a lag", () => {
   });
 });
 
-describe("geo: the distance now says when, and the house can be wrong", () => {
-  test("the timestamp was always stored — now it is shown", () => {
-    // recordLastCheck has written `at` since the feature shipped. A reading from three days
-    // ago and one from ten seconds ago looked identical on screen.
-    expect(visit).toMatch(/lsSet\(VISIT_GEO_LAST_KEY, JSON\.stringify\(\{ ft, name, at: Date\.now\(\) \}\)\)/);
-    expect(visit).toMatch(/const agoLabel = \(ts\) =>/);
-    // v1.105.169 — the line is one line now, so "checked 3 hours ago" lost the word
-    // "checked" and became a middot-separated clause. The timestamp is still shown, which
-    // is what this test is about.
-    expect(visit).toMatch(/when \? ` · \$\{when\}` : ''/);
-  });
-
-  test("ago reads in the units a person would use", () => {
-    const agoLabel = new Function(`${visit.slice(visit.indexOf("const agoLabel"), visit.indexOf("const VisitGeoStatus"))}\nreturn agoLabel;`)();
-    expect(agoLabel(Date.now())).toBe("just now");
-    expect(agoLabel(Date.now() - 5 * 60000)).toBe("5 min ago");
-    expect(agoLabel(Date.now() - 3 * 3600 * 1000)).toBe("3 hours ago");
-    expect(agoLabel(Date.now() - 50 * 3600 * 1000)).toBe("2 days ago");
-    // No timestamp is not "a long time ago", it is "we do not know" — Number(null) is 0, which
-    // dated the reading to 1970 and printed "20695 days ago" with total confidence. The line
-    // falls back to "at last check" on null.
-    expect(agoLabel(null)).toBe(null);
-    expect(agoLabel(undefined)).toBe(null);
-    expect(agoLabel(Date.now() + 60000)).toBe(null); // a clock skewed forward claims nothing
-  });
-
-  test("the OTHER half of the subtraction can be repaired", () => {
-    // Every fix so far assumed the phone was wrong. The home point comes from geocoding an
-    // address, which can land on a street or ZIP centroid — and then no GPS accuracy will ever
-    // close the gap. A stable, confident 2.3 miles while standing in the kitchen is that shape
-    // of wrong.
-    expect(visit).toMatch(/apiFetch\(`\/api\/care-recipients\/\$\{target\.id\}`, \{\s*\n\s*method: 'PUT', body: JSON\.stringify\(\{ latitude, longitude \}\)/);
-  });
-
-  test("it is only offered when the reading says you are far away", () => {
-    expect(visit).toMatch(/const looksWrong = last && last\.ft > 1000 && pinState !== 'done';/);
-  });
-
-  test("and never on one tap — it moves where someone's mother lives", () => {
-    expect(visit).toMatch(/pinState === 'confirming'/);
-    // The confirm survived the one-line rewrite; it just fits on the line now, and names the
-    // person so you know which house you are about to move.
-    expect(visit).toMatch(/Standing at \{last \? `\$\{last\.name\}'s` : 'the house'\} right now\?/);
-    expect(visit).toMatch(/>yes, pin it</);
-  });
-
-  test("it is one line, and the actions are what survives a narrow screen", () => {
-    // Pete: "takes up critical space. make it one line." It was three: the distance, a
-    // sentence explaining when the nudge fires, and "Standing at the house and this looks
-    // wrong? Pin it here". The explanation is gone and the pin is a word.
-    expect(visit).not.toMatch(/the nudge appears within 1,000 ft\.`/);
-    expect(visit).not.toMatch(/Standing at the house and this looks wrong\? Pin it here/);
-    // whiteSpace: nowrap on its own would just clip; the text must be the part that gives
-    // way, or an ellipsised "check now" is one line and useless.
-    expect(visit).toMatch(/flex: '1 1 auto', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'/);
-    expect(visit).toMatch(/flexShrink: 0,[\s\S]{0,220}whiteSpace: 'nowrap'/);
-    // A note replaces the line rather than being added under it, or "one line" lasts until
-    // the first time anything happens.
-    expect(visit).toMatch(/if \(pinNote\) \{\s*\n\s*return \(/);
-  });
-
-  test("and only the admin sees it while the distance is still wrong", () => {
-    // Pete: "make it just for me. no one else should see it. it's distracting." A line that
-    // explains a feature which does not yet do what it says is worse than no line at all on
-    // a family member's dashboard.
-    expect(visit).toMatch(/const adminOnly = !!\(window\.__isAdmin\);/);
-    expect(visit).toMatch(/if \(!adminOnly\) return null;/);
-    // The gate sits AFTER every hook — an early return between hooks is the late-hooks lint.
-    const body = visit.slice(visit.indexOf("const VisitGeoStatus"), visit.indexOf("const VisitNudgeCard"));
-    expect(body.indexOf("useState(readLastCheck)")).toBeLessThan(body.indexOf("if (!adminOnly) return null;"));
-    expect(body.indexOf("useState(null); // idle")).toBeLessThan(body.indexOf("if (!adminOnly) return null;"));
-    // ...and the flag is actually published by the app.
-    const app = require("./helpers/source").code("public/js/app.js");
-    expect(app).toMatch(/window\.__isAdmin = !!\(currentUser\?\.is_admin \|\| currentUser\?\.isAdmin\);/);
-  });
-
-  test("a failure says so instead of looking saved", () => {
-    expect(visit).toMatch(/setPinNote\(d\.error \|\| "Couldn't save that\."\)/);
+describe("geo: the distance line is retired (v1.144.0)", () => {
+  // Pete, 11/22: "I need the distance from Betty's banner at the top that was there for a test
+  // months ago to be gone." The status line, its pin-here repair and its ago label are deleted.
+  test("nothing on Home says how far away the house is", () => {
+    const visit = require("./helpers/source").code("public/js/components/FamilyVisitLog.js");
+    expect(visit).not.toMatch(/const VisitGeoStatus/);
+    expect(visit).not.toMatch(/miles from|pin here|check now'/);
   });
 });
