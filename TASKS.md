@@ -2,6 +2,18 @@
 
 > **How this works:** Add bugs and features below as you find them. Don't worry about wording or order. When you're ready for a dev session, say "let's work the task list" and Claude will batch everything together into one efficient push. Nothing gets executed until you say go.
 
+## Nov 22 2026 — caregiver updates (v1.146.0) and Betty's tablet (parked)
+
+Pete, 11/22: "I want a messaging option for all caregivers. An update. Tips. Newsletter of sorts." Card on their Home + push; replies go to him privately; every caregiver, onboarding too.
+
+- [x] Admin → **Caregiver updates**: kind (Tip / News / Thank you), title, message, preview, "Send to all caregivers" with a confirm. Sent list with sent / opened / got it / replied, "Who read it", "Fix a typo" (no new push), Withdraw.
+- [x] Caregiver Home: the newest update she hasn't settled is pinned at the top, with **Got it** and **Reply to <sender>** (a private DM to the sender, quoting the title). My Account › Settings › **Updates from InPlace** keeps every one.
+- [x] Push: "From InPlace — Pete sent a tip for caregivers", never the message. Type `caregiver_update` is an account push, so caregivers still waiting on ID review get it.
+- [x] A caregiver who joins later sees updates from the last 14 days (no push).
+- [ ] Not in v1: a photo in an update; an email copy; scheduling one for later.
+
+- [ ] **PARKED — Board mode for Betty's tablet** (Samsung Galaxy Tab A11+ on order). Pete, 11/22: "Park it for next task. Tablet is on the way." Memoryboard has no API and isn't open source, so InPlace draws its own always-on board (today's day/date, who's coming and when, appointments, a photo, a message from family). Mockups are in the design canvas. Next: pick a mockup, decide kiosk app vs browser, then build.
+
 ## Nov 19 2026 — outreach: block a number; sign-in codes aren't replies (v1.135.3)
 
 Pete, 11/19: "i just got a reply with a buffalo wild wings thing to the outreach number" … "block option?". It was "Your verification code for Buffalo Wild Wings is 6884." from a 10-digit number: someone had entered (540) 835-5987 as their phone, either a typo or the number's previous owner. Any unknown sender became a contact marked "replied" and OK to text.

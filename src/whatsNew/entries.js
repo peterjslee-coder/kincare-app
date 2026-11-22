@@ -31,6 +31,22 @@ const WINDOW_DAYS = 45;
 
 const ENTRIES = [
   {
+    id: "updates-from-inplace",
+    version: "1.146.0",
+    date: "2026-11-22",
+    audience: ["caregiver"],
+    title: "Tips and updates from InPlace",
+    body: "Now and then InPlace sends every caregiver a short tip or bit of news. It sits at the top of your Home until you tap Got it, and you can reply privately to whoever wrote it.",
+    howTo: [
+      "Read the card at the top of Home",
+      "Tap Got it to put it away, or Reply to answer",
+      "Find past ones in My Account, under Settings",
+    ],
+    examples: ["Check-in works best at the door"],
+    preview: "caregiverUpdate",
+    action: { label: "Show me", page: "dashboard" },
+  },
+  {
     id: "today-short-rows",
     version: "1.142.0",
     date: "2026-11-21",

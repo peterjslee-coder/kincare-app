@@ -3691,6 +3691,35 @@ async function initializeDatabase() {
         `ALTER TABLE users ADD COLUMN IF NOT EXISTS id_gate_waived_by TEXT`,
       ],
     },
+    {
+      // v1.146.0 — Pete, 11/22: "a messaging option for all caregivers. An update. Tips.
+      // Newsletter of sorts." One row per update; one receipt per caregiver it went to.
+      // kind: tip | news | thanks. A receipt records delivery, first open, "Got it" and a reply
+      // (the reply itself is an ordinary direct message to the sender, not stored here).
+      id: "092_caregiver_updates",
+      statements: [
+        `CREATE TABLE IF NOT EXISTS caregiver_updates (
+           id TEXT PRIMARY KEY,
+           kind TEXT NOT NULL DEFAULT 'tip',
+           title TEXT NOT NULL,
+           body TEXT NOT NULL,
+           created_by TEXT REFERENCES users(id),
+           created_at TIMESTAMPTZ DEFAULT NOW(),
+           edited_at TIMESTAMPTZ,
+           withdrawn_at TIMESTAMPTZ
+         )`,
+        `CREATE TABLE IF NOT EXISTS caregiver_update_receipts (
+           update_id TEXT NOT NULL REFERENCES caregiver_updates(id),
+           user_id TEXT NOT NULL REFERENCES users(id),
+           delivered_at TIMESTAMPTZ DEFAULT NOW(),
+           seen_at TIMESTAMPTZ,
+           got_it_at TIMESTAMPTZ,
+           replied_at TIMESTAMPTZ,
+           PRIMARY KEY (update_id, user_id)
+         )`,
+        `CREATE INDEX IF NOT EXISTS idx_cg_update_receipts_user ON caregiver_update_receipts(user_id)`,
+      ],
+    },
   ];
   for (const m of MIGRATIONS_V2) {
     if (applied.has(m.id)) continue;

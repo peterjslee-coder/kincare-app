@@ -2300,6 +2300,8 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
           </div>
         </div>
       </div>
+      {/* v1.146.0 — an update from InPlace (tip / news), pinned until she says Got it */}
+      {!profile.isDemo && typeof CaregiverUpdateCard !== 'undefined' && <CaregiverUpdateCard />}
       {/* ── INCOMPLETE CHECK-IN BANNER ── */}
       {incompleteCheckIn && (() => {
         const elapsed = Math.floor((Date.now() - incompleteCheckIn.startedAt) / 60000);

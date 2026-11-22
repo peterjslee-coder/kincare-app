@@ -2082,6 +2082,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
     ]},
     { label: 'Growth', tabs: [
       { id: 'outreach', label: 'Outreach', icon: '\u{1F4AC}', badge: outreachUnread || null }, // v1.113.0
+      { id: 'cg-updates', label: 'Caregiver updates', icon: '\u{1F4E3}' }, // v1.146.0
     ]},
     { label: 'Customer Service', tabs: [
       { id: 'tickets', label: 'Tickets', icon: '🎫', badge: ticketCount || null },
@@ -6889,6 +6890,13 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
               });
             } })
           : <div className="card">Outreach didn't load. Refresh the page.</div>
+      )}
+
+      {/* v1.146.0 — tips and news to every caregiver */}
+      {activeTab === 'cg-updates' && (
+        typeof AdminCaregiverUpdatesTab === 'function'
+          ? React.createElement(AdminCaregiverUpdatesTab, { apiFetch, showToast })
+          : <div className="card">Caregiver updates didn't load. Refresh the page.</div>
       )}
 
       {activeTab === 'local-help' && (

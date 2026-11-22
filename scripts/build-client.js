@@ -111,6 +111,7 @@ const scripts = [
   "js/components/OfferNegotiationPanel.js",
   "js/components/CaregiverCalendar.js",
   "js/components/HourReports.js",
+  "js/components/CaregiverUpdates.js", // v1.146.0 — the pinned update on her Home + its history in My Account
   "js/components/CaretakerHub.js",
   // v1.105.93 — after FamilyVisitLog.js, which defines LogVisitSheet, used below.
   "js/components/HelperHub.js",
@@ -143,6 +144,7 @@ const ADMIN_SCRIPTS = [
   "js/components/AdminOutreach.js", // v1.113.0 — caregiver outreach by text; AdminPanel renders it
   "js/components/SafetyFlagsTab.js",
   "js/components/ContentReportsTab.js",
+  "js/components/AdminCaregiverUpdates.js", // v1.146.0 — compose + read counts; AdminPanel renders it
   "js/components/AdminIdentityCheck.js", // v1.128.3 — one Identity card per person; AdminPanel renders it
   "js/components/AdminPanel.js",
 ];
