@@ -240,6 +240,74 @@ const OutCampaignLinks = ({ apiFetch, showToast }) => {
     </div>
   );
 };
+// v1.146.1 — tagged arrivals. A QR code or ad that carries ?utm_source=… (the founder's business
+// card prints utm_source=card) is counted here, phone by phone, even though it isn't a /i/ link.
+const outTagMins = (ms) => {
+  const m = Math.round((Number(ms) || 0) / 60000);
+  if (m < 1) return (Number(ms) || 0) >= 1000 ? `${Math.round(ms / 1000)} sec` : '—';
+  return m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${m % 60} min`;
+};
+const outTagScreen = (p) => ({
+  splash: 'home page', 'land-caregiver': 'caregiver page', 'land-family': 'family page', 'land-care_for': 'older-adult page',
+  register: 'sign-up', login: 'sign-in', onboarding: 'onboarding', dashboard: 'dashboard',
+}[p] || String(p || '').replace(/[-_]/g, ' '));
+const OutTaggedArrivals = ({ apiFetch }) => {
+  const [tags, setTags] = React.useState(null);
+  const [open, setOpen] = React.useState(null);
+  const [detail, setDetail] = React.useState({});
+  React.useEffect(() => {
+    (async () => {
+      try { const r = await apiFetch('/api/admin/links/tags'); if (r?.ok) setTags((await r.json()).tags); else setTags([]); } catch { setTags([]); }
+    })();
+  }, []);
+  const toggle = async (tag) => {
+    if (open === tag) { setOpen(null); return; }
+    setOpen(tag);
+    if (detail[tag]) return;
+    try {
+      const r = await apiFetch(`/api/admin/links/tags/${encodeURIComponent(tag)}`);
+      if (r?.ok) { const j = await r.json(); setDetail((d) => ({ ...d, [tag]: j.visitors })); }
+    } catch { /* stays loading */ }
+  };
+  const label = (t) => (t === 'card' ? 'Business card QR' : t);
+  return (
+    <div className="card">
+      <div className="card-header">Tagged QR codes &amp; ads</div>
+      <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 8, lineHeight: 1.5 }}>
+        Visits that arrived with a tag in the address (…?utm_source=card). Your business card's QR code carries “card”. A phone counts once however often it scans; time is what it spent in the app after its first scan.
+      </div>
+      {tags === null && <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>Loading…</div>}
+      {tags && tags.length === 0 && <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>No tagged visits yet.</div>}
+      {tags && tags.map((t) => (
+        <div key={t.tag} style={{ borderTop: '1px solid var(--border-light)' }}>
+          <button onClick={() => toggle(t.tag)} style={{ display: 'flex', width: '100%', alignItems: 'center', gap: 10, padding: '10px 0', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', color: 'var(--text-primary)' }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 14, fontWeight: 600 }}>{label(t.tag)}</div>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                {t.visitors} {t.visitors === 1 ? 'phone' : 'phones'} · {t.arrivals} {t.arrivals === 1 ? 'scan' : 'scans'} · {outTagMins(t.ms)} total · last {outWhen(t.last_visit_at)}
+              </div>
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{t.signups} signed up {open === t.tag ? '▴' : '▾'}</div>
+          </button>
+          {open === t.tag && (
+            <div style={{ paddingBottom: 10 }}>
+              {!detail[t.tag] && <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Loading…</div>}
+              {detail[t.tag] && detail[t.tag].map((v) => (
+                <div key={v.n} style={{ fontSize: 12, color: 'var(--text-secondary)', padding: '6px 0 6px 10px', borderLeft: '2px solid var(--border-color)', marginBottom: 6, lineHeight: 1.5 }}>
+                  <div style={{ color: 'var(--text-primary)', fontWeight: 600 }}>
+                    Phone {v.n} · first scan {outWhen(v.first_at)}{v.platform && v.platform !== 'web' ? ` · ${v.platform}` : ''}{v.signed_up ? ' · ✓ signed up' : ''}
+                  </div>
+                  <div>{outTagMins(v.ms)} in the app · {v.visits} {v.visits === 1 ? 'visit' : 'visits'}{v.last_seen_at ? ` · last seen ${outWhen(v.last_seen_at)}` : ''}</div>
+                  {v.top_pages.length > 0 && <div style={{ color: 'var(--text-muted)' }}>Read: {v.top_pages.map((p) => `${outTagScreen(p.page)} (${outTagMins(p.ms)})`).join(', ')}</div>}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+};
 const outSegments = (s) => {
   const gsm = /^[A-Za-z0-9 \r\n@£$¥èéùìòÇØøÅå_ÆæßÉ!"#%&'()*+,\-./:;<=>?¡ÄÖÑÜ§¿äöñüà^{}\\[~\]|€]*$/.test(s || '');
   const len = (s || '').length;
@@ -1102,6 +1170,7 @@ const AdminOutreachTab = window.AdminOutreachTab = ({ apiFetch, showToast, onUnr
       </div>
 
       <OutCampaignLinks apiFetch={apiFetch} showToast={showToast} />
+      <OutTaggedArrivals apiFetch={apiFetch} />
 
       {openId && (
         <OutreachThread contactId={openId} apiFetch={apiFetch} showToast={showToast} callScript={data && data.callScript}
