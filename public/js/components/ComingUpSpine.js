@@ -98,6 +98,49 @@ function nextDayRows(visits, events) {
 }
 window.nextDayRows = nextDayRows;
 
+// ─── v1.145.0 — appointments nest under the visit they fall in (Pete, 11/22) ───
+// "I don't like the plus church, plus lunch part. It's easy to miss. I would prefer that the
+// plus appointments nest underneath on the timeline from top to bottom in very narrow lines
+// that allow you to expand it. For instance, a little social balloon that says church 11 AM."
+// One narrow line each, in time order, under the caregiver's row; tap to expand where and
+// "Open", tap Open for the whole appointment.
+const RiderLines = window.RiderLines = ({ riders, onOpenEvent }) => {
+  const [open, setOpen] = useState(null);
+  if (!riders || !riders.length) return null;
+  const list = [...riders].sort((a, b) => a.at - b.at);
+  return (
+    <div data-testid="rider-lines" style={{ marginTop: 6, marginLeft: 15, paddingLeft: 24, borderLeft: '2px solid var(--border-light)' }}>
+      {list.map((e) => {
+        const isOpen = open === e.ev.id;
+        return (
+          <div key={e.ev.id}>
+            <button type="button" data-testid="rider-line" aria-expanded={isOpen} onClick={() => setOpen(isOpen ? null : e.ev.id)} style={{
+              width: '100%', display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0', minHeight: 30, background: 'none', border: 'none',
+              textAlign: 'left', cursor: 'pointer', color: 'var(--text-primary)', fontSize: 13,
+            }}>
+              <span aria-hidden="true" style={{ fontSize: 14 }}>{careEventIcon(e.ev.category)}</span>
+              <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.ev.title}</span>
+              <span style={{ color: 'var(--accent-color)', fontWeight: 600, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{e.ev.event_time ? _clock(e.at) : 'All day'}</span>
+              <span aria-hidden="true" style={{ color: 'var(--text-tertiary)', transform: isOpen ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s' }}>{'\u203A'}</span>
+            </button>
+            {isOpen && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '0 0 6px 22px', fontSize: 12, color: 'var(--text-secondary)' }}>
+                <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {e.ev.end_time ? `until ${_clock(_hm(e.ev.end_time))}` : ''}{e.ev.end_time && e.ev.location ? ' \u00b7 ' : ''}{e.ev.location || ''}
+                </span>
+                <button type="button" onClick={() => onOpenEvent && onOpenEvent(e.ev)} style={{
+                  background: 'none', border: '1px solid var(--border-color)', borderRadius: 14, padding: '4px 10px', minHeight: 28,
+                  fontSize: 12, fontWeight: 600, color: 'var(--role-color)', cursor: 'pointer', whiteSpace: 'nowrap',
+                }}>Open</button>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
 /**
  * v1.141.0 — when nothing is left today (Pete chose C on the 11/20 canvas): today folds into
  * one green line — notes still a tap away — and the next day's caregivers lead, one short row
@@ -163,19 +206,17 @@ const DayFoldCard = window.DayFoldCard = ({ today, next, onOpenVisit, onOpenEven
               }
               const v = r.v;
               return (
-                <div key={`v${v.id}`} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', minHeight: 44, borderRadius: radius,
+                <div key={`v${v.id}`} style={{ padding: '8px 10px', borderRadius: radius,
                   border: '1px solid var(--border-color)', borderTop: first || rows[i - 1].kind === 'overlap' || rows[i - 1].kind === 'gap' ? '1px solid var(--border-color)' : 'none' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, minHeight: 28 }}>
                   <button type="button" data-testid="day-fold-visit" onClick={() => onOpenVisit && onOpenVisit(v.id)} style={{
                     flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 10, background: 'none', border: 'none', padding: 0, textAlign: 'left', cursor: 'pointer', color: 'var(--text-primary)',
                   }}>
                     <span aria-hidden="true" style={{ width: 30, height: 30, minWidth: 30, borderRadius: '50%', background: 'var(--role-color)', color: 'var(--text-on-primary)', fontSize: 12, fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>{_spineInitials(v.name)}</span>
                     <span style={{ fontSize: 14 }}><b>{_spineFirst(v.name)}</b> <span style={{ color: 'var(--text-secondary)' }}>{_range(v.start, v.end)}</span></span>
                   </button>
-                  {r.riders.map((e) => (
-                    <button key={e.ev.id} type="button" onClick={() => onOpenEvent && onOpenEvent(e.ev)} style={{
-                      background: 'none', border: 'none', padding: '4px 0', fontSize: 11.5, fontWeight: 600, color: 'var(--accent-color)', cursor: 'pointer', whiteSpace: 'nowrap', maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis',
-                    }}>+ {e.ev.title.split(/\s+/).slice(0, 2).join(' ')} {_clock(e.at)}</button>
-                  ))}
+                  </div>
+                  <RiderLines riders={r.riders} onOpenEvent={onOpenEvent} />
                 </div>
               );
             })}
@@ -281,9 +322,10 @@ const TodayRowsCard = window.TodayRowsCard = ({ hero, visits, events, nowMin, tz
           }
           const v = r.v; const here = v.state === 'now';
           return (
-            <div key={`v${v.id}`} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', minHeight: 44, borderRadius: radius,
+            <div key={`v${v.id}`} style={{ padding: '8px 10px', borderRadius: radius,
               border: `1px solid ${here ? 'var(--role-color)' : 'var(--border-color)'}`, background: here ? 'var(--bg-highlight)' : 'none',
               borderTop: first || rows[i - 1].kind !== 'visit' ? undefined : 'none' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, minHeight: 28 }}>
               <button type="button" data-testid="today-visit" onClick={() => onOpenVisit && onOpenVisit(v.id)} style={{
                 flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 10, background: 'none', border: 'none', padding: 0, textAlign: 'left', cursor: 'pointer', color: 'var(--text-primary)',
               }}>
@@ -293,11 +335,8 @@ const TodayRowsCard = window.TodayRowsCard = ({ hero, visits, events, nowMin, tz
                   {here && <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-warning)', marginLeft: 6 }}>{'\u00b7'} HERE NOW</span>}
                 </span>
               </button>
-              {r.riders.map((e) => (
-                <button key={e.ev.id} type="button" onClick={() => onOpenEvent && onOpenEvent(e.ev)} style={{
-                  background: 'none', border: 'none', padding: '4px 0', fontSize: 11.5, fontWeight: 600, color: 'var(--accent-color)', cursor: 'pointer', whiteSpace: 'nowrap', maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis',
-                }}>+ {e.ev.title.split(/\s+/).slice(0, 2).join(' ')} {_clock(e.at)}</button>
-              ))}
+              </div>
+              <RiderLines riders={r.riders} onOpenEvent={onOpenEvent} />
             </div>
           );
         })}
