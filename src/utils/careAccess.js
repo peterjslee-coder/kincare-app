@@ -213,6 +213,9 @@ const ACCOUNT_PUSH_TYPES = new Set([
   "account_approved", "account_onboarding", "identity_approved", "identity_rejected",
   "role_added", "test", "totp", "background_check", "bgcheck_rejected", "checkr_blocked",
   "blocked", "unblocked",
+  // v1.146.0 — a tip or update from InPlace to every caregiver, onboarding ones included.
+  // It carries no care content, and its push body never carries the message.
+  "caregiver_update",
 ]);
 
 function isAccountPush(data) {

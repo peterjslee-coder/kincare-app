@@ -464,6 +464,21 @@ const WN_PREVIEWS = {
       ))}
     </div>
   ),
+  // v1.146.0 — the pinned update on a caregiver's Home
+  caregiverUpdate: () => (
+    <div>
+      <div style={{ ...wnCard, borderLeft: '4px solid var(--role-color)' }}>
+        <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', color: 'var(--role-color)' }}>{'\u{1F4A1}'} TIP FROM INPLACE</div>
+        <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--text-primary)', marginTop: 3 }}>Check-in works best at the door</div>
+        <div style={{ fontSize: 10.5, color: 'var(--text-secondary)', marginTop: 2 }}>Tap Check in as you arrive, so the family sees you got there.</div>
+        <div style={{ fontSize: 10, color: 'var(--text-tertiary)', marginTop: 3 }}>{'\u2014'} Sam, InPlace</div>
+        <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
+          <span style={{ fontSize: 10.5, fontWeight: 700, padding: '3px 10px', borderRadius: 7, background: 'var(--role-color)', color: 'var(--text-on-primary)' }}>Got it</span>
+          <span style={{ fontSize: 10.5, fontWeight: 700, padding: '3px 10px', borderRadius: 7, border: '1px solid var(--border-color)', color: 'var(--text-primary)' }}>Reply to Sam</span>
+        </div>
+      </div>
+    </div>
+  ),
   notice: () => (
     <div>
       <div style={wnHead}><span>{'🔔'} Notifications</span></div>

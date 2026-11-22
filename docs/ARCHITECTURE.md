@@ -7,9 +7,9 @@ build red.
 
 Hand-written sections (§3 "Where is…") are preserved across regeneration; edit those freely.
 
-Structure at last generation: 633 HTTP routes across 66 mounts ·
-120 `CREATE TABLE` statements · 16 background jobs · 42 socket events
-(17 with no client listener) · 76 push event types · 66 `window.__*` globals.
+Structure at last generation: 643 HTTP routes across 67 mounts ·
+122 `CREATE TABLE` statements · 16 background jobs · 43 socket events
+(18 with no client listener) · 76 push event types · 66 `window.__*` globals.
 
 ---
 
@@ -59,6 +59,7 @@ JSX is *not* compiled in the browser; Babel-standalone is not loaded. Editing an
 | `/api/care-todos` | `src/routes/careTodos.js` | 5 |  |
 | `/api/care-tools` | `src/routes/careTools.js` | 1 |  |
 | `/api/caregiver-onboarding` | `src/routes/caregiveronboarding.js` | 6 |  |
+| `/api/caregiver-updates` | `src/routes/caregiverUpdates.js` | 10 |  |
 | `/api/caregivers` | `src/routes/caregivers.js` | 12 |  |
 | `/api/checkr` | `src/routes/checkr.js` | 13 |  |
 | `/api/connections` | `src/routes/connections.js` | 4 |  |
@@ -205,22 +206,22 @@ Every job runs through `guardedPoller` → `withPollerLock` (`src/models/databas
 
 | Lock | Job | Interval | Declared |
 |---:|---|---|---|
-| 101 | Daily demo data refresh | 24 h | `src/server.js:1099` |
-| 102 | Session notification poller (every 60s) | 1 min | `src/server.js:1192` |
-| 103 | Session Accountability Poller | 1 min | `src/server.js:1475` |
-| 104 | Reimbursement push digest sweeper (v1.98.15) | 30 s | `src/server.js:1492` |
-| 105 | Auto-pay cron: charge overdue sessions | 5 min | `src/server.js:1584` |
-| 106 | Recurring reimbursements: generate due occurrences (v1.74.0) | 1 h | `src/server.js:1691` |
-| 107 | Care Tasks poller (v1.99.0) | 1 min | `src/server.js:1716` |
-| 108 | Care Events poller (v1.100.0) | 1 min | `src/server.js:1732` |
-| 109 | Kindred Reminder Delivery Poller | 1 min | `src/server.js:1506` |
-| 110 | Retention (v1.106.9, poller 110) | 24 h | `src/server.js:1769` |
-| 111 | (see src/server.js:1667) | 1 h | `src/server.js:1667` |
-| 112 | v1.106.13 — poller 112: proposals that nobody answered | 10 min | `src/server.js:1798` |
-| 113 | (see src/server.js:1841) | 1 min | `src/server.js:1841` |
-| 114 | Quiet hours summary (v1.107.3, poller 114) | 5 min | `src/server.js:1860` |
-| 115 | Recurring reimbursements: generate due occurrences (v1.74.0) | 1 h | `src/server.js:1704` |
-| 116 | Visit mileage: charge what is owed once the visit itself is paid (v1.126.1, poller 116) | 5 min | `src/server.js:1877` |
+| 101 | Daily demo data refresh | 24 h | `src/server.js:1100` |
+| 102 | Session notification poller (every 60s) | 1 min | `src/server.js:1193` |
+| 103 | Session Accountability Poller | 1 min | `src/server.js:1476` |
+| 104 | Reimbursement push digest sweeper (v1.98.15) | 30 s | `src/server.js:1493` |
+| 105 | Auto-pay cron: charge overdue sessions | 5 min | `src/server.js:1585` |
+| 106 | Recurring reimbursements: generate due occurrences (v1.74.0) | 1 h | `src/server.js:1692` |
+| 107 | Care Tasks poller (v1.99.0) | 1 min | `src/server.js:1717` |
+| 108 | Care Events poller (v1.100.0) | 1 min | `src/server.js:1733` |
+| 109 | Kindred Reminder Delivery Poller | 1 min | `src/server.js:1507` |
+| 110 | Retention (v1.106.9, poller 110) | 24 h | `src/server.js:1770` |
+| 111 | (see src/server.js:1668) | 1 h | `src/server.js:1668` |
+| 112 | v1.106.13 — poller 112: proposals that nobody answered | 10 min | `src/server.js:1799` |
+| 113 | (see src/server.js:1842) | 1 min | `src/server.js:1842` |
+| 114 | Quiet hours summary (v1.107.3, poller 114) | 5 min | `src/server.js:1861` |
+| 115 | Recurring reimbursements: generate due occurrences (v1.74.0) | 1 h | `src/server.js:1705` |
+| 116 | Visit mileage: charge what is owed once the visit itself is paid (v1.126.1, poller 116) | 5 min | `src/server.js:1878` |
 
 ---
 
@@ -240,6 +241,7 @@ why this app runs on exactly one Railway replica.
 | `call_ring_status` | `server.js` | yes |
 | `care_event_update` | `routes/careEvents.js` | 🔶 **none** |
 | `care_team_invite` | `routes/careTeams.js` | yes |
+| `caregiver_update` | `routes/caregiverUpdates.js` | 🔶 **none** |
 | `checkin_nudge` | `routes/accountability.js` | 🔶 **none** |
 | `connect_error_reason` | `server.js` | yes |
 | `family_no_show` | `routes/accountability.js` | 🔶 **none** |
@@ -259,7 +261,7 @@ why this app runs on exactly one Railway replica.
 | `messages_read` | `server.js` | yes |
 | `new_feedback` | `routes/feedback.js` | 🔶 **none** |
 | `new_job` | `routes/sessions.js` | yes |
-| `new_message` | `routes/admin/safety.js`, `routes/interviews.js` | yes |
+| `new_message` | `routes/admin/safety.js`, `routes/caregiverUpdates.js` | yes |
 | `offer_update` | `routes/offers.js` | yes |
 | `proposal_expired` | `utils/proposals.js` | 🔶 **none** |
 | `reminder_delivered` | `server.js` | 🔶 **none** |
@@ -275,7 +277,7 @@ why this app runs on exactly one Railway replica.
 | `visit_photos` | `routes/photos.js` | yes |
 
 
-🔶 **17 event(s) are emitted with no client listener**: `call_accepted`, `care_event_update`, `checkin_nudge`, `family_no_show`, `instructions_updated`, `interview_accepted`, `interview_cancelled`, `interview_completed`, `interview_declined`, `interview_request`, `ipai_coaching`, `ipai_session_summary`, `late_resolution`, `new_feedback`, `proposal_expired`, `reminder_delivered`, `time_proposal`. Either the feature is unfinished or the emit is dead code.
+🔶 **18 event(s) are emitted with no client listener**: `call_accepted`, `care_event_update`, `caregiver_update`, `checkin_nudge`, `family_no_show`, `instructions_updated`, `interview_accepted`, `interview_cancelled`, `interview_completed`, `interview_declined`, `interview_request`, `ipai_coaching`, `ipai_session_summary`, `late_resolution`, `new_feedback`, `proposal_expired`, `reminder_delivered`, `time_proposal`. Either the feature is unfinished or the emit is dead code.
 
 ---
 

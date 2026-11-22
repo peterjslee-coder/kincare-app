@@ -1635,6 +1635,8 @@ const MyAccount = window.MyAccount = ({ setCurrentUser, onNavigate }) => {
       {/* ─── Security Tab ─── */}
       {activeTab === 'settings' && (
         <div>
+          {/* v1.146.0 — every tip and update InPlace has sent her */}
+          {!isDemo && isCaregiver && typeof CaregiverUpdatesHistory !== 'undefined' && <CaregiverUpdatesHistory />}
           {/* ─── Security Section ─── */}
           {!isDemo && (
           <div>
