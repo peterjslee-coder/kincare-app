@@ -515,7 +515,9 @@ const FindWork = window.FindWork = () => {
     try {
       const res = await apiFetch(`/api/sessions/${sessionId}/claim`, { method: 'PUT' });
       if (res?.ok) {
-        showToast('Care request accepted!', 'success');
+        // v1.147.0 — "Accepted. Tapped by mistake? Undo"
+        if (window.offerUndoAccept) window.offerUndoAccept([sessionId], { label: 'Accepted.', onUndone: () => fetchData() });
+        else showToast('Care request accepted!', 'success');
         fetchData();
       } else {
         const err = await res.json().catch(() => ({}));

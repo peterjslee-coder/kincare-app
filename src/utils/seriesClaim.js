@@ -21,7 +21,7 @@ async function applySeriesClaim(db, { caregiverProfileId, confirmIds, releaseIds
     for (const id of confirmIds) {
       const applied = await tx.prepare(`
         UPDATE care_sessions
-        SET caregiver_id = ?, status = 'confirmed', updated_at = NOW()
+        SET caregiver_id = ?, status = 'confirmed', caregiver_accepted_at = NOW(), updated_at = NOW()
         WHERE id = ? AND status IN ${CLAIMABLE_SQL}
       `).run(caregiverProfileId, id);
 

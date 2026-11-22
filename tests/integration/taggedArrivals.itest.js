@@ -1,5 +1,5 @@
 /**
- * v1.145.1 — tagged arrivals. The business card's QR code opens yourinplace.com/?utm_source=card,
+ * v1.146.1 — tagged arrivals. The business card's QR code opens yourinplace.com/?utm_source=card,
  * which is a tag, not a /i/ link. Every scan was already recorded; this proves Admin can now see
  * it: phones, scans, time in the app after the scan, screens read, sign-ups — and that demo
  * sessions and other tags stay out, and only admins can read it.

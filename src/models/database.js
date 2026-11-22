@@ -3720,6 +3720,15 @@ async function initializeDatabase() {
         `CREATE INDEX IF NOT EXISTS idx_cg_update_receipts_user ON caregiver_update_receipts(user_id)`,
       ],
     },
+    {
+      // v1.147.0 — Pete, 11/22: "somebody accidentally accepted the job that they can't do."
+      // When she accepted it, so a cancel soon after is an undo, not a late cancellation
+      // (utils/acceptMistake.js). Set by the caregiver's own claim paths only.
+      id: "093_caregiver_accepted_at",
+      statements: [
+        `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS caregiver_accepted_at TIMESTAMPTZ`,
+      ],
+    },
   ];
   for (const m of MIGRATIONS_V2) {
     if (applied.has(m.id)) continue;

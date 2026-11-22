@@ -2,6 +2,15 @@
 
 > **How this works:** Add bugs and features below as you find them. Don't worry about wording or order. When you're ready for a dev session, say "let's work the task list" and Claude will batch everything together into one efficient push. Nothing gets executed until you say go.
 
+## Nov 22 2026 — "I accepted this by mistake" (v1.147.0)
+
+Pete, 11/22: "somebody accidentally accepted the job that they can't do. Do they just go cancel it?" Cancel already existed (Find Work › Upcoming, Visit details, Schedule; the visit goes back to open). What was missing: an accidental accept inside 24 hours counted as a late cancellation and opened a review.
+
+- [x] `care_sessions.caregiver_accepted_at` (migration 093), stamped by `/claim` and the series claim.
+- [x] `utils/acceptMistake.js`: for 30 minutes after HER accept, her cancel is an undo. No late mark, no review. The family's push reads "Visit open again", saying she accepted by mistake and undid it.
+- [x] Undo bar for a minute after accepting (Home, Find Work, series accept); the cancel screen says "Accepted this by mistake?…" while the window is open.
+- Tests: `acceptMistake.test.js`, `acceptMistake.itest.js` (5).
+
 ## Nov 22 2026 — caregiver updates (v1.146.0) and Betty's tablet (parked)
 
 Pete, 11/22: "I want a messaging option for all caregivers. An update. Tips. Newsletter of sorts." Card on their Home + push; replies go to him privately; every caregiver, onboarding too.

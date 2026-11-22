@@ -402,6 +402,7 @@ router.put("/:id/claim", async (req, res) => {
   await db.prepare(`
     UPDATE care_sessions SET caregiver_id = ?, status = 'confirmed',
       interview_status = COALESCE(?, interview_status),
+      caregiver_accepted_at = NOW(), -- v1.147.0: a cancel soon after is an undo (utils/acceptMistake.js)
       updated_at = NOW()
     WHERE id = ?
   `).run(profile.id, interviewStatus, req.params.id);
@@ -4116,7 +4117,9 @@ router.get("/:id/cancel-preview", async (req, res) => {
       session.scheduled_date.split("T")[0], session.scheduled_time || "00:00", tz
     );
     const hoursUntil = (startsAt - getNowInZone(tz)) / 3600000;
-    const isLateCancel = !!session.caregiver_id && hoursUntil < 24;
+    // v1.147.0 — inside the window after she accepted, her cancel is an undo, not a late cancel.
+    const mistake = require("../utils/acceptMistake").mistakeWindow(session, cancelledBy);
+    const isLateCancel = !!session.caregiver_id && hoursUntil < 24 && !mistake.open;
 
     const charge = await decideCancellationCharge(db, {
       cancelledBy,
@@ -4144,6 +4147,7 @@ router.get("/:id/cancel-preview", async (req, res) => {
     res.json({
       cancelledBy,
       isLateCancel,
+      mistakeWindow: mistake.open ? { minutesLeft: mistake.minutesLeft } : null,
       series,
       hoursUntilSession: Math.round(hoursUntil * 10) / 10,
       willCharge: charge.action === "capture",
@@ -4605,7 +4609,9 @@ async function cancelOneSession(db, session, sessionId, cancelledBy, reason) {
   const sessionDateTime = buildDateTimeInZone(session.scheduled_date.split("T")[0], session.scheduled_time || "00:00", cancelTz);
   const hoursUntilSession = (sessionDateTime - getNowInZone(cancelTz)) / (1000 * 60 * 60);
   const hasCaregiver = !!session.caregiver_id;
-  const isLateCancel = hasCaregiver && hoursUntilSession < 24;
+  // v1.147.0 — her cancel within minutes of accepting is an undo, never a late cancel.
+  const { mistakeWindow } = require("../utils/acceptMistake");
+  const isLateCancel = hasCaregiver && hoursUntilSession < 24 && !mistakeWindow(session, cancelledBy).open;
 
   if (cancelledBy === "caregiver") {
     // Caregiver drops the job — revert to open so other caregivers can claim it
@@ -4815,6 +4821,8 @@ router.put("/:id/cancel", async (req, res) => {
     // v1.125.2 — "one" (default, what every old client sends) or "series": this visit and
     // every later one in the same recurring series that this person could cancel.
     const scope = req.body && req.body.scope === "series" ? "series" : "one";
+    // v1.147.0 — read BEFORE the cancel clears caregiver_id: was this an undo of a mis-tap?
+    const byMistake = require("../utils/acceptMistake").mistakeWindow(session, cancelledBy).open;
     const { updated, isLateCancel, hasCaregiver, charge } = await cancelOneSession(db, session, req.params.id, cancelledBy, reason);
 
     const more = [];
@@ -4865,6 +4873,7 @@ router.put("/:id/cancel", async (req, res) => {
             ? ` Only this visit — the other ${stillBooked} in the series are still with ${cancellerFirst}.`
             : ` Only this visit — the other ${stillBooked} in the series still stand.`)
           : "";
+        if (byMistake) return `${cancellerName} accepted the ${headDay} ${svcLabel.toLowerCase() || 'care'} visit by mistake and undid it. It's open again for another caregiver.${tail}`;
         return `${svcLabel} session on ${headDay} was cancelled by ${cancellerName}${isLateCancel ? " (late cancellation)" : ""}.${tail}`;
       })()
     );
@@ -4916,10 +4925,12 @@ router.put("/:id/cancel", async (req, res) => {
         : `the ${when} visit`;
       const onlyThis = !more.length && stillBooked ? " Only that one — the rest of the series is unchanged." : "";
       sendPushToUser(pushUserId, {
-        title: isForCaregiver ? (more.length ? "Visits cancelled" : "Visit cancelled") : "Caregiver cancelled",
+        title: isForCaregiver ? (more.length ? "Visits cancelled" : "Visit cancelled") : (byMistake ? "Visit open again" : "Caregiver cancelled"),
         body: isForCaregiver
           ? `The family cancelled ${whatWord}.${onlyThis} Please do not travel to the home.`
-          : `Your caregiver cancelled ${whatWord}.${onlyThis}${isLateCancel ? " We're finding a replacement." : ""}`,
+          : byMistake
+            ? `${cancellerFirst} accepted ${whatWord} by mistake and undid it. It's open again for another caregiver.${onlyThis}`
+            : `Your caregiver cancelled ${whatWord}.${onlyThis}${isLateCancel ? " We're finding a replacement." : ""}`,
         data: { type: "session_cancelled", sessionId: req.params.id, cancelledBy, seriesCancelled: more.length },
       }, "session_cancelled").catch(() => {});
     }
@@ -4947,6 +4958,7 @@ router.put("/:id/cancel", async (req, res) => {
       cancelledBy,
       isLateCancel,
       hasCaregiver,
+      acceptedByMistake: byMistake, // v1.147.0
       // v1.125.2 — how many visits this request cancelled, and how many of the series remain.
       cancelledCount: 1 + more.length,
       seriesCancelled: more.length,

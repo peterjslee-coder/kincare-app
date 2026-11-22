@@ -31,6 +31,20 @@ const WINDOW_DAYS = 45;
 
 const ENTRIES = [
   {
+    id: "undo-accept",
+    version: "1.147.0",
+    date: "2026-11-22",
+    audience: ["caregiver"],
+    title: "Accepted a visit by mistake? Undo it",
+    body: "Right after you accept a visit, an Undo button shows at the bottom for a minute. For half an hour after accepting, cancelling it counts as a mistake, not a late cancellation, and the family is told it is open again.",
+    howTo: [
+      "Tap Undo on the bar that appears after you accept",
+      "Or open the visit and tap Cancel visit within 30 minutes",
+    ],
+    examples: ["I tapped Accept on the wrong day"],
+    preview: "undoAccept",
+  },
+  {
     id: "updates-from-inplace",
     version: "1.146.0",
     date: "2026-11-22",
