@@ -156,7 +156,7 @@ const DayFoldCard = window.DayFoldCard = ({ today, next, onOpenVisit, onOpenEven
                   }}>
                     <span aria-hidden="true" style={{ width: 30, textAlign: 'center', fontSize: 16 }}>{careEventIcon(r.e.ev.category)}</span>
                     <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      <span style={{ color: 'var(--text-secondary)' }}>{_clock(r.e.at)}</span> {r.e.ev.title}
+                      <span style={{ color: 'var(--text-secondary)' }}>{r.e.ev.event_time ? _clock(r.e.at) : 'All day'}</span> {r.e.ev.title}
                     </span>
                   </button>
                 );
@@ -201,7 +201,8 @@ const TodayRowsCard = window.TodayRowsCard = ({ hero, visits, events, nowMin, tz
     ...events.filter((e) => e.done).map((e) => ({ key: `e${e.ev.id}`, at: e.at, time: e.ev.event_time ? _clock(e.at) : 'All day', label: e.ev.title, notes: Number(e.ev.notes_count) || 0, onOpen: () => onOpenEvent && onOpenEvent(e.ev) })),
   ].sort((a, b) => a.at - b.at);
   const live = visits.filter((v) => v.state !== 'done');
-  const rows = nextDayRows(live, events.filter((e) => !e.done));
+  const allDay = events.filter((e) => e.allDay);
+  const rows = nextDayRows(live, events.filter((e) => !e.done && !e.allDay));
   const active = hero && hero.isActive;
   const label = hero?.hasPendingTC ? 'Time change proposed' : active ? 'In progress now' : 'Today';
   const labelColor = hero?.hasPendingTC ? 'var(--color-purple)' : active ? 'var(--color-warning)' : 'var(--accent-color)';
@@ -236,6 +237,17 @@ const TodayRowsCard = window.TodayRowsCard = ({ hero, visits, events, nowMin, tz
           </div>
         );
       })()}
+      {allDay.map((e) => (
+        <button key={`ad${e.ev.id}`} type="button" data-testid="today-all-day" onClick={() => onOpenEvent && onOpenEvent(e.ev)} style={{
+          width: '100%', display: 'flex', alignItems: 'center', gap: 8, marginTop: 10, padding: '8px 10px', minHeight: 40, borderRadius: 10,
+          border: '1px solid var(--border-color)', background: 'var(--bg-elevated)', color: 'var(--text-primary)', fontSize: 13.5, textAlign: 'left', cursor: 'pointer',
+        }}>
+          <span aria-hidden="true">{careEventIcon(e.ev.category)}</span>
+          <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent-color)', whiteSpace: 'nowrap' }}>TODAY</span>
+          <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.ev.title}</span>
+          <span aria-hidden="true" style={{ color: 'var(--text-tertiary)' }}>{'\u203A'}</span>
+        </button>
+      ))}
       {doneLines.length > 0 && (
         <div style={{ marginTop: 8 }}>
           {doneLines.map((d) => <DoneLine key={d.key} time={d.time} label={d.label} notes={d.notes} onOpen={d.onOpen} />)}
@@ -262,7 +274,7 @@ const TodayRowsCard = window.TodayRowsCard = ({ hero, visits, events, nowMin, tz
               }}>
                 <span aria-hidden="true" style={{ width: 30, textAlign: 'center', fontSize: 16 }}>{careEventIcon(r.e.ev.category)}</span>
                 <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  <span style={{ color: 'var(--text-secondary)' }}>{_clock(r.e.at)}</span> {r.e.ev.title}
+                  <span style={{ color: 'var(--text-secondary)' }}>{r.e.ev.event_time ? _clock(r.e.at) : 'All day'}</span> {r.e.ev.title}
                 </span>
               </button>
             );

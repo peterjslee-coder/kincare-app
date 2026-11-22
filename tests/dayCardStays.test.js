@@ -78,3 +78,9 @@ describe("v1.142.0 — today in short rows (Pete chose E)", () => {
     expect(card).not.toMatch(/ev\.location/);
   });
 });
+
+test("v1.144.1 — an untimed event is not 'done' at midnight; it shows as Today", () => {
+  const dash = code("public/js/components/Dashboard.js");
+  expect(dash).toMatch(/if \(!ev\.event_time\) return \{ ev, at: 0, done: false, allDay: true \};/);
+  expect(code("public/js/components/ComingUpSpine.js")).toMatch(/data-testid="today-all-day"/);
+});

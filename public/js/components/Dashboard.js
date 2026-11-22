@@ -1764,7 +1764,10 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
             ];
             const eventsToday = (careEventsUpcoming?.events || []).filter((ev) => dOf(ev.event_date) === todayStr).map((ev) => {
               const startMs = TimezoneHelper.buildDateTime(todayStr, ev.event_time || '00:00', ev.timezone || ftz).getTime();
-              return { ev, at: ev.event_time ? hm(ev.event_time) : 0, done: evEnd({ ev, startMs }) <= nowMsEv };
+              // v1.144.1 — an untimed (all-day) event is never "done" before the day is: Pete's
+              // "Lunch at Peggy's with Ryan" had no time and showed as ✓ done at midnight.
+              if (!ev.event_time) return { ev, at: 0, done: false, allDay: true };
+              return { ev, at: hm(ev.event_time), done: evEnd({ ev, startMs }) <= nowMsEv };
             });
             return (
               <TodayRowsCard hero={heroToday ? heroInfo : null} visits={visitsToday} events={eventsToday} nowMin={nowLocal} tz={ftz}
