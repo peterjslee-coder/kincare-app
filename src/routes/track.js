@@ -5,6 +5,8 @@
  *   POST /api/t            public beacon: start · page · identify  (navigator.sendBeacon, text/plain)
  *   GET  /api/admin/links  campaign links with what they brought in
  *   POST /api/admin/links  make one: { label, audience }
+ *   GET  /api/admin/links/tags       arrivals grouped by ?utm_source= (e.g. the business card)
+ *   GET  /api/admin/links/tags/:tag  one tag, phone by phone
  *
  * /i/:code deliberately writes nothing. iMessage, Android Messages, Facebook and Slack all fetch
  * a link the moment it is pasted to draw a preview card, so a server-side "clicked" would mark
@@ -175,6 +177,90 @@ adminRouter.get("/", async (req, res) => {
   } catch (err) {
     captureException(err, { where: "track: list links" });
     res.status(500).json({ error: "Failed to load links" });
+  }
+});
+
+// ─── GET /api/admin/links/tags — visits that arrived carrying ?utm_source= (v1.145.1) ───
+// The founder's business card (11/2026) prints yourinplace.com/?utm_source=card — a tag, not a
+// /i/ link, so it never showed under the links above even though every scan was recorded. This
+// groups arrivals by that tag: how many phones, how many arrivals, time spent in the sessions the
+// tag opened, and who signed up. Demo sessions never count.
+const TAG_WINDOW = "INTERVAL '365 days'";
+adminRouter.get("/tags", async (req, res) => {
+  try {
+    const db = await getDb();
+    const tags = await db.prepare(`
+      WITH s AS (
+        SELECT session_id, visitor_id, utm_source, created_at FROM visit_events
+         WHERE kind = 'start' AND utm_source IS NOT NULL AND demo = FALSE AND created_at > NOW() - ${TAG_WINDOW}
+      )
+      SELECT t.utm_source AS tag,
+             COUNT(DISTINCT t.visitor_id) AS visitors,
+             COUNT(*) AS arrivals,
+             MIN(t.created_at) AS first_visit_at,
+             MAX(t.created_at) AS last_visit_at,
+             (SELECT COALESCE(SUM(p.ms), 0) FROM visit_events p
+               WHERE p.kind = 'page' AND p.session_id IN (SELECT s2.session_id FROM s s2 WHERE s2.utm_source = t.utm_source)) AS ms,
+             (SELECT COUNT(DISTINCT v.user_id) FROM visitors v
+               WHERE v.user_id IS NOT NULL AND v.id IN (SELECT s3.visitor_id FROM s s3 WHERE s3.utm_source = t.utm_source)) AS signups
+        FROM s t
+       GROUP BY t.utm_source
+       ORDER BY MAX(t.created_at) DESC
+       LIMIT 50
+    `).all();
+    res.json({ tags: tags.map((t) => ({ ...t, visitors: Number(t.visitors) || 0, arrivals: Number(t.arrivals) || 0, ms: Number(t.ms) || 0, signups: Number(t.signups) || 0 })) });
+  } catch (err) {
+    captureException(err, { where: "track: list tags" });
+    res.status(500).json({ error: "Failed to load tags" });
+  }
+});
+
+// One tag, phone by phone: when it first arrived, how often it came back (by any route), the time
+// spent, the screens it read, and whether it became an account. No names — this answers "did the
+// cards work", not "who is this".
+adminRouter.get("/tags/:tag", async (req, res) => {
+  const tag = T.cleanTag(req.params.tag);
+  if (!tag) return res.status(400).json({ error: "Bad tag" });
+  try {
+    const db = await getDb();
+    const rows = await db.prepare(`
+      WITH tagged AS (
+        SELECT visitor_id, MIN(created_at) AS first_at, COUNT(*) AS tag_arrivals FROM visit_events
+         WHERE kind = 'start' AND utm_source = ? AND demo = FALSE AND created_at > NOW() - ${TAG_WINDOW}
+         GROUP BY visitor_id
+      )
+      SELECT tg.visitor_id, tg.first_at, tg.tag_arrivals, v.platform, v.last_seen_at,
+             (v.user_id IS NOT NULL) AS signed_up,
+             (SELECT COUNT(DISTINCT e.session_id) FROM visit_events e
+               WHERE e.visitor_id = tg.visitor_id AND e.kind = 'start' AND e.created_at >= tg.first_at) AS visits,
+             (SELECT COALESCE(SUM(e.ms), 0) FROM visit_events e
+               WHERE e.visitor_id = tg.visitor_id AND e.kind = 'page' AND e.created_at >= tg.first_at) AS ms
+        FROM tagged tg JOIN visitors v ON v.id = tg.visitor_id
+       ORDER BY tg.first_at DESC
+       LIMIT 100
+    `).all(tag);
+    const byVisitor = {};
+    for (const r of rows) {
+      const pages = await db.prepare(`
+        SELECT page, SUM(ms) AS ms FROM visit_events
+         WHERE visitor_id = ? AND kind = 'page' AND page IS NOT NULL AND created_at >= ?
+         GROUP BY page ORDER BY SUM(ms) DESC LIMIT 4
+      `).all(r.visitor_id, r.first_at);
+      byVisitor[r.visitor_id] = pages.map((p) => ({ page: p.page, ms: Number(p.ms) || 0 }));
+    }
+    res.json({
+      tag,
+      visitors: rows.map((r, i) => ({
+        n: rows.length - i,
+        first_at: r.first_at, last_seen_at: r.last_seen_at, platform: r.platform,
+        tag_arrivals: Number(r.tag_arrivals) || 0, visits: Number(r.visits) || 0, ms: Number(r.ms) || 0,
+        signed_up: !!r.signed_up,
+        top_pages: byVisitor[r.visitor_id] || [],
+      })),
+    });
+  } catch (err) {
+    captureException(err, { where: "track: one tag" });
+    res.status(500).json({ error: "Failed to load that tag" });
   }
 });
 
