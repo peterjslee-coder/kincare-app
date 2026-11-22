@@ -74,7 +74,7 @@ describe("v1.142.0 — today in short rows (Pete chose E)", () => {
   });
   test("appointments ride as a tag, not a full card with an address", () => {
     const card = spine.slice(spine.indexOf("const TodayRowsCard"), spine.indexOf("const ComingUpSpine"));
-    expect(card).toMatch(/r\.riders\.map/);
+    expect(card).toMatch(/<RiderLines riders=\{r\.riders\}/); // v1.145.0 — nested narrow lines, not a "+" tag
     expect(card).not.toMatch(/ev\.location/);
   });
 });
@@ -83,4 +83,12 @@ test("v1.144.1 — an untimed event is not 'done' at midnight; it shows as Today
   const dash = code("public/js/components/Dashboard.js");
   expect(dash).toMatch(/if \(!ev\.event_time\) return \{ ev, at: 0, done: false, allDay: true \};/);
   expect(code("public/js/components/ComingUpSpine.js")).toMatch(/data-testid="today-all-day"/);
+});
+
+test("v1.145.0 — appointments nest under the visit as narrow lines that expand", () => {
+  const spine = code("public/js/components/ComingUpSpine.js");
+  const rl = spine.slice(spine.indexOf("const RiderLines"), spine.indexOf("const DayFoldCard"));
+  expect(rl).toMatch(/data-testid="rider-line" aria-expanded=\{isOpen\}/);
+  expect(rl).toMatch(/>Open<\/button>/);
+  expect(spine).not.toMatch(/\+ \{e\.ev\.title\.split/);
 });
