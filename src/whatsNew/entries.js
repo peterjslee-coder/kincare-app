@@ -31,6 +31,37 @@ const WINDOW_DAYS = 45;
 
 const ENTRIES = [
   {
+    id: "hub-photos-family",
+    version: "1.155.0",
+    date: "2026-11-23",
+    audience: ["family"],
+    title: "Photos on your loved one's Hub",
+    body: "Anyone on the care team can now put a photo on the InPlace Hub, the tablet screen on the counter. The newest shows big with who sent it, and they take turns every 20 seconds.",
+    howTo: [
+      "On Home, find Care photos and tap + Add photo",
+      "Say something if you like, keep \"Show on their screen\" ticked, then Add photo",
+      "Already have a photo there? Tap it, then Show on their screen",
+      "Tap it again to take it off; the photo stays in Care photos",
+    ],
+    examples: ["Sam's first day of school", "The garden this morning"],
+    preview: "hubPhotos",
+  },
+  {
+    id: "hub-photos-caregiver",
+    version: "1.155.0",
+    date: "2026-11-23",
+    audience: ["caregiver"],
+    title: "Put a visit photo on their screen",
+    body: "When a family has an InPlace Hub, check-out now asks whether a visit photo should show on that screen too. It is off unless you tick it, and the family sees every photo either way.",
+    howTo: [
+      "At Check Out, add your visit photos as usual",
+      "Tick \"Show on their screen\" for a photo they would enjoy",
+      "Check out: it shows on the Hub with your name",
+    ],
+    examples: ["The puzzle we finished", "Lunch on the porch"],
+    preview: "hubPhotos",
+  },
+  {
     id: "handoff-caregiver",
     version: "1.154.0",
     date: "2026-11-23",

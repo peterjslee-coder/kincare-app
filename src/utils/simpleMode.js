@@ -63,6 +63,7 @@ const HUB_DEFAULTS = Object.freeze({
   on: false,
   faces: true,   // "Who's who": faces and names
   week: true,    // the next seven days, not just today and tomorrow
+  photos: true,  // v1.155.0 — photos the team chose to show on the screen
   dimFrom: "21:00", // the screen goes dark with a big clock after this...
   dimTo: "07:00",   // ...and brightens again at this
 });
@@ -70,7 +71,7 @@ const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
 function cleanHub(raw) {
   const out = { ...HUB_DEFAULTS };
   if (raw && typeof raw === "object") {
-    for (const k of ["on", "faces", "week"]) if (typeof raw[k] === "boolean") out[k] = raw[k];
+    for (const k of ["on", "faces", "week", "photos"]) if (typeof raw[k] === "boolean") out[k] = raw[k];
     for (const k of ["dimFrom", "dimTo"]) if (typeof raw[k] === "string" && HHMM.test(raw[k])) out[k] = raw[k];
   }
   return out;
@@ -252,7 +253,7 @@ function relationLabel(label) {
 }
 
 async function hubScreenFor(db, recipient, linkedUserId, todayStr, hubCfg) {
-  const out = { on: true, faces: hubCfg.faces, week: hubCfg.week, dimFrom: hubCfg.dimFrom, dimTo: hubCfg.dimTo, today: todayStr, here: null, days: [], people: [] };
+  const out = { on: true, faces: hubCfg.faces, week: hubCfg.week, showPhotos: hubCfg.photos !== false, photos: [], dimFrom: hubCfg.dimFrom, dimTo: hubCfg.dimTo, today: todayStr, here: null, days: [], people: [] };
 
   // Who is here right now: a visit in progress today.
   const here = await db.prepare(`
@@ -298,6 +299,11 @@ async function hubScreenFor(db, recipient, linkedUserId, todayStr, hubCfg) {
       // v1.153.2 — the label is when they come NEXT ("Today", "Tomorrow", "Thursday"): short
       // enough for the tablet (a list of weekdays was cut off), and the more useful thing to know.
       .map((c) => ({ userId: c.userId, firstName: c.firstName, photo: c.photo, label: nextVisitLabel(c.dates[0], todayStr), today: c.today }));
+  }
+  // v1.155.0 — photos the team flagged for her screen (utils/hubPhotos.js), newest first.
+  if (out.showPhotos) {
+    const { hubPhotosFor } = require("./hubPhotos");
+    out.photos = await hubPhotosFor(db, recipient.id);
   }
   return out;
 }

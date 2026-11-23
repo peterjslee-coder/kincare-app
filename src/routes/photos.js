@@ -73,6 +73,17 @@ router.post(
       return res.status(400).json({ error: "No photos provided" });
     }
 
+    // v1.155.0 — "Show on <name>'s screen" (the InPlace Hub). The caregiver's choice, off unless
+    // she ticks it, and honoured only while that person's Hub is actually on.
+    let showOnHub = 0;
+    if (["1", "true"].includes(String(req.body.showOnHub || ""))) {
+      const hubPhotos = require("../utils/hubPhotos");
+      const s = await db.prepare(
+        "SELECT cs.care_recipient_id FROM visit_logs vl JOIN care_sessions cs ON vl.session_id = cs.id WHERE vl.id = ?"
+      ).get(visitLogId);
+      if (s && (await hubPhotos.hubOn(db, s.care_recipient_id))) showOnHub = 1;
+    }
+
     const photos = [];
     for (let i = 0; i < req.files.length; i++) {
       const file = req.files[i];
@@ -90,13 +101,13 @@ router.post(
 
       await db
         .prepare(
-          "INSERT INTO visit_photos (id, visit_log_id, photo_url, caption) VALUES (?, ?, ?, ?)"
+          "INSERT INTO visit_photos (id, visit_log_id, photo_url, caption, show_on_hub) VALUES (?, ?, ?, ?, ?)"
         )
-        .run(id, visitLogId, stored, captions[i] || null);
+        .run(id, visitLogId, stored, captions[i] || null, showOnHub);
 
       // v1.106.7 — a URL, not the bytes. The client just sent us this image; echoing a
       // megabyte of base64 back at it was the upload paid for twice.
-      photos.push({ id, visitLogId, photoUrl: `/api/photos/${id}/image`, caption: captions[i] || null });
+      photos.push({ id, visitLogId, photoUrl: `/api/photos/${id}/image`, caption: captions[i] || null, showOnHub: !!showOnHub });
     }
 
     // Real-time: notify family that photos were added
@@ -131,6 +142,29 @@ router.post(
     res.status(201).json({ photos, count: photos.length });
   }
 );
+
+// ─── GET /api/photos/hub-option/session/:sessionId ───
+// v1.155.0 — may the check-out picker offer "Show on <name>'s screen"? Only to the caregiver on
+// this visit, and only while that person's Hub is on. Answers { available, firstName }.
+router.get("/hub-option/session/:sessionId", async (req, res) => {
+  try {
+    const db = await getDb();
+    const row = await db.prepare(`
+      SELECT cs.care_recipient_id, cr.first_name AS recipient_name
+        FROM care_sessions cs
+        JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+        JOIN care_recipients cr ON cs.care_recipient_id = cr.id
+       WHERE cs.id = ? AND cp.user_id = ?
+    `).get(req.params.sessionId, req.user.id);
+    if (!row) return res.json({ available: false });
+    const hubPhotos = require("../utils/hubPhotos");
+    if (!(await hubPhotos.hubOn(db, row.care_recipient_id))) return res.json({ available: false });
+    res.json({ available: true, firstName: row.recipient_name || null });
+  } catch (err) {
+    captureException(err, { where: "photos: hub option" });
+    res.json({ available: false });
+  }
+});
 
 // ─── GET /api/photos/visit/:visitLogId ───
 // Get photos for a visit log (if user is session participant, care team member, or admin)

@@ -3807,6 +3807,20 @@ async function initializeDatabase() {
         `ALTER TABLE visit_logs ADD COLUMN IF NOT EXISTS handoff_prompt_sent_at TIMESTAMPTZ`,
       ],
     },
+    {
+      // v1.155.0 — photos on the InPlace Hub (11/23): anyone on the care team can add one, and
+      // a caregiver's photo shows only if she chooses "Show on <name>'s screen". A flag on the
+      // two photo tables that already exist, not a third copy of the bytes: care_photos
+      // (family: saved from Messages, or now added directly) and visit_photos (caregivers, at
+      // check-out). care_photos.source_message_id was already nullable.
+      id: "098_hub_photos",
+      statements: [
+        `ALTER TABLE care_photos ADD COLUMN IF NOT EXISTS show_on_hub INTEGER NOT NULL DEFAULT 0`,
+        `ALTER TABLE visit_photos ADD COLUMN IF NOT EXISTS show_on_hub INTEGER NOT NULL DEFAULT 0`,
+        `CREATE INDEX IF NOT EXISTS idx_care_photos_hub ON care_photos(care_recipient_id, created_at DESC) WHERE show_on_hub = 1 AND deleted_at IS NULL`,
+        `CREATE INDEX IF NOT EXISTS idx_visit_photos_hub ON visit_photos(created_at DESC) WHERE show_on_hub = 1`,
+      ],
+    },
   ];
   for (const m of MIGRATIONS_V2) {
     if (applied.has(m.id)) continue;

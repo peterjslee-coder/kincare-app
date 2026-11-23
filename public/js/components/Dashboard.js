@@ -35,9 +35,26 @@ const Spend30 = window.Spend30 = ({ s }) => {
 // v1.137.0 — what you can do with a photo in the Home strip. A photo saved from Messages can
 // move to a visit (or off one); any photo can be deleted. Two taps to delete, no browser dialog
 // (dialogs block the native shell).
-const PhotoActions = window.PhotoActions = ({ photo, onChanged }) => {
+const PhotoActions = window.PhotoActions = ({ photo, onChanged, hubRecipients }) => {
   const { showToast } = useToast();
   const [confirmDelete, setConfirmDelete] = React.useState(false);
+  // v1.155.0 — "Show on <name>'s screen": offered only while that person's InPlace Hub is on.
+  const hubFor = (hubRecipients || []).find((r) => r.id === photo.careRecipientId) || null;
+  const [onHub, setOnHub] = React.useState(!!photo.showOnHub);
+  const toggleHub = async (e) => {
+    stop(e);
+    const next = !onHub;
+    setBusy(true);
+    try {
+      const r = await apiFetch(`/api/care-photos/hub/${photo.kind === 'care' ? 'care' : 'visit'}/${photo.id}`, { method: 'PATCH', body: JSON.stringify({ showOnHub: next }) });
+      if (r && r.ok) {
+        setOnHub(next);
+        showToast(next ? `Showing on ${hubFor.firstName}'s screen` : `Taken off ${hubFor.firstName}'s screen`, 'success');
+        onChanged && onChanged({ keepOpen: true });
+      } else showToast("Couldn't change that photo", 'error');
+    } catch { showToast("Couldn't change that photo", 'error'); }
+    setBusy(false);
+  };
   const [visits, setVisits] = React.useState(null);
   const [busy, setBusy] = React.useState(false);
   const stop = (e) => e.stopPropagation();
@@ -90,6 +107,13 @@ const PhotoActions = window.PhotoActions = ({ photo, onChanged }) => {
           </button>
         </div>
       ) : (
+        <>
+        {hubFor && (
+          <button type="button" data-testid="photo-hub-toggle" onClick={toggleHub} disabled={busy}
+            style={{ ...btn, width: '100%', marginBottom: 8, border: onHub ? '1px solid #7fd6b9' : '1px solid rgba(255,255,255,0.4)', color: onHub ? '#7fd6b9' : 'var(--text-on-primary)' }}>
+            {onHub ? `✓ On ${hubFor.firstName}'s screen · tap to remove` : `Show on ${hubFor.firstName}'s screen`}
+          </button>
+        )}
         <div style={{ display: 'flex', gap: 8 }}>
           {isCare && (
             <button type="button" onClick={openMove} disabled={busy}
@@ -98,8 +122,87 @@ const PhotoActions = window.PhotoActions = ({ photo, onChanged }) => {
           <button type="button" data-testid="photo-delete" onClick={del} disabled={busy}
             style={{ ...btn, border: '1px solid #ff8a8a', color: '#ff8a8a' }}>{confirmDelete ? 'Tap again to delete' : 'Delete'}</button>
         </div>
+        </>
       )}
     </div>
+  );
+};
+
+// v1.155.0 — family adds a photo straight to Care photos, and (by default) to the person's
+// InPlace Hub. Shown only when at least one loved one has the Hub on. No `capture` attribute:
+// it would force the camera and hide the photo library.
+const AddCarePhoto = window.AddCarePhoto = ({ hubRecipients, onAdded }) => {
+  const { showToast } = useToast();
+  const [file, setFile] = React.useState(null);
+  const [preview, setPreview] = React.useState(null);
+  const [caption, setCaption] = React.useState('');
+  const [recipientId, setRecipientId] = React.useState(hubRecipients[0] && hubRecipients[0].id);
+  const [onHub, setOnHub] = React.useState(true);
+  const [busy, setBusy] = React.useState(false);
+  const inputRef = React.useRef(null);
+  const who = hubRecipients.find((r) => r.id === recipientId) || hubRecipients[0];
+  const reset = () => { if (preview) URL.revokeObjectURL(preview); setFile(null); setPreview(null); setCaption(''); setOnHub(true); };
+  const pick = (e) => {
+    const f = e.target.files && e.target.files[0];
+    e.target.value = '';
+    if (!f) return;
+    if (!/^image\//.test(f.type || '')) { showToast('Choose a photo', 'error'); return; }
+    setFile(f); setPreview(URL.createObjectURL(f));
+  };
+  const save = async () => {
+    if (!file || !who) return;
+    setBusy(true);
+    try {
+      const small = await downscaleImageFile(file, { maxDim: 1600, quality: 0.85 });
+      const fd = new FormData();
+      fd.append('photo', await uploadSafeFile(small, small.name || 'photo.jpg'));
+      fd.append('careRecipientId', who.id);
+      fd.append('caption', caption.trim());
+      fd.append('showOnHub', onHub ? '1' : '0');
+      const r = await apiFetch('/api/care-photos/upload', { method: 'POST', body: fd });
+      if (r && r.ok) {
+        showToast(onHub ? `Added — showing on ${who.firstName}'s screen` : 'Added to Care photos', 'success');
+        reset(); onAdded && onAdded();
+      } else {
+        let msg = "Couldn't add that photo";
+        try { const d = await r.json(); if (d && d.error) msg = d.error; } catch (_) {}
+        showToast(msg, 'error');
+      }
+    } catch { showToast("Couldn't add that photo", 'error'); }
+    setBusy(false);
+  };
+  return (
+    <>
+      <input ref={inputRef} type="file" accept="image/*" onChange={pick} style={{ display: 'none' }} data-testid="add-care-photo-input" />
+      {!file ? (
+        <button type="button" data-testid="add-care-photo" onClick={() => inputRef.current && inputRef.current.click()}
+          style={{ fontSize: 13, fontWeight: 600, padding: '6px 12px', minHeight: 36, borderRadius: 8, border: '1px solid var(--role-color)', background: 'none', color: 'var(--role-color)', cursor: 'pointer' }}>
+          + Add photo
+        </button>
+      ) : (
+        <div data-testid="add-care-photo-panel" style={{ position: 'fixed', inset: 0, zIndex: 2100, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+          <div style={{ background: 'var(--bg-surface)', color: 'var(--text-primary)', borderRadius: 14, padding: 16, width: 'min(380px, 100%)', maxHeight: '90vh', overflowY: 'auto' }}>
+            <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 10 }}>Add a photo</div>
+            <img src={preview} alt="" style={{ width: '100%', maxHeight: '40vh', objectFit: 'contain', borderRadius: 10, background: 'var(--bg-primary)' }} />
+            {hubRecipients.length > 1 && (
+              <select value={recipientId} onChange={(e) => setRecipientId(e.target.value)} className="form-input" style={{ marginTop: 10, width: '100%' }}>
+                {hubRecipients.map((r) => <option key={r.id} value={r.id}>{r.firstName}</option>)}
+              </select>
+            )}
+            <input className="form-input" value={caption} maxLength={200} onChange={(e) => setCaption(e.target.value)}
+              placeholder="Say something (optional) — e.g. Sam's first day of school" style={{ marginTop: 10, width: '100%' }} />
+            <label style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 12, fontSize: 15, minHeight: 44, cursor: 'pointer' }}>
+              <input type="checkbox" checked={onHub} onChange={(e) => setOnHub(e.target.checked)} style={{ width: 22, height: 22 }} data-testid="add-care-photo-hub" />
+              Show on {who ? who.firstName : 'their'}'s screen
+            </label>
+            <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+              <button type="button" className="btn btn-secondary" onClick={reset} disabled={busy} style={{ flex: 1, minHeight: 44 }}>Cancel</button>
+              <button type="button" className="btn btn-primary" data-testid="add-care-photo-save" onClick={save} disabled={busy} style={{ flex: 1, minHeight: 44 }}>{busy ? 'Adding…' : 'Add photo'}</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 };
 
@@ -2476,12 +2579,19 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
           card under Next Up is the one acknowledgment point. */}
 
       {/* Recent Visit Photos */}
-      {data.recentPhotos && data.recentPhotos.length > 0 && (
-        <div className="card">
-          <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      {((data.recentPhotos && data.recentPhotos.length > 0) || (data.hubRecipients && data.hubRecipients.length > 0)) && (
+        <div className="card" data-testid="care-photos-card">
+          <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
             <span><span className="card-icon">📸</span>Care photos</span>
-            <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>{data.recentPhotos.length} photo{data.recentPhotos.length !== 1 ? 's' : ''}</span>
+            {data.hubRecipients && data.hubRecipients.length > 0
+              ? <AddCarePhoto hubRecipients={data.hubRecipients} onAdded={fetchDashboard} />
+              : <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>{data.recentPhotos.length} photo{data.recentPhotos.length !== 1 ? 's' : ''}</span>}
           </div>
+          {(!data.recentPhotos || data.recentPhotos.length === 0) && (
+            <div style={{ fontSize: 13, color: 'var(--text-secondary)', padding: '4px 0 8px' }}>
+              Add a photo and it can show on {data.hubRecipients[0].firstName}'s screen.
+            </div>
+          )}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))', gap: 8, padding: '4px 0' }}>
             {data.recentPhotos.map((p, i) => (
               <div key={p.id || i} style={{ position: 'relative', borderRadius: 8, overflow: 'hidden', border: '1px solid var(--border-color)', cursor: 'pointer' }}
@@ -2491,12 +2601,17 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
                 <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'linear-gradient(transparent, rgba(0,0,0,0.6))', padding: '12px 6px 4px', color: 'var(--text-on-primary)', fontSize: 10, lineHeight: 1.3 }}>
                   {p.caregiverName}
                 </div>
+                {p.showOnHub && (
+                  <div title="On their screen" style={{ position: 'absolute', top: 4, right: 4, background: '#1b6b5a', color: '#fff', fontSize: 10, fontWeight: 700, borderRadius: 6, padding: '2px 6px' }}>On screen</div>
+                )}
               </div>
             ))}
           </div>
-          {data.recentPhotos.length > 0 && (
+          {data.recentPhotos && data.recentPhotos.length > 0 && (
             <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 6, textAlign: 'center' }}>
-              Tap a photo to see it, move it to a visit, or delete it
+              {data.hubRecipients && data.hubRecipients.length > 0
+                ? `Tap a photo to show it on ${data.hubRecipients[0].firstName}'s screen, move it, or delete it`
+                : 'Tap a photo to see it, move it to a visit, or delete it'}
             </div>
           )}
         </div>
@@ -2529,8 +2644,8 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
               </div>
             )}
             {/* v1.137.0 — move a saved photo to a visit, or delete it, right here (Pete, 11/20). */}
-            <PhotoActions photo={lightboxPhoto}
-              onChanged={() => { setLightboxPhoto(null); fetchDashboard(); }} />
+            <PhotoActions photo={lightboxPhoto} hubRecipients={data.hubRecipients}
+              onChanged={(o) => { if (!(o && o.keepOpen)) setLightboxPhoto(null); fetchDashboard(); }} />
           </div>
         </div>
       )}

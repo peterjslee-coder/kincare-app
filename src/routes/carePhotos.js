@@ -183,6 +183,90 @@ router.post("/", async (req, res) => {
   }
 });
 
+// ─── v1.155.0 — photos on the InPlace Hub ───
+// See utils/hubPhotos.js. Family can now add a care photo directly (not only from Messages),
+// and flag any care photo or visit photo to show on the person's screen.
+const multer = require("multer");
+const { uploadQuota } = require("../utils/usageLimits");
+const { validateMagicBytes } = require("../utils/fileValidation");
+const hubPhotos = require("../utils/hubPhotos");
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const mime = String(file.mimetype || "").split(";")[0].trim().toLowerCase();
+    if (IMAGE_MIMES.includes(mime)) cb(null, true);
+    else cb(new Error("Photos must be JPEG, PNG, WebP, GIF or HEIC"));
+  },
+});
+const truthy = (v) => v === true || v === 1 || v === "1" || v === "true";
+
+// POST /api/care-photos/upload (multipart: photo, careRecipientId, caption?, showOnHub?)
+router.post("/upload", uploadQuota(), (req, res, next) => {
+  upload.single("photo")(req, res, (err) => {
+    if (err) return res.status(400).json({ error: err.message || "That photo couldn't be read" });
+    next();
+  });
+}, async (req, res) => {
+  try {
+    const db = await getDb();
+    const careRecipientId = String((req.body && req.body.careRecipientId) || "");
+    if (!(await hubPhotos.isFamilyFor(db, careRecipientId, req.user))) {
+      return res.status(403).json({ error: "Care photos are for family on the care team." });
+    }
+    const file = req.file;
+    if (!file) return res.status(400).json({ error: "No photo provided" });
+    if (!validateMagicBytes(file.buffer, file.mimetype).valid) {
+      return res.status(400).json({ error: "That file isn't the picture it says it is" });
+    }
+    const caption = String((req.body && req.body.caption) || "").trim().slice(0, CAPTION_MAX) || null;
+    const showOnHub = truthy(req.body && req.body.showOnHub) ? 1 : 0;
+    const stored = await storage.storeFileData("care-photo", `data:${file.mimetype};base64,${file.buffer.toString("base64")}`);
+    const id = uuid();
+    await db.prepare(`
+      INSERT INTO care_photos (id, care_recipient_id, session_id, source_message_id, photo_url, caption, added_by, show_on_hub)
+      VALUES (?, ?, NULL, NULL, ?, ?, ?, ?)
+    `).run(id, careRecipientId, stored, caption, req.user.id, showOnHub);
+    res.status(201).json({ id, photoUrl: `/api/care-photos/${id}/image`, showOnHub: !!showOnHub });
+  } catch (err) {
+    captureException(err, { where: "carePhotos: upload" });
+    res.status(500).json({ error: "Could not save that photo" });
+  }
+});
+
+// PATCH /api/care-photos/hub/:kind/:id { showOnHub } — family on her team, either kind of photo
+router.patch("/hub/:kind/:id", async (req, res) => {
+  try {
+    const db = await getDb();
+    const { kind, id } = req.params;
+    const row = await hubPhotos.hubPhotoRow(db, kind, id);
+    if (!row || !(await hubPhotos.isFamilyFor(db, row.care_recipient_id, req.user))) {
+      return res.status(404).json({ error: "Photo not found" });
+    }
+    const on = truthy(req.body && req.body.showOnHub) ? 1 : 0;
+    const table = kind === "care" ? "care_photos" : "visit_photos";
+    await db.prepare(`UPDATE ${table} SET show_on_hub = ? WHERE id = ?`).run(on, id);
+    res.json({ id, kind, showOnHub: !!on });
+  } catch (err) {
+    captureException(err, { where: "carePhotos: hub toggle" });
+    res.status(500).json({ error: "Could not change that photo" });
+  }
+});
+
+// GET /api/care-photos/hub/:kind/:id/image — her own account (flagged photos only) or family
+router.get("/hub/:kind/:id/image", async (req, res) => {
+  try {
+    const db = await getDb();
+    const row = await hubPhotos.hubPhotoForViewer(db, req.params.kind, req.params.id, req.user);
+    if (!row) return res.status(404).json({ error: "Photo not found" });
+    return await sendStoredFile(res, row.photo_url, { allow: IMAGE_MIMES, filename: `photo-${row.id}.jpg` });
+  } catch (err) {
+    captureException(err, { where: "carePhotos: hub image" });
+    res.status(500).json({ error: "Failed to load photo" });
+  }
+});
+
 // GET /api/care-photos/:id/image
 router.get("/:id/image", async (req, res) => {
   try {

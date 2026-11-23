@@ -345,6 +345,47 @@ const hubLine = (c) => {
 // recipient's role colour is purple; the Hub is always green.
 const HUB_THEME = { '--role-color': '#1b6b5a', '--role-color-light': '#e1f0eb', '--text-on-primary': '#ffffff' };
 
+// v1.155.0 — photos on the Hub. The team chose these for her screen (a family member adds one,
+// or switches one on; a caregiver ticks "Show on <name>'s screen" at check-out). The newest is
+// shown big with who sent it and when, and it moves on to the next every 20 seconds.
+const hubPhotoWhen = (iso, now) => {
+  const t = new Date(iso);
+  if (isNaN(t)) return '';
+  const day = (d) => { const x = new Date(d); x.setHours(12, 0, 0, 0); return x; };
+  const diff = Math.round((day(now) - day(t)) / 86400000);
+  if (diff <= 0) { const h = t.getHours(); return h < 12 ? 'this morning' : h < 17 ? 'this afternoon' : 'this evening'; }
+  if (diff === 1) return 'yesterday';
+  if (diff < 7) return 'on ' + t.toLocaleDateString('en-US', { weekday: 'long' });
+  return 'on ' + t.toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
+};
+const HUB_PHOTO_MS = 20000;
+const HubPhoto = ({ photos, now, card }) => {
+  const [i, setI] = React.useState(0);
+  const [broken, setBroken] = React.useState({});
+  const list = (photos || []).filter((p) => !broken[p.kind + p.id]);
+  const key = list.map((p) => p.id).join(',');
+  React.useEffect(() => { setI(0); }, [key]);
+  React.useEffect(() => {
+    if (list.length < 2) return undefined;
+    const iv = setInterval(() => setI((n) => n + 1), HUB_PHOTO_MS);
+    return () => clearInterval(iv);
+  }, [key]);
+  if (!list.length) return null;
+  const p = list[i % list.length];
+  const when = hubPhotoWhen(p.createdAt, now);
+  return (
+    <div data-testid="hub-photo" style={{ ...card, padding: 0, flex: '1 1 auto', minHeight: '26vh', position: 'relative', overflow: 'hidden', background: '#000', flexShrink: 1 }}>
+      <img key={p.kind + p.id} src={p.url} alt={p.caption || (p.from ? `Photo from ${p.from}` : 'Photo')}
+        onError={() => setBroken((b) => ({ ...b, [p.kind + p.id]: true }))}
+        style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain' }} />
+      <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, padding: '5vh 2.4vh 1.6vh', background: 'linear-gradient(transparent, rgba(0,0,0,0.75))', color: '#fff' }}>
+        {p.caption && <div style={{ fontSize: '4vh', fontWeight: 800, lineHeight: 1.2, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{p.caption}</div>}
+        <div style={{ fontSize: '3.2vh', opacity: 0.9 }}>{p.from ? `From ${p.from}` : 'A photo'}{when ? ` · ${when}` : ''}</div>
+      </div>
+    </div>
+  );
+};
+
 const HubBoard = ({ hub, first, now, show, calls, note, s, failed, readFlash, reading, acking, unread, awake, onWake, onRead, onAck, onText, onMessages, onCall }) => {
   const today = hub.today;
   const days = hub.days || [];
@@ -478,6 +519,10 @@ const HubBoard = ({ hub, first, now, show, calls, note, s, failed, readFlash, re
               <button onClick={onText} style={{ ...btn('var(--bg-card)', 'var(--text-primary)'), border: '2px solid var(--border-color)', minHeight: '10vh', fontSize: '4.4vh' }}>Write back</button>
             </div>
           </div>
+        )}
+
+        {!note && !waiting && !readFlash && hub.showPhotos !== false && (
+          <HubPhoto photos={hub.photos} now={now} card={card} />
         )}
 
         {hub.faces && (hub.people || []).length > 0 && (
@@ -1140,6 +1185,10 @@ const SimpleModeSettings = window.SimpleModeSettings = ({ recipientId, firstName
                   <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text-primary)', cursor: 'pointer' }}>
                     <input type="checkbox" disabled={saving} checked={!!hub.faces} onChange={(e) => save({ hub: { faces: e.target.checked } })} style={{ width: 16, height: 16, accentColor: 'var(--role-color)' }} />
                     <span><strong>Who's who</strong> <span style={{ color: 'var(--text-secondary)' }}>— faces and names of the caregivers coming this week, and when each comes next</span></span>
+                  </label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text-primary)', cursor: 'pointer' }}>
+                    <input type="checkbox" disabled={saving} checked={hub.photos !== false} onChange={(e) => save({ hub: { photos: e.target.checked } })} style={{ width: 16, height: 16, accentColor: 'var(--role-color)' }} data-testid="hub-photos-setting" />
+                    <span><strong>Photos</strong> <span style={{ color: 'var(--text-secondary)' }}>— the photos the team chooses for {name}'s screen. Add one from Care photos on Home, or tap any care photo and pick "Show on {name}'s screen". A caregiver's photo shows only if they tick it at check-out.</span></span>
                   </label>
                   <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text-primary)', cursor: 'pointer' }}>
                     <input type="checkbox" disabled={saving} checked={!!hub.week} onChange={(e) => save({ hub: { week: e.target.checked } })} style={{ width: 16, height: 16, accentColor: 'var(--role-color)' }} />

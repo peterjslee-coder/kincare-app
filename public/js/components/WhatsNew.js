@@ -508,6 +508,25 @@ const WN_PREVIEWS = {
       </div>
     </div>
   ),
+  // v1.155.0 — a photo the team chose, big on the Hub
+  hubPhotos: () => (
+    <div style={{ background: '#1d1b19', borderRadius: 12, padding: 6 }}>
+      <div style={{ background: 'var(--bg-surface)', borderRadius: 7, padding: 8, display: 'grid', gridTemplateColumns: '1fr 1.2fr', gap: 6 }}>
+        <div>
+          <div style={{ fontSize: 9.5, color: 'var(--text-secondary)', lineHeight: 1.2 }}>Monday<br />March 2, 2026</div>
+          <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--text-primary)' }}>10:45</div>
+          <div style={{ ...wnCard, marginTop: 5, padding: '5px 7px', fontSize: 10.5, fontWeight: 700, color: 'var(--text-primary)' }}>Jane is here</div>
+        </div>
+        <div style={{ position: 'relative', borderRadius: 7, overflow: 'hidden', minHeight: 88, background: 'linear-gradient(160deg, #8fc7a8 0%, #3f8f6b 55%, #e8c46a 100%)' }}>
+          <div aria-hidden="true" style={{ position: 'absolute', top: 14, left: '50%', marginLeft: -14, width: 28, height: 28, borderRadius: 14, background: '#f6d9b5' }} />
+          <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, padding: '14px 7px 5px', background: 'linear-gradient(transparent, rgba(0,0,0,0.7))', color: '#fff' }}>
+            <div style={{ fontSize: 10.5, fontWeight: 800 }}>Sam's first day of school</div>
+            <div style={{ fontSize: 9 }}>From Jane {'·'} this morning</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  ),
   // v1.154.0 — the hand-off note from one caregiver to the next
   handoffNote: () => (
     <div>
