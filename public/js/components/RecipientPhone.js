@@ -251,8 +251,15 @@ const HubBoard = ({ hub, first, now, show, calls, note, s, failed, readFlash, re
     fontFamily: 'inherit', textDecoration: 'none', cursor: 'pointer', padding: '0 2vh', boxSizing: 'border-box',
   });
   const waiting = show.text && s.text && Array.isArray(s.text.waiting) && s.text.waiting.length ? s.text.waiting[s.text.waiting.length - 1] : null;
+  // Rows are sized in vh, so the same number fit on any screen: about seven under the clock, five
+  // when "is here" takes its card. Today first (up to three), the week gets what is left, so
+  // nothing is ever cut off mid-line.
+  const todayShown = todayItems.filter((c) => !(c.kind === 'visit' && c.inProgress));
+  const budget = (hub.here ? 5 : 7) - (failed ? 1 : 0);
+  const todayRows = todayShown.slice(0, 3);
+  const weekRows = later.slice(0, Math.max(0, budget - Math.max(1, todayRows.length)));
   const weekGroups = [];
-  for (const c of later) {
+  for (const c of weekRows) {
     const last = weekGroups[weekGroups.length - 1];
     if (last && last.date === c.date) last.items.push(c); else weekGroups.push({ date: c.date, items: [c] });
   }
@@ -281,7 +288,7 @@ const HubBoard = ({ hub, first, now, show, calls, note, s, failed, readFlash, re
         {failed && <div style={{ ...card, fontSize: '3vh' }}>Can't reach InPlace right now. It will try again by itself.</div>}
 
         {hub.here && (
-          <div style={{ ...card, display: 'flex', alignItems: 'center', gap: '2vh' }}>
+          <div style={{ ...card, display: 'flex', alignItems: 'center', gap: '2vh', flexShrink: 0 }}>
             <SimpleFace photo={hub.here.photo} name={hub.here.firstName} size={Math.round(window.innerHeight * 0.1)} />
             <div>
               <div style={{ fontSize: '4.2vh', fontWeight: 800, color: 'var(--text-primary)' }}>{hub.here.firstName} is here</div>
@@ -293,9 +300,9 @@ const HubBoard = ({ hub, first, now, show, calls, note, s, failed, readFlash, re
         {show.comingUp && (
           <div style={card}>
             <div style={{ ...label, color: 'var(--role-color)' }}>Today</div>
-            {todayItems.filter((c) => !(c.kind === 'visit' && c.inProgress)).length === 0
+            {todayRows.length === 0
               ? <div style={{ ...row, color: 'var(--text-secondary)' }}>Nothing else today.</div>
-              : todayItems.filter((c) => !(c.kind === 'visit' && c.inProgress)).map((c, i) => (
+              : todayRows.map((c, i) => (
                 <div key={c.kind + c.id} style={{ ...row, borderTop: i ? '2px solid var(--border-color)' : 'none' }}>
                   <span style={{ width: '16vh', flexShrink: 0, fontWeight: 700 }}>{c.time ? simpleFmtTime(c.time) : ''}</span>
                   <span style={{ minWidth: 0 }}>{hubLine(c)}</span>
@@ -323,7 +330,7 @@ const HubBoard = ({ hub, first, now, show, calls, note, s, failed, readFlash, re
           <div style={{ ...card, borderColor: 'var(--color-success, #1b7a3d)', borderWidth: 3, fontSize: '3.2vh', fontWeight: 700 }}>{'✓'} {readFlash}</div>
         )}
         {note && (
-          <div style={{ ...card, borderColor: 'var(--role-color)', borderWidth: 3 }}>
+          <div style={{ ...card, borderColor: 'var(--role-color)', borderWidth: 3, flexShrink: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '1.6vh', marginBottom: '1vh' }}>
               <SimpleFace photo={note.fromPhoto} name={note.from} size={Math.round(window.innerHeight * 0.07)} />
               <div style={{ fontSize: '2.8vh', color: 'var(--text-secondary)' }}>From {note.from} {'·'} {simpleAgo(note.createdAt)}</div>
@@ -335,7 +342,7 @@ const HubBoard = ({ hub, first, now, show, calls, note, s, failed, readFlash, re
           </div>
         )}
         {!note && waiting && (
-          <div style={{ ...card, borderColor: 'var(--role-color)', borderWidth: 3 }}>
+          <div style={{ ...card, borderColor: 'var(--role-color)', borderWidth: 3, flexShrink: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '1.6vh', marginBottom: '1vh' }}>
               <SimpleFace photo={waiting.fromPhoto} name={waiting.from} size={Math.round(window.innerHeight * 0.07)} />
               <div style={{ fontSize: '2.8vh', color: 'var(--text-secondary)' }}>{waiting.isReply ? `${waiting.from} wrote back` : `Message from ${waiting.from}`}</div>
@@ -351,7 +358,7 @@ const HubBoard = ({ hub, first, now, show, calls, note, s, failed, readFlash, re
         {hub.faces && (hub.people || []).length > 0 && (
           <div style={{ ...card, flexShrink: 0 }}>
             <div style={label}>Who's who</div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: '1.6vh', marginTop: '1.4vh', textAlign: 'center' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: `repeat(${hub.people.length <= 4 ? hub.people.length : 3}, minmax(0, 1fr))`, gap: '1.6vh', marginTop: '1.4vh', textAlign: 'center' }}>
               {hub.people.map((p) => (
                 <div key={p.userId} style={{ minWidth: 0 }}>
                   <div style={{ display: 'flex', justifyContent: 'center' }}>
