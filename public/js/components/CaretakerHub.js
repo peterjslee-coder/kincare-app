@@ -333,6 +333,10 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
   const [checkOutSummary, setCheckOutSummary] = useState('');
   const [checkOutPhotos, setCheckOutPhotos] = useState([]);
   const [checkOutPhotoUrls, setCheckOutPhotoUrls] = useState([]);
+  // v1.155.0 — "Show on <name>'s screen" (the InPlace Hub): offered only while that person's Hub
+  // is on, and off unless the caregiver ticks it.
+  const [checkOutHubOption, setCheckOutHubOption] = useState(null);
+  const [checkOutShowOnHub, setCheckOutShowOnHub] = useState(false);
   const checkOutPhotoRef = useRef(null);
   const [checkSubmitting, setCheckSubmitting] = useState(false);
   const [earlyDepartureReason, setEarlyDepartureReason] = useState('');
@@ -1037,6 +1041,18 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
       return prev.filter((_, i) => i !== idx);
     });
   };
+
+  useEffect(() => {
+    setCheckOutShowOnHub(false);
+    setCheckOutHubOption(null);
+    if (!checkOutSession || !checkOutSession.id) return undefined;
+    let live = true;
+    apiFetch(`/api/photos/hub-option/session/${checkOutSession.id}`)
+      .then((r) => (r && r.ok ? r.json() : null))
+      .then((d) => { if (live && d && d.available) setCheckOutHubOption(d); })
+      .catch(() => {});
+    return () => { live = false; };
+  }, [checkOutSession && checkOutSession.id]);
 
   const handleCheckOutPhotoSelect = async (e) => {
     // v1.104.0 — auto-downscale at selection so check-out photos never trip the 5MB cap
@@ -4919,6 +4935,12 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                   ))}
                 </div>
               )}
+              {checkOutHubOption && checkOutPhotos.length > 0 && (
+                <label data-testid="checkout-show-on-hub" style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 10, fontSize: 14, minHeight: 44, cursor: 'pointer', color: 'var(--text-primary)' }}>
+                  <input type="checkbox" checked={checkOutShowOnHub} onChange={(e) => setCheckOutShowOnHub(e.target.checked)} style={{ width: 20, height: 20, accentColor: 'var(--role-color)' }} />
+                  <span>Show on {checkOutHubOption.firstName || 'their'}'s screen <span style={{ color: 'var(--text-tertiary)', fontSize: 12 }}>— the family sees every photo either way</span></span>
+                </label>
+              )}
             </div>
 
             {/* v1.126.1 — the visit's mileage, so the caregiver sees it before ending the visit */}
@@ -5049,6 +5071,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                       try {
                         const formData = new FormData();
                         for (const f of checkOutPhotos) formData.append('photos', await uploadSafeFile(f));
+                        if (checkOutHubOption && checkOutShowOnHub) formData.append('showOnHub', '1');
                         const __csrf = typeof getCsrfToken === 'function' ? getCsrfToken() : (window.getCsrfToken ? window.getCsrfToken() : null);
                         const photoHeaders = {};
                         if (__csrf) photoHeaders['X-CSRF-Token'] = __csrf;

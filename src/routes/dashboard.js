@@ -206,7 +206,7 @@ async function familyDashboard(db, userId, res) {
 
       // Recent visit photos
       db.prepare(`
-        SELECT vp.id, vp.photo_url, vp.caption, vp.created_at,
+        SELECT vp.id, vp.photo_url, vp.caption, vp.created_at, vp.show_on_hub, cs.care_recipient_id,
           u.first_name || ' ' || u.last_name AS caregiver_name,
           cr.first_name || ' ' || cr.last_name AS recipient_name,
           cs.id AS session_id, cs.scheduled_date
@@ -427,6 +427,7 @@ async function familyDashboard(db, userId, res) {
         if (allRecipientIds.length === 0) return recentPhotos;
         const saved = await db.prepare(`
           SELECT p.id, p.photo_url, p.caption, p.created_at, p.session_id, 'care' AS kind,
+                 p.show_on_hub, p.care_recipient_id,
                  cs.scheduled_date,
                  cr.first_name || ' ' || cr.last_name AS recipient_name,
                  su.first_name || ' ' || su.last_name AS caregiver_name
@@ -454,7 +455,23 @@ async function familyDashboard(db, userId, res) {
         recipientName: p.recipient_name,
         sessionId: p.session_id,
         sessionDate: p.scheduled_date,
+        careRecipientId: p.care_recipient_id || null,
+        showOnHub: p.show_on_hub === 1,
       })),
+      // v1.155.0 — loved ones whose InPlace Hub is on and whose photos this user may choose for
+      // it. Drives the "Add photo" button and the "Show on <name>'s screen" switch on Home.
+      hubRecipients: await (async () => {
+        const hubPhotos = require("../utils/hubPhotos");
+        const out = [];
+        for (const r of recipients) {
+          try {
+            if ((await hubPhotos.hubOn(db, r.id)) && (await hubPhotos.isFamilyFor(db, r.id, { id: userId, role: "family" }))) {
+              out.push({ id: r.id, firstName: r.first_name || null });
+            }
+          } catch { /* a missing Hub is not an error on Home */ }
+        }
+        return out;
+      })(),
       recentlyCompleted: await (async () => {
         // Batch-fetch reviews for all completed sessions in one query (no N+1)
         const sessionIds = recentCompleted.map(s => s.id);

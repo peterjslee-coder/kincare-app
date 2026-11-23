@@ -7,7 +7,7 @@ build red.
 
 Hand-written sections (§3 "Where is…") are preserved across regeneration; edit those freely.
 
-Structure at last generation: 650 HTTP routes across 69 mounts ·
+Structure at last generation: 654 HTTP routes across 69 mounts ·
 124 `CREATE TABLE` statements · 17 background jobs · 43 socket events
 (18 with no client listener) · 77 push event types · 66 `window.__*` globals.
 
@@ -52,7 +52,7 @@ JSX is *not* compiled in the browser; Babel-standalone is not loaded. Editing an
 | `/api/availability` | `src/routes/availability.js` | 5 |  |
 | `/api/care-events` | `src/routes/careEvents.js` | 10 |  |
 | `/api/care-intelligence` | `src/routes/careIntelligence.js` | 8 |  |
-| `/api/care-photos` | `src/routes/carePhotos.js` | 6 |  |
+| `/api/care-photos` | `src/routes/carePhotos.js` | 9 |  |
 | `/api/care-recipients` | `src/routes/careRecipients.js` | 22 |  |
 | `/api/care-tasks` | `src/routes/careTasks.js` | 10 |  |
 | `/api/care-teams` | `src/routes/careTeams.js` | 21 |  |
@@ -89,7 +89,7 @@ JSX is *not* compiled in the browser; Babel-standalone is not loaded. Editing an
 | `/api/passkeys` | `src/routes/passkeys.js` | 7 |  |
 | `/api/password-reset` | `src/routes/passwordReset.js` | 2 |  |
 | `/api/payments` | `src/routes/payments.js` | 20 |  |
-| `/api/photos` | `src/routes/photos.js` | 6 |  |
+| `/api/photos` | `src/routes/photos.js` | 7 |  |
 | `/api/platform-invites` | `src/routes/platformInvites.js` | 6 |  |
 | `/api/pricing` | `src/routes/pricing.js` | 1 |  |
 | `/api/push` | `src/routes/push.js` | 11 |  |
