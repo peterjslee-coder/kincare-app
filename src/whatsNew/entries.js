@@ -31,6 +31,22 @@ const WINDOW_DAYS = 45;
 
 const ENTRIES = [
   {
+    id: "ranked-caregiver-picker",
+    version: "1.151.0",
+    date: "2026-11-23",
+    audience: ["family"],
+    title: "Request care: who to ask, in order",
+    body: "The second step of Request care now starts with Post as open request or Offer to a specific caregiver. The list puts whoever is free that day and has been with your loved one lately first, with their stars, and remembers the rate you usually offer.",
+    howTo: [
+      "Tap + then Request care, pick the day and times, then Next",
+      "Leave it as an open request, or tap Offer to a specific caregiver",
+      "The Best match is free that day; anyone already booked then is shown but can't be picked",
+      "Tap Change next to Your offer to set the rate you usually pay; it stays for next time",
+    ],
+    examples: ["Offer Sunday to whoever has been with Mom lately", "Church at 10:30 during the visit: tap Needs a ride?"],
+    preview: "rankedPicker",
+  },
+  {
     id: "start-and-end-times",
     version: "1.150.0",
     date: "2026-11-22",

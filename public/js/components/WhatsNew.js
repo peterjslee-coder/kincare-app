@@ -466,6 +466,30 @@ const WN_PREVIEWS = {
   ),
   // v1.147.0 — the Undo bar after accepting a visit
   // v1.150.0 — start and end set the visit; length is worked out
+  // v1.151.0 — Request care, step 2: open request first, then the ranked list with stars
+  rankedPicker: () => (
+    <div>
+      <div style={{ ...wnCard, border: '1.5px solid var(--role-color)' }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)' }}>Post as open request</div>
+        <div style={{ fontSize: 10.5, color: 'var(--text-secondary)' }}>The first to accept gets it</div>
+      </div>
+      <div style={{ ...wnCard }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)' }}>Offer to a specific caregiver</div>
+        {[['Sam', '\u2605 5.0 \u00b7 6 visits \u00b7 last week', true], ['Jane', 'Usually off Sundays \u00b7 \u2605 4.9', false]].map(([n, f, best]) => (
+          <div key={n} style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6 }}>
+            <span style={{ width: 20, height: 20, borderRadius: 10, background: 'var(--bg-primary)', border: '1px solid var(--border-light)', fontSize: 9, fontWeight: 700, color: 'var(--role-color)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{n[0]}</span>
+            <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-primary)' }}>{n}</span>
+            {best && <span style={{ fontSize: 8.5, fontWeight: 700, color: 'var(--role-color)', border: '1px solid var(--role-color)', borderRadius: 6, padding: '0 4px' }}>BEST MATCH</span>}
+            <span style={{ fontSize: 10, color: 'var(--text-secondary)', marginLeft: 'auto' }}>{f}</span>
+          </div>
+        ))}
+      </div>
+      <div style={{ ...wnCard, display: 'flex', justifyContent: 'space-between', fontSize: 11 }}>
+        <span style={{ color: 'var(--text-secondary)' }}>Your offer</span>
+        <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>$23/hr {'\u00b7'} your usual</span>
+      </div>
+    </div>
+  ),
   startEndTimes: () => (
     <div>
       <div style={{ ...wnCard }}>
