@@ -31,6 +31,21 @@ const WINDOW_DAYS = 45;
 
 const ENTRIES = [
   {
+    id: "read-receipts",
+    version: "1.149.0",
+    date: "2026-11-23",
+    audience: ["family"],
+    title: "Got it! — let the team know you read it",
+    body: "Care notes and visit reports now have a big green Got it button. Tap it once you have read one, and everyone on the care team sees who has read it and who has not yet.",
+    howTo: [
+      "Open Care Notes, or tap a finished visit",
+      "Read it, then tap ✓ Got it! — Mark read",
+      "Look under any note for Seen by and Not yet",
+    ],
+    examples: ["Mom ate a full dinner tonight", "Visit report: walked to the mailbox"],
+    preview: "readReceipts",
+  },
+  {
     id: "time-offer-one-card",
     version: "1.148.0",
     date: "2026-11-22",
