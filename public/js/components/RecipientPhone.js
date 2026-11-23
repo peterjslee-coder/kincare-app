@@ -251,11 +251,11 @@ const HubBoard = ({ hub, first, now, show, calls, note, s, failed, readFlash, re
     fontFamily: 'inherit', textDecoration: 'none', cursor: 'pointer', padding: '0 2vh', boxSizing: 'border-box',
   });
   const waiting = show.text && s.text && Array.isArray(s.text.waiting) && s.text.waiting.length ? s.text.waiting[s.text.waiting.length - 1] : null;
-  // Rows are sized in vh, so the same number fit on any screen: about seven under the clock, five
+  // Rows are sized in vh, so the same number fit on any screen: about six under the clock, four
   // when "is here" takes its card. Today first (up to three), the week gets what is left, so
   // nothing is ever cut off mid-line.
   const todayShown = todayItems.filter((c) => !(c.kind === 'visit' && c.inProgress));
-  const budget = (hub.here ? 5 : 7) - (failed ? 1 : 0);
+  const budget = (hub.here ? 4 : 6) - (failed ? 1 : 0);
   const todayRows = todayShown.slice(0, 3);
   const weekRows = later.slice(0, Math.max(0, budget - Math.max(1, todayRows.length)));
   const weekGroups = [];
