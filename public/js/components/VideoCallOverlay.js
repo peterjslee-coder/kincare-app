@@ -95,10 +95,12 @@ const VideoCallOverlay = window.VideoCallOverlay = ({ callState, onEndCall, curr
         // Check if Twilio Video SDK is loaded — self-hosted primary, CDN fallback
         if (!window.Twilio || !window.Twilio.Video) {
           const sdkUrls = [
-            '/vendor/twilio-video.min.js',  // self-hosted (primary)
-            'https://sdk.twilio.com/js/video/releases/2.28.1/twilio-video.min.js',
-            'https://unpkg.com/twilio-video@2.28.1/dist/twilio-video.min.js',
-            'https://cdn.jsdelivr.net/npm/twilio-video@2.28.1/dist/twilio-video.min.js',
+            // v1.154.1 — 2.36.1 (was 2.28.1, October 2023), under a versioned name so no cache
+            // anywhere (Cloudflare, the browser, the service worker) can hand back the old one.
+            '/vendor/twilio-video-2.36.1.min.js',  // self-hosted (primary)
+            'https://sdk.twilio.com/js/video/releases/2.36.1/twilio-video.min.js',
+            'https://unpkg.com/twilio-video@2.36.1/dist/twilio-video.min.js',
+            'https://cdn.jsdelivr.net/npm/twilio-video@2.36.1/dist/twilio-video.min.js',
           ];
           let loaded = false;
           for (const url of sdkUrls) {
@@ -191,13 +193,42 @@ const VideoCallOverlay = window.VideoCallOverlay = ({ callState, onEndCall, curr
         // overlay saying "Connecting..." with no end to it. Twilio's own default has no
         // deadline, and neither did we. 30s, then say so, so the person is looking at an
         // error with a way out instead of at a call they think is still trying.
-        const twilioRoom = await Promise.race([
-          Video.connect(token, connectOptions),
-          new Promise((_, reject) => setTimeout(
-            () => reject(new Error("Couldn't connect the call. Check your signal and try again.")),
-            30000
-          )),
-        ]);
+        // ─── v1.154.1 — try the connection again before giving up ───
+        //
+        // Pete, 11/23: calls from his iPhone app to Betty's tablet never connected. Twilio's
+        // room log showed why: the iPhone joined and dropped within ~3 seconds, or never
+        // joined at all, while the tablet and Chrome on his Mac connected every time. iOS 26's
+        // WebKit has a known WebSocket regression (bugs.webkit.org/298616), and Twilio's
+        // signalling runs over a WebSocket. A signalling failure (53000-53002) or a stall is
+        // now retried twice, quickly, with the same token and the same microphone — the
+        // person sees "Connecting…" a little longer instead of a dead call.
+        const SIGNALING_CODES = new Set([53000, 53001, 53002]);
+        let twilioRoom = null;
+        let lastErr = null;
+        for (let attempt = 1; attempt <= 3 && !cancelled; attempt++) {
+          try {
+            twilioRoom = await Promise.race([
+              Video.connect(token, connectOptions),
+              new Promise((_, reject) => setTimeout(() => {
+                const e = new Error("Couldn't connect the call. Check your signal and try again.");
+                e.code = 'TIMEOUT';
+                reject(e);
+              }, attempt === 3 ? 30000 : 12000)),
+            ]);
+            break;
+          } catch (e) {
+            lastErr = e;
+            const retryable = e && (SIGNALING_CODES.has(e.code) || e.code === 'TIMEOUT');
+            if (!retryable || attempt === 3) throw e;
+            try {
+              if (typeof reportClientError === 'function') {
+                reportClientError(e, { page: 'call', callStage: 'connect-retry', attempt, twilioCode: e.code, ua: navigator.userAgent });
+              }
+            } catch { /* never let reporting break the call */ }
+            await new Promise((r) => setTimeout(r, 800 * attempt));
+          }
+        }
+        if (!twilioRoom) throw lastErr || new Error("Couldn't connect the call. Check your signal and try again.");
 
         // Detect camera zoom capability for local video track
         if (callState.callType === 'video') {
@@ -295,10 +326,21 @@ const VideoCallOverlay = window.VideoCallOverlay = ({ callState, onEndCall, curr
           requestWakeLock();
         });
 
-        twilioRoom.on('disconnected', () => {
+        twilioRoom.on('disconnected', (_room, discErr) => {
           setStatus('ended');
           stopTimer();
           releaseWakeLock();
+          // v1.154.1 — Twilio's room log showed Pete's iPhone joining and leaving 3 seconds
+          // later with no error anywhere. A disconnect WITH an error is Twilio dropping us,
+          // not someone hanging up: say so on screen and report the code.
+          if (discErr && !cancelled) {
+            try {
+              if (typeof reportClientError === 'function') {
+                reportClientError(discErr, { page: 'call', callStage: 'disconnected', twilioCode: discErr.code != null ? discErr.code : null, callDirection: callState.callDirection, ua: navigator.userAgent });
+              }
+            } catch { /* never let reporting break the call */ }
+            setError(`The call dropped${discErr.code ? ` (code ${discErr.code})` : ''}. Try calling again.`);
+          }
         });
 
         // If there are already participants, we're connected

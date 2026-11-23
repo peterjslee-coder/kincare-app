@@ -1,13 +1,13 @@
 // InPlace Service Worker — v1.57.14
-const CACHE_NAME = 'inplace-build-b81435ab';
-const SW_VERSION = 'build-b81435ab';
+const CACHE_NAME = 'inplace-build-a6fb14fb';
+const SW_VERSION = 'build-a6fb14fb';
 const STATIC_ASSETS = [
   '/',
   '/css/styles.css',
   '/vendor/react.production.min.js',
   '/vendor/react-dom.production.min.js',
   '/vendor/socket.io.min.js',
-  '/vendor/twilio-video.min.js',
+  '/vendor/twilio-video-2.36.1.min.js',
   '/vendor/leaflet.js',
   '/vendor/leaflet.css',
   '/js-compiled/bundle.js',

@@ -1419,7 +1419,7 @@ const warmVideoSdk = window.warmVideoSdk = () => {
   _twilioWarming = true;
   try {
     const s = document.createElement('script');
-    s.src = '/vendor/twilio-video.min.js';
+    s.src = '/vendor/twilio-video-2.36.1.min.js'; // v1.154.1 — versioned name: no cached 2.28.1
     s.async = true;
     s.onerror = () => { _twilioWarming = false; };
     document.head.appendChild(s);
