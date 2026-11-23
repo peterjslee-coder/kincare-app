@@ -215,7 +215,6 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
     return () => window.removeEventListener('inplace:focus', claim);
   }, []);
 
-  const [proposalActionLoading, setProposalActionLoading] = useState(null);
   const [nextUpExpanded, setNextUpExpanded] = useState(false);
   // ─── Care Tasks (v1.99.0): today's occurrences, inline in Next Up ───
   const [careTasksToday, setCareTasksToday] = useState(_dashCache.careTasks);
@@ -562,20 +561,6 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
     setReviewLoading(false);
   };
 
-  const handleProposalAction = async (sessionId, proposalId, action) => {
-    setProposalActionLoading(proposalId);
-    try {
-      const res = await apiFetch(`/api/sessions/${sessionId}/proposals/${proposalId}/${action}`, { method: 'PUT' });
-      if (res?.ok) {
-        if (typeof showToast === 'function') showToast(action === 'accept' ? 'Proposal accepted! Session updated.' : 'Proposal declined.', action === 'accept' ? 'success' : 'info');
-        fetchDashboard();
-      } else {
-        const err = await res?.json().catch(() => ({}));
-        alert(err?.error || `Failed to ${action} proposal`);
-      }
-    } catch { alert(`Failed to ${action} proposal`); }
-    setProposalActionLoading(null);
-  };
 
   useEffect(() => {
     fetchDashboard(); fetchUser(); fetchCareTeams(); fetchAnalytics(); fetchPendingReviews(); fetchPendingInvites(); fetchNotifications(); fetchCareTasks(); fetchCareEvents();
@@ -1521,95 +1506,10 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
         </div>
       )}
 
-      {/* Time Proposals — critical action item, above everything */}
-      {(() => {
-        const proposals = data?.pendingProposals || [];
-        if (proposals.length === 0) return null;
-        const tz = upcoming[0]?.timezone || TimezoneHelper.DEFAULT_TZ;
-        return (
-          <div style={{ marginBottom: 16 }}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-violet)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 10 }}>
-              {'\u{1F4E8}'} Time Proposals ({proposals.length})
-            </div>
-            {proposals.map((p) => {
-              const origDay = TimezoneHelper.getDateLabel((p.originalDate || '').split('T')[0], tz);
-              const origTime = TimezoneHelper.formatTime(p.originalTime);
-              const propDay = TimezoneHelper.getDateLabel((p.proposedDate || '').split('T')[0], tz);
-              const propTime = TimezoneHelper.formatTime(p.proposedTime);
-              const isLoading = proposalActionLoading === p.id;
-              // Countdown timer for 2-hour response window
-              const expiresAt = p.expiresAt ? new Date(p.expiresAt) : null;
-              const minsLeft = expiresAt ? Math.max(0, Math.floor((expiresAt - new Date()) / 60000)) : null;
-              const hrsLeft = minsLeft !== null ? Math.floor(minsLeft / 60) : null;
-              const minsRemainder = minsLeft !== null ? minsLeft % 60 : null;
-              const isUrgent = minsLeft !== null && minsLeft <= 30;
-              const timeLeftLabel = minsLeft !== null ? (hrsLeft > 0 ? `${hrsLeft}h ${minsRemainder}m left to respond` : `${minsLeft}m left to respond`) : null;
-              return (
-                <div key={p.id} style={{
-                  marginBottom: 10, padding: '14px 16px', borderRadius: 12,
-                  border: isUrgent ? '2px solid #e8724a' : '2px solid #7b61ff', background: isUrgent ? 'var(--bg-accent-light)' : '#f5f0ff',
-                }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2, flexWrap: 'wrap' }}>
-                        <div style={{ fontWeight: 600, fontSize: 15, color: 'var(--text-primary)' }}>
-                          {p.caregiverName} proposed a different time
-                        </div>
-                        {timeLeftLabel && (
-                          <span style={{
-                            fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 10,
-                            background: isUrgent ? 'var(--accent-color)' : 'var(--color-violet)', color: 'var(--text-on-primary)',
-                          }}>
-                            {isUrgent ? '\u23F1' : '\u23F3'} {timeLeftLabel}
-                          </span>
-                        )}
-                      </div>
-                      <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 6 }}>
-                        For {p.recipientName || 'Care Visit'}{p.serviceType ? ` \u2022 ${formatServiceType(p.serviceType)}` : ''}{p.durationHours ? ` \u2022 ${p.durationHours}hr` : ''}
-                      </div>
-                      <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: p.message ? 8 : 0 }}>
-                        <div>
-                          <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase' }}>Original</div>
-                          <div style={{ fontSize: 13, color: 'var(--text-tertiary)', textDecoration: 'line-through' }}>{origDay} at {origTime}</div>
-                        </div>
-                        <div>
-                          <div style={{ fontSize: 11, color: 'var(--color-violet)', fontWeight: 600, textTransform: 'uppercase' }}>Proposed</div>
-                          <div style={{ fontSize: 14, color: 'var(--color-violet)', fontWeight: 600 }}>{propDay} at {propTime}</div>
-                        </div>
-                      </div>
-                      {p.message && (
-                        <div style={{ fontSize: 13, color: 'var(--text-secondary)', fontStyle: 'italic', background: 'var(--color-purple-bg)', padding: '6px 10px', borderRadius: 6, marginTop: 4 }}>
-                          "{p.message}"
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                  <div style={{ display: 'flex', gap: 8, marginTop: 12, justifyContent: 'flex-end' }}>
-                    <button
-                      disabled={isLoading}
-                      onClick={() => handleProposalAction(p.sessionId, p.id, 'decline')}
-                      style={{
-                        padding: '8px 18px', borderRadius: 8, border: '1px solid var(--border-color)', background: 'var(--bg-surface)',
-                        color: 'var(--color-error)', fontSize: 13, fontWeight: 600, cursor: isLoading ? 'wait' : 'pointer', opacity: isLoading ? 0.6 : 1,
-                      }}>
-                      Decline
-                    </button>
-                    <button
-                      disabled={isLoading}
-                      onClick={() => handleProposalAction(p.sessionId, p.id, 'accept')}
-                      style={{
-                        padding: '8px 18px', borderRadius: 8, border: 'none', background: 'var(--color-violet)',
-                        color: 'var(--text-on-primary)', fontSize: 13, fontWeight: 600, cursor: isLoading ? 'wait' : 'pointer', opacity: isLoading ? 0.6 : 1,
-                      }}>
-                      Accept New Time
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        );
-      })()}
+      {/* v1.148.0 — the Time Proposals list is gone. A caregiver's proposed time is answered
+          on the Needs-you card (Accept / Decline) and nowhere else — Pete: "there should only
+          be one option to move forward." Two cards for one proposal let him press an Accept
+          that could not work on one while the other still waited. */}
 
       {/* Coming Up spine (v1.126.0) — the visit inside 24h and every appointment inside 24h on
           one line. Replaces the separate session hero and care-event heroes; see ComingUpSpine.js. */}

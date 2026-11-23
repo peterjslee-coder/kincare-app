@@ -465,6 +465,21 @@ const WN_PREVIEWS = {
     </div>
   ),
   // v1.147.0 — the Undo bar after accepting a visit
+  // v1.148.0 — a caregiver's offered time, answered on the one Needs-you card
+  timeOfferCard: () => (
+    <div>
+      <div style={{ ...wnCard, border: '2px solid var(--accent-color)' }}>
+        <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 10, background: 'var(--accent-color-dark)', color: 'var(--text-on-primary)' }}>{'\u{1F551}'} SCHEDULE</span>
+        <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--text-primary)', marginTop: 5 }}>Jane offered a time</div>
+        <div style={{ fontSize: 10.5, color: 'var(--text-secondary)', marginTop: 2 }}>Sun at 1:30 PM {'\u00b7'} instead of 9:00 AM {'\u00b7'} 4 hr</div>
+        <div style={{ fontSize: 10.5, color: 'var(--text-secondary)', marginTop: 2, fontStyle: 'italic' }}>{'\u201c'}Church until 1, I can come at 1:30{'\u201d'}</div>
+        <div style={{ display: 'flex', gap: 6, marginTop: 7 }}>
+          <span style={{ flex: 1, textAlign: 'center', fontSize: 10.5, fontWeight: 700, padding: '4px 10px', borderRadius: 7, background: 'var(--accent-color-dark)', color: 'var(--text-on-primary)' }}>Accept</span>
+          <span style={{ fontSize: 10.5, fontWeight: 700, padding: '4px 10px', borderRadius: 7, border: '1px solid var(--border-color)', color: 'var(--color-error)' }}>Decline</span>
+        </div>
+      </div>
+    </div>
+  ),
   undoAccept: () => (
     <div>
       <div style={wnCard}>

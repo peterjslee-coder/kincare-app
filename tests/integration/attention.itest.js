@@ -80,10 +80,13 @@ describe("the other three queries actually match the schema", () => {
   // leave it at 0.
   test("a pending time-change proposal counts for the booking family", async () => {
     const sessionId = uuid();
+    // v1.148.0 — 'open', not 'confirmed'. A time proposal is a caregiver's answer to an OPEN
+    // request (propose-time and accept both refuse anything else), and the card now hides
+    // proposals on visits that are no longer open, because they cannot be accepted.
     await db.prepare(`
       INSERT INTO care_sessions (id, care_recipient_id, family_user_id, service_type, status,
                                  scheduled_date, scheduled_time, duration_hours, created_at)
-      VALUES (?, ?, ?, 'companionship', 'confirmed', '2026-09-01', '10:00', 2, NOW())
+      VALUES (?, ?, ?, 'companionship', 'open', '2026-09-01', '10:00', 2, NOW())
     `).run(sessionId, recipientId, leader.user.id);
 
     const cg = await h.createUser({ firstName: "Care", lastName: "Giver", roles: ["caregiver"] });

@@ -5577,6 +5577,27 @@ router.post("/:id/propose-time", async (req, res) => {
       return res.status(400).json({ error: "You already have a pending proposal for this session" });
     }
 
+    // v1.148.0 — a proposed time that lands on top of her own booked visit can never be
+    // accepted (the accept route runs the same check), so it is refused here, to the one
+    // person who can fix it, instead of reaching the family as an Accept that always fails.
+    {
+      const cGate = await scheduleConflictGate(db, {
+        id: session.id,
+        scheduled_date: proposedDate,
+        scheduled_time: proposedTime,
+        duration_hours: session.duration_hours,
+      }, profile);
+      if (cGate) {
+        const hrs = parseFloat(session.duration_hours);
+        const len = Number.isFinite(hrs) && hrs > 0 ? `This visit is ${hrs} hours, so ` : "";
+        return res.status(409).json({
+          code: "CAREGIVER_BOOKED",
+          error: cGate.error.replace(/ that overlaps this one\..*$/, "") + ". "
+            + len + `starting at ${formatTimeForDisplay(proposedTime)} would overlap it. Pick a time that doesn't.`,
+        });
+      }
+    }
+
     const proposalId = require("uuid").v4();
     const expiresAt = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(); // 2-hour response window
     await db.prepare(`
@@ -5698,8 +5719,13 @@ router.put("/:id/proposals/:proposalId/accept", async (req, res) => {
         duration_hours: sess && sess.duration_hours,
       }, { id: proposal.caregiver_profile_id });
       if (cGate) {
+        // v1.148.0 — `done: false`. The Needs-you card reads a bare 409 as "already in the
+        // state you asked for", so this refusal used to look like a success there: the row
+        // reloaded, came straight back, and Pete had an Accept that could never work (Kay's
+        // Nov 29 proposal sat on top of her own 2 PM visit).
         return res.status(409).json({
-          error: "This caregiver is already booked at that time — " + cGate.error.replace(/^You already have /, "").replace(/ Ask the family.*$/, "") + " Pick another caregiver or time.",
+          done: false, code: "CAREGIVER_BOOKED",
+          error: "This caregiver is already booked at that time — " + cGate.error.replace(/^You already have /, "").replace(/ Ask the family.*$/, "") + " Decline it and the visit stays open for someone else.",
         });
       }
     }
@@ -5732,7 +5758,7 @@ router.put("/:id/proposals/:proposalId/accept", async (req, res) => {
     });
 
     if (!confirmed) {
-      return res.status(409).json({ error: "This session was just booked by someone else." });
+      return res.status(409).json({ done: false, code: "SESSION_TAKEN", error: "This session was just booked by someone else." });
     }
 
     // Auto-create assignment so caregiver appears in future "Request Care" lists
@@ -5789,6 +5815,10 @@ router.put("/:id/proposals/:proposalId/decline", async (req, res) => {
       return res.status(403).json({ error: "Only the requesting family can decline proposals" });
     }
     if (proposal.status !== "pending") {
+      // v1.148.0 — already declined is done (409, which the Needs-you card reads as done).
+      if (proposal.status === "declined") {
+        return res.status(409).json({ error: "Already declined", code: "ALREADY_RESPONDED", status: proposal.status });
+      }
       return res.status(400).json({ error: `Proposal is already ${proposal.status}` });
     }
 
