@@ -140,7 +140,8 @@ describe("D3 — every proposal mutation is all-or-nothing", () => {
 
   test("accepting a caregiver's bid confirms, accepts and declines rivals as one act", () => {
     const block = txBlock(sess, sess.indexOf('router.put("/:id/proposals/:proposalId/accept"'));
-    expect(block).toMatch(/UPDATE care_sessions SET[\s\S]{0,200}status = 'confirmed'/);
+    // v1.150.0 — the UPDATE also sets the proposed length and reprices, so the window is wider.
+    expect(block).toMatch(/UPDATE care_sessions SET[\s\S]{0,800}status = 'confirmed'/);
     expect(block).toMatch(/UPDATE time_proposals SET status = 'accepted'/);
     expect(block).toMatch(/UPDATE time_proposals SET status = 'declined'[\s\S]{0,140}id != \?/);
   });

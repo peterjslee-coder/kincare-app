@@ -7,6 +7,8 @@ const SeriesChangeModal = window.SeriesChangeModal = ({ sessionId, onClose, onDo
   const [p, setP] = useState(null);
   const [time, setTime] = useState('');
   const [hours, setHours] = useState('');
+  // v1.150.0 — start and end are what you set; hours is worked out from them.
+  const [end, setEnd] = useState('');
   const [rate, setRate] = useState('');
   const [instructions, setInstructions] = useState('');
   const [saving, setSaving] = useState(false);
@@ -21,6 +23,7 @@ const SeriesChangeModal = window.SeriesChangeModal = ({ sessionId, onClose, onDo
         setP(d);
         setTime(d.current.time || '');
         setHours(d.current.durationHours != null ? String(d.current.durationHours) : '');
+        setEnd(d.current.durationHours != null ? TimeRange.endOf(d.current.time || '', d.current.durationHours) : '');
         setRate(d.current.rate != null ? String(d.current.rate) : '');
         setInstructions(d.current.instructions || '');
       } catch { if (live) { showToast("Couldn't load the series", 'error'); onClose(); } }
@@ -35,6 +38,7 @@ const SeriesChangeModal = window.SeriesChangeModal = ({ sessionId, onClose, onDo
     try {
       const body = { sessionId };
       if (time && time !== p.current.time) body.time = time;
+      if (end && TimeRange.hoursBetween(time, end) == null) { showToast('Set an end after the start (30 min to 12 hours)', 'error'); setSaving(false); return; }
       if (hours !== '' && Number(hours) !== Number(p.current.durationHours)) body.durationHours = Number(hours);
       if (rate !== '' && Number(rate) !== Number(p.current.rate)) body.rate = Number(rate);
       if (instructions !== (p.current.instructions || '')) body.instructions = instructions;
@@ -63,10 +67,8 @@ const SeriesChangeModal = window.SeriesChangeModal = ({ sessionId, onClose, onDo
         padding: '16px 16px calc(24px + env(safe-area-inset-bottom, 0px))', display: 'flex', flexDirection: 'column', gap: 12, maxHeight: '90vh', overflowY: 'auto' }}>
         <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--text-primary)' }}>Change the series</div>
         <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{total} {total === 1 ? 'visit' : 'visits'} from {day(p.fromDate)} on. Days stay the same.</div>
-        <div style={{ display: 'flex', gap: 10 }}>
-          <label style={{ ...label, flex: 1 }}>Start time<input type="time" value={time} onChange={(e) => setTime(e.target.value)} style={field} /></label>
-          <label style={{ ...label, flex: 1 }}>Hours<input type="number" inputMode="decimal" min="0.5" max="24" step="0.25" value={hours} onChange={(e) => setHours(e.target.value)} style={field} /></label>
-        </div>
+        <TimeRange start={time} end={end} compact quick={[]}
+          onChange={(r) => { setTime(r.start); setEnd(r.end); setHours(r.hours != null ? String(r.hours) : ''); }} />
         <label style={label}>Hourly pay ($)<input type="number" inputMode="decimal" min="10" max="200" step="0.5" value={rate} onChange={(e) => setRate(e.target.value)} style={field} /></label>
         <label style={label}>Instructions<textarea rows={3} value={instructions} onChange={(e) => setInstructions(e.target.value)} style={{ ...field, resize: 'vertical', fontFamily: 'inherit' }} /></label>
         <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5, background: 'var(--bg-elevated)', borderRadius: 10, padding: '10px 12px' }}>

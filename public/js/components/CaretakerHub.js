@@ -364,6 +364,8 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
   const [proposingFor, setProposingFor] = useState(null);
   const [proposalDate, setProposalDate] = useState('');
   const [proposalTime, setProposalTime] = useState('');
+  // v1.150.0 — she can move the END too; start and end are what she sets, length follows.
+  const [proposalEnd, setProposalEnd] = useState('');
   const [proposalMsg, setProposalMsg] = useState('');
   const [proposalLoading, setProposalLoading] = useState(false);
   // Inline profile editing state (for onboarding)
@@ -1265,6 +1267,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
   };
 
   const openProposalModal = (job) => {
+    setProposalEnd(TimeRange.endOf(job.time || job.scheduled_time || '', job.durationHours ?? job.duration_hours ?? job.duration));
     setProposingFor(job);
     setProposalDate(job.date || job.scheduled_date || '');
     // Suggest a start time AFTER the conflict ends (includes travel buffer)
@@ -1293,11 +1296,12 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
 
   const handlePropose = async () => {
     if (!proposingFor || !proposalDate || !proposalTime) return;
+    if (proposalEnd && TimeRange.hoursBetween(proposalTime, proposalEnd) == null) { showToast('Set an end after the start', 'error'); return; }
     setProposalLoading(true);
     try {
       const res = await apiFetch(`/api/sessions/${proposingFor.id}/propose-time`, {
         method: 'POST',
-        body: JSON.stringify({ proposedDate: proposalDate, proposedTime: proposalTime, message: proposalMsg || null }),
+        body: JSON.stringify({ proposedDate: proposalDate, proposedTime: proposalTime, proposedEndTime: proposalEnd || null, message: proposalMsg || null }),
       });
       if (res?.ok) {
         showToast && showToast('Time proposal sent to family!', 'success');
@@ -5176,9 +5180,8 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                 style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid #ddd', fontSize: 14, boxSizing: 'border-box' }} />
             </div>
             <div style={{ marginBottom: 14 }}>
-              <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>Time</label>
-              <input type="time" value={proposalTime} onChange={(e) => setProposalTime(e.target.value)}
-                style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid #ddd', fontSize: 14, boxSizing: 'border-box' }} />
+              <TimeRange start={proposalTime} end={proposalEnd} quick={[]}
+                onChange={({ start, end }) => { setProposalTime(start); setProposalEnd(end); }} />
             </div>
             <div style={{ marginBottom: 18 }}>
               <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>Message (optional)</label>
@@ -5191,7 +5194,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                 style={{ flex: 1, padding: '12px 16px', borderRadius: 10, border: '1px solid #ddd', background: 'var(--bg-surface)', color: 'var(--text-secondary)', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
                 Cancel
               </button>
-              <button onClick={handlePropose} disabled={proposalLoading || !proposalDate || !proposalTime}
+              <button onClick={handlePropose} disabled={proposalLoading || !proposalDate || !proposalTime || (proposalEnd && TimeRange.hoursBetween(proposalTime, proposalEnd) == null)}
                 style={{
                   flex: 1, padding: '12px 16px', borderRadius: 10, border: 'none',
                   background: (proposalLoading || !proposalDate || !proposalTime) ? 'var(--border-light)' : 'var(--role-color)',

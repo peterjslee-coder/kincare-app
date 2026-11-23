@@ -159,3 +159,83 @@ describe("an ordinary proposal: one card, both answers", () => {
     expect(await offerItems()).toHaveLength(0);
   });
 });
+
+// ─── v1.150.0 — start and end are what people set ───
+//
+// Pete, 11/22: "If I pick a start time of eight and go for six hours and someone proposes that
+// they need to end at 1330, then it's a 5 1/2 hour visit. That's it. It doesn't push it left to
+// 730."
+describe("a proposal can move the end", () => {
+  test("8:00 for 6 hours, she offers to end at 1:30 → a 5½-hour visit at 8:00, repriced", async () => {
+    const open = await makeSession({ time: "08:00", hours: 6 }); // $138 for 6 h
+    const res = await h.request.post(`/api/sessions/${open}/propose-time`)
+      .set(h.auth(kay.token))
+      .send({ proposedDate: day, proposedTime: "08:00", proposedEndTime: "13:30" });
+    expect(res.status).toBe(200);
+
+    const tp = await db.prepare("SELECT id, proposed_time, proposed_duration FROM time_proposals WHERE session_id = ?").get(open);
+    expect(tp.proposed_time).toBe("08:00");
+    expect(Number(tp.proposed_duration)).toBe(5.5);
+
+    const [item] = await offerItems();
+    expect(item.durationHours).toBe(5.5);
+    expect(item.originalHours).toBe(6);
+    expect(item.totalWas).toBe(138);
+    expect(item.totalNew).toBe(126.5);
+
+    const acc = await h.request.put(`/api/sessions/${open}/proposals/${tp.id}/accept`)
+      .set(h.auth(family.token)).send({});
+    expect(acc.status).toBe(200);
+    const s = await db.prepare("SELECT scheduled_time, duration_hours, estimated_cost, status FROM care_sessions WHERE id = ?").get(open);
+    expect(s.scheduled_time).toBe("08:00");          // the start did not slide
+    expect(Number(s.duration_hours)).toBe(5.5);
+    expect(Number(s.estimated_cost)).toBe(126.5);
+    expect(s.status).toBe("confirmed");
+  });
+
+  test("Kay's real case now works: ending before her 2 PM visit is offerable", async () => {
+    await makeSession({ status: "confirmed", time: "14:00", caregiverId: profileId });
+    const open = await makeSession({ time: "08:00", hours: 6 });
+    const res = await h.request.post(`/api/sessions/${open}/propose-time`)
+      .set(h.auth(kay.token))
+      .send({ proposedDate: day, proposedTime: "08:00", proposedEndTime: "13:30" });
+    expect(res.status).toBe(200);
+    const [item] = await offerItems();
+    expect(item.verb).toBe("Accept");
+  });
+
+  test("an end running into her own visit names both ends in the refusal", async () => {
+    await makeSession({ status: "confirmed", time: "14:00", caregiverId: profileId });
+    const open = await makeSession({ time: "08:00", hours: 6 });
+    const res = await h.request.post(`/api/sessions/${open}/propose-time`)
+      .set(h.auth(kay.token))
+      .send({ proposedDate: day, proposedTime: "10:00", proposedEndTime: "15:00" });
+    expect(res.status).toBe(409);
+    expect(res.body.error).toMatch(/10:00 AM to 3:00 PM/);
+  });
+
+  test("an end at or before the start is refused, not 'fixed'", async () => {
+    const open = await makeSession();
+    for (const end of ["08:00", "07:00", "08:15"]) {
+      const res = await h.request.post(`/api/sessions/${open}/propose-time`)
+        .set(h.auth(kay.token))
+        .send({ proposedDate: day, proposedTime: "08:00", proposedEndTime: end });
+      expect(res.status).toBe(400);
+    }
+  });
+
+  test("no end = the visit's own length and price, as before", async () => {
+    const open = await makeSession({ time: "08:00", hours: 6 });
+    const pid = await seedProposal(open, "09:00");
+    const [item] = await offerItems();
+    expect(item.durationHours).toBe(6);
+    expect(item.totalNew).toBeUndefined();
+    const acc = await h.request.put(`/api/sessions/${open}/proposals/${pid}/accept`).set(h.auth(family.token)).send({});
+    expect(acc.status).toBe(200);
+    const s = await db.prepare("SELECT scheduled_time, duration_hours, estimated_cost FROM care_sessions WHERE id = ?").get(open);
+    expect(s.scheduled_time).toBe("09:00");
+    expect(Number(s.duration_hours)).toBe(6);
+    expect(Number(s.estimated_cost)).toBe(138);
+  });
+});
+

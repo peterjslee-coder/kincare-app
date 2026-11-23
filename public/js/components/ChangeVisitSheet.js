@@ -26,23 +26,20 @@ const ChangeVisitSheet = window.ChangeVisitSheet = ({ session, role, onClose, on
 
   const [newDate, setNewDate] = React.useState(curDate);
   const [newTime, setNewTime] = React.useState(curTime);
-  const [newDur, setNewDur] = React.useState(String(curDur));
+  // v1.150.0 — start and END are what you set; the length follows (Pete: "start time and end
+  // time are the most important"). Moving one never slides the other.
+  const [newEnd, setNewEnd] = React.useState(TimeRange.endOf(curTime, curDur));
+  const newDur = TimeRange.hoursBetween(newTime, newEnd);
   const [reason, setReason] = React.useState('');
   const [sending, setSending] = React.useState(false);
 
   let today = '';
   try { today = TimezoneHelper.getToday(tz); } catch { today = ''; }
 
-  // Every half hour from 1 to 12, plus the current length if it is something else (a 7-hour
-  // visit must still be pickable as "no change in length").
-  const lengths = Array.from({ length: 23 }, (_, i) => 1 + i / 2);
-  if (!lengths.includes(curDur)) { lengths.push(curDur); lengths.sort((a, b) => a - b); }
-  const startMin = TimeChange.toMin(newTime);
-
   const c = TimeChange.describe({
     fromDate: curDate, toDate: newDate || curDate,
     fromTime: curTime, fromHours: curDur,
-    toTime: newTime, toHours: parseFloat(newDur) || curDur,
+    toTime: newTime, toHours: newDur || curDur,
   });
   const unchanged = c.kind === 'same';
   const other = role === 'caregiver' ? 'the family' : (s.caregiverName ? s.caregiverName.split(' ')[0] : 'the caregiver');
@@ -58,7 +55,7 @@ const ChangeVisitSheet = window.ChangeVisitSheet = ({ session, role, onClose, on
         body: JSON.stringify({
           proposedDate: newDate || curDate,
           proposedTime: newTime,
-          proposedDuration: parseFloat(newDur),
+          proposedDuration: newDur,
           reason: reason || null,
         }),
       });
@@ -91,25 +88,13 @@ const ChangeVisitSheet = window.ChangeVisitSheet = ({ session, role, onClose, on
           <label style={label}>Day</label>
           <input type="date" value={newDate} min={today || undefined} onChange={(e) => setNewDate(e.target.value)} style={field} />
         </div>
-        <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
-          <div style={{ flex: 1 }}>
-            <label style={label}>Start</label>
-            <input type="time" value={newTime} onChange={(e) => setNewTime(e.target.value)} style={field} />
-          </div>
-          <div style={{ flex: 1.3 }}>
-            <label style={label}>How long</label>
-            <select value={String(parseFloat(newDur) || '')} onChange={(e) => setNewDur(e.target.value)} style={field}>
-              {lengths.map((h) => (
-                <option key={h} value={String(h)}>
-                  {TimeChange.hours(h).replace(/ hr$/, h > 1 ? ' hrs' : ' hr')}{startMin != null ? ` · ends ${TimeChange.clock(startMin + h * 60)}` : ''}
-                </option>
-              ))}
-            </select>
-          </div>
+        <div style={{ marginBottom: 10 }}>
+          <TimeRange start={newTime} end={newEnd} compact quick={[]}
+            onChange={({ start, end }) => { setNewTime(start); setNewEnd(end); }} />
         </div>
 
         <div style={{ marginBottom: 12, padding: '9px 11px', borderRadius: 8, background: unchanged ? 'var(--bg-neutral)' : 'var(--color-purple-bg)', fontSize: 13 }}>
-          <div style={{ fontWeight: 700, color: unchanged ? 'var(--text-secondary)' : 'var(--color-purple)' }}>{unchanged ? 'Same as now — change the day, start or length' : c.headline}</div>
+          <div style={{ fontWeight: 700, color: unchanged ? 'var(--text-secondary)' : 'var(--color-purple)' }}>{unchanged ? 'Same as now — change the day, start or end' : c.headline}</div>
           {!unchanged && (
             <div style={{ color: 'var(--text-secondary)', marginTop: 2 }}>
               New visit: {newDate ? TimeChange.dateLabel(newDate) : ''}{c.to ? `, ${c.to}` : ''} ({c.toHours})
@@ -135,8 +120,8 @@ const ChangeVisitSheet = window.ChangeVisitSheet = ({ session, role, onClose, on
             style={{ padding: '9px 16px', borderRadius: 8, border: '1px solid var(--border-color)', background: 'var(--bg-surface)', color: 'var(--text-secondary)', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
             Cancel
           </button>
-          <button disabled={sending || unchanged || !newTime || !newDate} onClick={send}
-            style={{ padding: '9px 16px', borderRadius: 8, border: 'none', background: (sending || unchanged) ? 'var(--text-muted)' : 'var(--color-purple)', color: 'var(--text-on-primary)', fontSize: 13, fontWeight: 700, cursor: sending ? 'wait' : 'pointer' }}>
+          <button disabled={sending || unchanged || !newTime || !newDate || newDur == null} onClick={send}
+            style={{ padding: '9px 16px', borderRadius: 8, border: 'none', background: (sending || unchanged || newDur == null) ? 'var(--text-muted)' : 'var(--color-purple)', color: 'var(--text-on-primary)', fontSize: 13, fontWeight: 700, cursor: sending ? 'wait' : 'pointer' }}>
             {sending ? 'Sending…' : `Send to ${other}`}
           </button>
         </div>

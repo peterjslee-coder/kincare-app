@@ -14,6 +14,15 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
   const [expandedHour, setExpandedHour] = useState(null); // which hour pill is expanded to show :15/:30/:45
   const timeScrollRef = useRef(null);
   const [duration, setDuration] = useState('');
+  // v1.150.0 — the END is what you set (or a length pill sets it for you); `duration` is worked
+  // out from start and end. Moving the start keeps the end — Pete: "start time and end time are
+  // the most important."
+  const [endTime, setEndTime] = useState('');
+  useEffect(() => {
+    if (!endTime) return;
+    const h = TimeRange.hoursBetween(time, endTime);
+    setDuration(h != null ? String(h) : '');
+  }, [time]);
   const [instructions, setInstructions] = useState('');
   const [recurrence, setRecurrence] = useState('none');
   const [recurrenceWeeks, setRecurrenceWeeks] = useState('4');
@@ -89,6 +98,7 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
         setDate(d.date || '');
         setTime(d.time || '08:00');
         setDuration(d.durationHours != null ? String(d.durationHours) : '');
+        setEndTime(d.durationHours != null ? TimeRange.endOf(d.time || '08:00', d.durationHours) : '');
         setInstructions(d.specialInstructions || '');
         const scope = d.recurrence ? 'series' : 'this';
         setEditScope(scope);
@@ -541,16 +551,6 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
   const resolvedServiceType = serviceType === 'other' && otherCareText.trim()
     ? `other:${otherCareText.trim()}` : serviceType;
 
-  const durationOptions = [
-    { value: '1', label: '1h' }, { value: '2', label: '2h' }, { value: '3', label: '3h' },
-    { value: '4', label: '4h' }, { value: '6', label: '6h' }, { value: '8', label: '8h' },
-  ];
-  // Same for a duration not on the list (1.5h): keep it visible and selected.
-  if (duration && !durationOptions.some(o => o.value === duration)) {
-    durationOptions.push({ value: duration, label: `${duration}h` });
-    durationOptions.sort((a, b) => Number(a.value) - Number(b.value));
-  }
-
   // Loading state
   if (assignedCaregivers === null) {
     return (
@@ -812,17 +812,14 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
               </div>
             )}
 
-            {/* Duration pills — only show if time is selected */}
+            {/* v1.150.0 — when it ends. The pills set the end from the start; the end can then be
+                set to any quarter hour (4½ hr, ends 1:30 PM). */}
             {time && (
               <div style={{ marginBottom: 16 }}>
-                <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>Duration</div>
-                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                  {durationOptions.map(opt => (
-                    <button key={opt.value} type="button" onClick={() => setDuration(opt.value)} style={pill(duration === opt.value)}>
-                      {opt.label}
-                    </button>
-                  ))}
-                </div>
+                <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>Ends</div>
+                <TimeRange hideStart start={time} end={endTime} quick={[1, 2, 3, 4, 6, 8]}
+                  labels={{ end: 'End time' }}
+                  onChange={({ end, hours }) => { setEndTime(end); setDuration(hours != null ? String(hours) : ''); }} />
               </div>
             )}
 
@@ -1234,7 +1231,7 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
               </button>
               {!step1Complete && (
                 <div style={{ fontSize: 12, color: '#e67e22', textAlign: 'center', marginTop: 8, fontWeight: 600, padding: '6px 10px', background: 'rgba(230,126,34,0.1)', borderRadius: 8 }}>
-                  {!serviceType ? '\u261D Select a care type above, or choose "Other" and leave instructions for the caregiver' : (serviceType === 'other' && !otherCareText.trim()) ? 'Describe the care type above' : !date ? 'Pick a date' : !time ? 'Pick a start time' : !duration ? 'Select a duration' : 'Complete all fields above'}
+                  {!serviceType ? '\u261D Select a care type above, or choose "Other" and leave instructions for the caregiver' : (serviceType === 'other' && !otherCareText.trim()) ? 'Describe the care type above' : !date ? 'Pick a date' : !time ? 'Pick a start time' : !duration ? 'Pick when it ends' : 'Complete all fields above'}
                 </div>
               )}
             </div>
