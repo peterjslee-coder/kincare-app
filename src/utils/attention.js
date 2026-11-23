@@ -185,9 +185,10 @@ async function attentionItemsFor(db, userId) {
   // excluded for the same reason — there is no answering a change to a cancelled visit.
   const offerRows = await safeRows("timeOffers", () => db.prepare(`
     SELECT tp.id, tp.session_id, tp.proposed_date, tp.proposed_time, tp.message,
-           tp.caregiver_profile_id,
+           tp.caregiver_profile_id, tp.proposed_duration,
            cu.first_name AS caregiver_first, cu.last_name AS caregiver_last,
            cs.service_type, cs.scheduled_date, cs.scheduled_time, cs.duration_hours,
+           cs.estimated_cost, cs.agreed_rate, cs.short_notice_surcharge,
            cr.timezone AS tz, cr.first_name AS recipient_first
     FROM time_proposals tp
     JOIN care_sessions cs ON cs.id = tp.session_id
@@ -214,7 +215,7 @@ async function attentionItemsFor(db, userId) {
           id: p.session_id,
           scheduled_date: p.proposed_date,
           scheduled_time: p.proposed_time,
-          duration_hours: p.duration_hours,
+          duration_hours: p.proposed_duration != null ? p.proposed_duration : p.duration_hours,
         }, { id: p.caregiver_profile_id });
         if (gate) offerClash[p.id] = true;
       } catch { /* unknown → offer Accept; the route still refuses a real clash */ }
@@ -760,7 +761,21 @@ async function attentionItemsFor(db, userId) {
       // v1.148.0 — what it replaces, and how long it runs, now that this is the only card.
       originalDate: p.scheduled_date || null,
       originalTime: p.scheduled_time || null,
-      durationHours: p.duration_hours != null ? Number(p.duration_hours) : null,
+      // v1.150.0 — a proposal can move the end too; durationHours is the PROPOSED length.
+      durationHours: p.proposed_duration != null ? Number(p.proposed_duration)
+        : (p.duration_hours != null ? Number(p.duration_hours) : null),
+      originalHours: p.duration_hours != null ? Number(p.duration_hours) : null,
+      // v1.150.0 — a new length is a new price; the card says both before Accept. Same rule the
+      // accept route writes (sessions.js, proposals accept): hourly × new hours + any surcharge.
+      ...(() => {
+        const nh = p.proposed_duration != null ? Number(p.proposed_duration) : null;
+        const oh = Number(p.duration_hours) || 0;
+        const was = p.estimated_cost != null ? Number(p.estimated_cost) : null;
+        if (nh == null || was == null || !oh || Math.abs(nh - oh) < 0.001) return {};
+        const sur = Number(p.short_notice_surcharge) || 0;
+        const hourly = Number(p.agreed_rate) > 0 ? Number(p.agreed_rate) : (was - sur) / oh;
+        return { totalWas: Math.round(was * 100) / 100, totalNew: Math.round((hourly * nh + sur) * 100) / 100 };
+      })(),
       ...(offerClash[p.id]
         // She is already booked then. Accept cannot work, so it is not offered; Decline
         // clears the card and leaves the visit open for someone else.

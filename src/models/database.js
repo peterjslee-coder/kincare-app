@@ -3746,6 +3746,16 @@ async function initializeDatabase() {
            ON read_receipts(target_type, target_id, user_id)`,
       ],
     },
+    {
+      // v1.150.0 — Pete, 11/22: "If I pick a start time of eight and go for six hours and
+      // someone proposes that they need to end at 1330, then it's a 5 1/2 hour visit." A
+      // caregiver's proposal can now move the end as well as the start. NULL = the visit's own
+      // length (every proposal made before this).
+      id: "095_time_proposal_duration",
+      statements: [
+        `ALTER TABLE time_proposals ADD COLUMN IF NOT EXISTS proposed_duration REAL`,
+      ],
+    },
   ];
   for (const m of MIGRATIONS_V2) {
     if (applied.has(m.id)) continue;

@@ -465,6 +465,27 @@ const WN_PREVIEWS = {
     </div>
   ),
   // v1.147.0 — the Undo bar after accepting a visit
+  // v1.150.0 — start and end set the visit; length is worked out
+  startEndTimes: () => (
+    <div>
+      <div style={{ ...wnCard }}>
+        <div style={{ display: 'flex', gap: 8 }}>
+          {[['Start', '1:30 PM'], ['End', '6:00 PM']].map(([k, v]) => (
+            <div key={k} style={{ flex: 1 }}>
+              <div style={{ fontSize: 9.5, fontWeight: 700, color: 'var(--text-secondary)' }}>{k}</div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', border: '1px solid var(--border-color)', borderRadius: 6, padding: '4px 7px', marginTop: 2 }}>{v}</div>
+            </div>
+          ))}
+        </div>
+        <div style={{ display: 'flex', gap: 4, marginTop: 7, flexWrap: 'wrap' }}>
+          {['2 hr', '3 hr', '4 hr', '4\u00bd hr', '6 hr'].map((h) => (
+            <span key={h} style={{ fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 10, border: h === '4\u00bd hr' ? '1.5px solid var(--accent-color)' : '1px solid var(--border-color)', color: h === '4\u00bd hr' ? 'var(--accent-color)' : 'var(--text-secondary)' }}>{h}</span>
+          ))}
+        </div>
+        <div style={{ fontSize: 10.5, color: 'var(--text-secondary)', marginTop: 6 }}>Sun {'\u00b7'} 1:30 PM {'\u2013'} 6:00 PM {'\u00b7'} 4{'\u00bd'} hr</div>
+      </div>
+    </div>
+  ),
   // v1.148.0 — a caregiver's offered time, answered on the one Needs-you card
   timeOfferCard: () => (
     <div>

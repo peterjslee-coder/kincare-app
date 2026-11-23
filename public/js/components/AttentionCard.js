@@ -152,16 +152,22 @@ const attentionDetail = (item) => {
     return day;
   }
   if (item.kind === 'timeOffer') {
+    // v1.150.0 — start and END, as offered, then what it replaces: "Sun, Nov 29 · 1:30 – 5:30 PM
+    // · 4 hr · instead of 8:00 AM – 2:00 PM". Start and end are what people decide on.
     const day = attentionDay(item.proposedDate, item.tz);
-    const at = attentionClock(item.proposedTime);
-    // v1.148.0 — "instead of 8:00 AM" and the length: this card replaced the Time Proposals
-    // list, which was the only place either was shown.
+    const span = (t, h) => {
+      const end = h ? TimeRange.endOf(t, h) : '';
+      return end ? `${attentionClock(t)} – ${attentionClock(end)}` : attentionClock(t);
+    };
     const sameDay = !item.originalDate || String(item.originalDate).slice(0, 10) === String(item.proposedDate || '').slice(0, 10);
+    const now = item.proposedTime ? span(item.proposedTime, item.durationHours) : null;
     const was = item.originalTime
-      ? `instead of ${sameDay ? '' : attentionDay(item.originalDate, item.tz) + ' '}${attentionClock(item.originalTime)}`
+      ? `instead of ${sameDay ? '' : attentionDay(item.originalDate, item.tz) + ' '}${span(item.originalTime, item.originalHours || item.durationHours)}`
       : null;
-    const hrs = item.durationHours ? `${item.durationHours} hr` : null;
-    return [`${day}${at ? ` at ${at}` : ''}`, was, hrs].filter(Boolean).join(' · ');
+    const hrs = item.durationHours ? TimeRange.hoursLabel(item.durationHours) : null;
+    const money = (n) => `$${Number(n).toFixed(Number(n) % 1 ? 2 : 0)}`;
+    const price = item.totalNew != null && item.totalWas != null ? `${money(item.totalNew)} total (was ${money(item.totalWas)})` : null;
+    return [day, now, hrs, was, price].filter(Boolean).join(' · ');
   }
   if (item.kind === 'careTask') {
     return item.dueAt ? `Due ${attentionDay(item.dueAt, item.tz)}` : 'Due now';

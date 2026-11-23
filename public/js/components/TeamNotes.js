@@ -77,23 +77,6 @@ const TeamNotes = window.TeamNotes = ({ onNavigate }) => {
     })();
   }, []);
 
-  // v1.149.1 — a note push while this page is already open: it does not remount, so the
-  // recipient pick above never re-ran and a brand-new note was not in the loaded list.
-  const [reloadTick, setReloadTick] = React.useState(0);
-  const recipientsRef = React.useRef(recipients);
-  React.useEffect(() => { recipientsRef.current = recipients; }, [recipients]);
-  React.useEffect(() => {
-    const onFocus = () => {
-      const f = window.__pendingFocus;
-      if (typeof f !== 'string' || !(f.startsWith('note:') || f.startsWith('visit:'))) return;
-      const want = window.__pendingNoteRecipientId;
-      if (want && (recipientsRef.current || []).some((r) => r.id === want)) setSelectedId(want);
-      setReloadTick((t) => t + 1);
-    };
-    window.addEventListener('inplace:focus', onFocus);
-    return () => window.removeEventListener('inplace:focus', onFocus);
-  }, []);
-
   React.useEffect(() => {
     if (!selectedId) return;
     let cancelled = false;
@@ -125,7 +108,7 @@ const TeamNotes = window.TeamNotes = ({ onNavigate }) => {
       } catch { /* a missing visit history must not blank the notes */ }
     })();
     return () => { cancelled = true; };
-  }, [selectedId, recipients, reloadTick]);
+  }, [selectedId, recipients]);
 
   // The note the notification was about: show it even if it is far down, and mark it so the
   // person can see WHICH one they were told about.

@@ -368,11 +368,11 @@ State travels through `window`, not props. This table is the registry.
 | `window.__originalSearch` | app.js | 4 |
 | `window.__pendingCall` | app.js, Messages.js | 5 |
 | `window.__pendingConversation` | app.js, CheckinOverdueSheet.js, QuickAdd.js | 8 |
-| `window.__pendingFocus` | app.js, AttentionCard.js, CancelFeeSheet.js | 58 |
+| `window.__pendingFocus` | app.js, AttentionCard.js, CancelFeeSheet.js | 56 |
 | `window.__pendingLogVisit` | TeamNotes.js | 2 |
-| `window.__pendingLovedOneTeamId` | CareTeamManage.js, LovedOneGuide.js | 7 |
+| `window.__pendingLovedOneTeamId` | CareTeamManage.js, LovedOneGuide.js | 6 |
 | `window.__pendingNoteDraft` | CareProfile.js, Messages.js | 3 |
-| `window.__pendingNoteRecipientId` | app.js, CareProfile.js, LovedOneGuide.js | 9 |
+| `window.__pendingNoteRecipientId` | app.js, TeamNotes.js | 4 |
 | `window.__pendingPage` | app.js | 10 |
 | `window.__pendingScheduleDate` | ActivityFeed.js | 7 |
 | `window.__pendingTeam` | app.js | 5 |

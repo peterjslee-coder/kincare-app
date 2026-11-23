@@ -31,6 +31,21 @@ const WINDOW_DAYS = 45;
 
 const ENTRIES = [
   {
+    id: "start-and-end-times",
+    version: "1.150.0",
+    date: "2026-11-22",
+    audience: ["family", "caregiver"],
+    title: "Set when a visit starts and when it ends",
+    body: "Visits are now set by a start time and an end time, and the length is worked out for you, so 4½ or 5 hours is easy. Moving the start never moves the end, and a caregiver can offer a new end time too.",
+    howTo: [
+      "Pick a start, then pick an end, or tap a length to fill in the end",
+      "To change a booked visit, open it and tap Change: set the new start or end",
+      "If a caregiver offers a different end, the Needs you card shows the new length and total",
+    ],
+    examples: ["Sunday, start at 1:30 after church, end at 6:00", "Keep the 8:00 start but finish at 1:30"],
+    preview: "startEndTimes",
+  },
+  {
     id: "read-receipts",
     version: "1.149.0",
     date: "2026-11-23",

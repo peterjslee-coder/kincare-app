@@ -893,43 +893,6 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
     setGeneratingAI(false);
   };
 
-  const switchRecipient = (r) => {
-    setProfile(r); fetchNotes(r.id); fetchFamilyVisits(r.id); setEditing(false);
-    setPermTier(r.permission_tier || 'full');
-    try { setVisSettings(r.visibility_settings ? JSON.parse(r.visibility_settings) : null); } catch { setVisSettings(null); }
-  };
-
-  // ─── v1.149.1 — a note push that arrives while this page is ALREADY open ───
-  //
-  // The push router only calls setCurrentPage('care-profile'), which does not remount a page
-  // that is already showing. So nothing re-ran: not pickLovedOne (wrong person stayed on
-  // screen) and not the focus effect below (its deps are the notes, which had not changed).
-  // The router now announces `inplace:focus` after a note/visit tap; this switches to the
-  // person the note is about if needed, then nudges the focus effect to look again.
-  const [focusTick, setFocusTick] = useState(0);
-  const recipientsRef = React.useRef(allRecipients);
-  const profileIdRef = React.useRef(profile?.id);
-  useEffect(() => { recipientsRef.current = allRecipients; }, [allRecipients]);
-  useEffect(() => { profileIdRef.current = profile?.id; }, [profile]);
-  useEffect(() => {
-    const onFocus = () => {
-      const f = window.__pendingFocus;
-      if (typeof f !== 'string' || !(f.startsWith('note:') || f.startsWith('visit:'))) return;
-      const want = window.__pendingNoteRecipientId;
-      const hit = want ? (recipientsRef.current || []).find((x) => x.id === want) : null;
-      if (hit) window.__pendingNoteRecipientId = null;
-      if (hit && hit.id !== profileIdRef.current) {
-        switchRecipient(hit); // loads that person's notes; the focus effect claims on arrival
-      } else if (profileIdRef.current) {
-        // Same person — but the note is new, so the list on screen does not have it yet.
-        fetchNotes(profileIdRef.current); fetchFamilyVisits(profileIdRef.current);
-      }
-      setFocusTick((t) => t + 1);
-    };
-    window.addEventListener('inplace:focus', onFocus);
-    return () => window.removeEventListener('inplace:focus', onFocus);
-  }, []);
-
   // ─── v1.105.163 — a note push lands ON the note ───
   //
   // Pete: "i get a notification that debbie left a note about betty. I click it. it opens the
@@ -973,7 +936,7 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
       if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }, 80);
     setTimeout(() => setHighlightNoteId(null), 5000);
-  }, [notes, familyVisits, focusTick]);
+  }, [notes, familyVisits]);
 
   // v1.121.0 — "new since your last look". Snapshot the stored time when a profile opens; stamp
   // "now" when it closes (switching people, leaving the page, or the app going away), so what
@@ -1081,7 +1044,7 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
       {allRecipients.length > 1 && (
         <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap' }}>
           {allRecipients.map(r => (
-            <button key={r.id} onClick={() => switchRecipient(r)}
+            <button key={r.id} onClick={() => { setProfile(r); fetchNotes(r.id); fetchFamilyVisits(r.id); setEditing(false); setPermTier(r.permission_tier || 'full'); try { setVisSettings(r.visibility_settings ? JSON.parse(r.visibility_settings) : null); } catch { setVisSettings(null); } }}
               style={{ padding: '6px 14px', borderRadius: 20, border: r.id === profile?.id ? '2px solid #1b6b5a' : '1px solid #d0d0d0', background: r.id === profile?.id ? 'var(--role-color-light)' : 'var(--bg-card)', color: r.id === profile?.id ? 'var(--role-color)' : 'var(--text-secondary)', fontSize: 13, fontWeight: r.id === profile?.id ? 600 : 400, cursor: 'pointer' }}>
               {r.first_name} {r.last_name}
             </button>

@@ -35,6 +35,8 @@ const FindWork = window.FindWork = () => {
   const [proposingFor, setProposingFor] = useState(null); // session object for proposal modal
   const [proposalDate, setProposalDate] = useState('');
   const [proposalTime, setProposalTime] = useState('');
+  // v1.150.0 — she can move the END too; start and end are what she sets, length follows.
+  const [proposalEnd, setProposalEnd] = useState('');
   const [proposalMsg, setProposalMsg] = useState('');
   const [proposalLoading, setProposalLoading] = useState(false);
   const [visitCounts, setVisitCounts] = useState({}); // recipientId → count
@@ -532,6 +534,7 @@ const FindWork = window.FindWork = () => {
 
   const openProposalModal = (session) => {
     // Pre-fill with the original date but shift time by the conflict amount
+    setProposalEnd(TimeRange.endOf(session.time || session.scheduled_time || '', session.durationHours ?? session.duration_hours ?? session.duration));
     setProposingFor(session);
     setProposalDate(session.date || '');
     // Default: shift 2 hours later than original time
@@ -543,11 +546,12 @@ const FindWork = window.FindWork = () => {
 
   const handlePropose = async () => {
     if (!proposingFor || !proposalDate || !proposalTime) return;
+    if (proposalEnd && TimeRange.hoursBetween(proposalTime, proposalEnd) == null) { showToast('Set an end after the start', 'error'); return; }
     setProposalLoading(true);
     try {
       const res = await apiFetch(`/api/sessions/${proposingFor.id}/propose-time`, {
         method: 'POST',
-        body: JSON.stringify({ proposedDate: proposalDate, proposedTime: proposalTime, message: proposalMsg || null }),
+        body: JSON.stringify({ proposedDate: proposalDate, proposedTime: proposalTime, proposedEndTime: proposalEnd || null, message: proposalMsg || null }),
       });
       if (res?.ok) {
         showToast('Time proposal sent to family!', 'success');
@@ -1350,10 +1354,9 @@ const FindWork = window.FindWork = () => {
               <input type="date" value={proposalDate} onChange={(e) => setProposalDate(e.target.value)}
                 style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid #ddd', fontSize: 14, boxSizing: 'border-box' }} />
             </div>
-            <div style={{ marginBottom: 12 }}>
-              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4 }}>Time</label>
-              <input type="time" value={proposalTime} onChange={(e) => setProposalTime(e.target.value)}
-                style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid #ddd', fontSize: 14, boxSizing: 'border-box' }} />
+            <div style={{ marginBottom: 14 }}>
+              <TimeRange start={proposalTime} end={proposalEnd} quick={[]}
+                onChange={({ start, end }) => { setProposalTime(start); setProposalEnd(end); }} />
             </div>
             <div style={{ marginBottom: 16 }}>
               <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4 }}>Note to family (optional)</label>
@@ -1366,7 +1369,7 @@ const FindWork = window.FindWork = () => {
                 style={{ flex: 1, padding: 12, borderRadius: 10, border: '1px solid #ddd', background: 'var(--bg-surface)', fontSize: 14, fontWeight: 600, cursor: 'pointer', color: 'var(--text-secondary)' }}>
                 Cancel
               </button>
-              <button onClick={handlePropose} disabled={proposalLoading || !proposalDate || !proposalTime}
+              <button onClick={handlePropose} disabled={proposalLoading || !proposalDate || !proposalTime || (proposalEnd && TimeRange.hoursBetween(proposalTime, proposalEnd) == null)}
                 style={{
                   flex: 2, padding: 12, borderRadius: 10, border: 'none',
                   background: 'var(--role-color)', color: 'var(--text-on-primary)', fontSize: 14, fontWeight: 700, cursor: 'pointer',

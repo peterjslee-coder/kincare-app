@@ -869,9 +869,6 @@ const App = () => {
       } else if (t === 'check_in_reminder' || t === 'check_out_reminder' || t === 'caregiver_arriving' || t === 'caregiver_arriving_recipient' || t === 'session_in_progress' || t === 'session_complete') {
         if (d.sessionId && !d.focus) window.__pendingFocus = `session:${d.sessionId}`;
         target = 'dashboard';
-        // v1.149.1 — "Session Complete" opens the visit report (with its Got it button). If Home
-        // is already open it does not remount, so its claim() has to be told to look.
-        setTimeout(() => window.dispatchEvent(new Event('inplace:focus')), 0);
       } else if (t === 'team_note' || t === 'observation_attention' || t === 'family_visit') {
         // ─── v1.105.153 — send them where they can actually read it ───
         //
@@ -892,9 +889,6 @@ const App = () => {
         // which is the exact complaint.
         if (d.visitId && !d.noteId && !d.focus) window.__pendingFocus = `visit:${d.visitId}`;
         target = (window.__currentRole || 'family') === 'family' ? 'care-profile' : 'care-notes';
-        // v1.149.1 — if that page is already open it does not remount, so tell it (CareProfile
-        // switches to the right person and claims the focus; TeamNotes ignores what it can't use).
-        setTimeout(() => window.dispatchEvent(new Event('inplace:focus')), 0);
       } else if (t.startsWith('care_task') || t.startsWith('care_event')) {
         target = 'dashboard';
       } else if (t === 'safety_flag') {

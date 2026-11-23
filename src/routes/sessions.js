@@ -5535,7 +5535,7 @@ router.post("/:sessionId/first-visit-confirm", async (req, res) => {
 router.post("/:id/propose-time", async (req, res) => {
   try {
     const db = await getDb();
-    const { proposedDate, proposedTime, message } = req.body;
+    const { proposedDate, proposedTime, message, proposedEndTime } = req.body;
     const userId = req.user.id;
     const activeRole = req.user.activeRole || req.user.role;
     const rawRoles = req.user.roles || activeRole || "";
@@ -5548,6 +5548,19 @@ router.post("/:id/propose-time", async (req, res) => {
     }
     if (!proposedDate || !proposedTime) {
       return res.status(400).json({ error: "Proposed date and time are required" });
+    }
+
+    // v1.150.0 — she may move the END too. Start and end are what she sets; the length is
+    // worked out from them ("ends at 1:30" on an 8:00 visit makes it a 5½-hour visit — it does
+    // not slide the start). No end = the visit's own length, as before.
+    let proposedHours = null;
+    if (proposedEndTime) {
+      const hm = (t) => { const m = /^(\d{1,2}):(\d{2})$/.exec(String(t)); return m ? Number(m[1]) * 60 + Number(m[2]) : null; };
+      const a = hm(proposedTime), b = hm(proposedEndTime);
+      if (a == null || b == null || b - a < 30 || b - a > 12 * 60) {
+        return res.status(400).json({ error: "The end has to be after the start, on the same day — 30 minutes to 12 hours." });
+      }
+      proposedHours = Math.round((b - a) / 15) / 4;
     }
 
     const profile = await db.prepare("SELECT * FROM caregiver_profiles WHERE user_id = ?").get(userId);
@@ -5595,15 +5608,17 @@ router.post("/:id/propose-time", async (req, res) => {
         id: session.id,
         scheduled_date: proposedDate,
         scheduled_time: proposedTime,
-        duration_hours: session.duration_hours,
+        duration_hours: proposedHours != null ? proposedHours : session.duration_hours,
       }, profile);
       if (cGate) {
         const hrs = parseFloat(session.duration_hours);
-        const len = Number.isFinite(hrs) && hrs > 0 ? `This visit is ${hrs} hours, so ` : "";
+        const span = proposedHours != null
+          ? `${formatTimeForDisplay(proposedTime)} to ${formatTimeForDisplay(proposedEndTime)} would overlap it.`
+          : (Number.isFinite(hrs) && hrs > 0 ? `This visit is ${hrs} hours, so ` : "")
+            + `starting at ${formatTimeForDisplay(proposedTime)} would overlap it.`;
         return res.status(409).json({
           code: "CAREGIVER_BOOKED",
-          error: cGate.error.replace(/ that overlaps this one\..*$/, "") + ". "
-            + len + `starting at ${formatTimeForDisplay(proposedTime)} would overlap it. Pick a time that doesn't.`,
+          error: cGate.error.replace(/ that overlaps this one\..*$/, "") + ". " + span + " Pick a time that doesn't.",
         });
       }
     }
@@ -5611,9 +5626,9 @@ router.post("/:id/propose-time", async (req, res) => {
     const proposalId = require("uuid").v4();
     const expiresAt = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(); // 2-hour response window
     await db.prepare(`
-      INSERT INTO time_proposals (id, session_id, caregiver_profile_id, caregiver_user_id, proposed_date, proposed_time, message, status, expires_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?)
-    `).run(proposalId, req.params.id, profile.id, userId, proposedDate, proposedTime, message || null, expiresAt);
+      INSERT INTO time_proposals (id, session_id, caregiver_profile_id, caregiver_user_id, proposed_date, proposed_time, proposed_duration, message, status, expires_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)
+    `).run(proposalId, req.params.id, profile.id, userId, proposedDate, proposedTime, proposedHours, message || null, expiresAt);
 
     // Notify family
     const emitToUser = req.app.get("emitToUser");
@@ -5621,7 +5636,8 @@ router.post("/:id/propose-time", async (req, res) => {
     const caregiverUser = await db.prepare("SELECT first_name, last_name FROM users WHERE id = ?").get(userId);
     const caregiverName = caregiverUser ? `${caregiverUser.first_name} ${caregiverUser.last_name}` : "A caregiver";
 
-    const timeStr = formatTimeForDisplay(proposedTime);
+    const timeStr = formatTimeForDisplay(proposedTime)
+      + (proposedHours != null ? ` to ${formatTimeForDisplay(proposedEndTime)}` : "");
 
     const title = `${caregiverName} proposed a different time`;
     const body = `${caregiverName} would like to care for ${session.recipient_first_name} on ${proposedDate} at ${timeStr} instead. You have 2 hours to respond.`;
@@ -5726,7 +5742,7 @@ router.put("/:id/proposals/:proposalId/accept", async (req, res) => {
         id: req.params.id,
         scheduled_date: proposal.proposed_date,
         scheduled_time: proposal.proposed_time,
-        duration_hours: sess && sess.duration_hours,
+        duration_hours: proposal.proposed_duration != null ? proposal.proposed_duration : (sess && sess.duration_hours),
       }, { id: proposal.caregiver_profile_id });
       if (cGate) {
         // v1.148.0 — `done: false`. The Needs-you card reads a bare 409 as "already in the
@@ -5752,13 +5768,24 @@ router.put("/:id/proposals/:proposalId/accept", async (req, res) => {
     // The status re-check inside the UPDATE is the other half. Everything above was read
     // before these writes, so two accepts arriving together both passed the "still open"
     // check. Making the write itself conditional means the second one changes no rows.
+    // v1.150.0 — a proposal can carry its own end, so its own length. A different length is a
+    // different price: same hourly (the agreed rate, else the booking's own), new hours, any
+    // short-notice amount as it was — the rule time-change accept has used since v1.107.7.
+    // NULL keeps the visit's length and price untouched. Right-hand sides read the row as it WAS.
+    const newHours = proposal.proposed_duration != null ? parseFloat(proposal.proposed_duration) : null;
     const confirmed = await db.transaction(async (tx) => {
       const applied = await tx.prepare(`
         UPDATE care_sessions SET
           scheduled_date = ?, scheduled_time = ?,
+          duration_hours = COALESCE(?::real, duration_hours),
+          estimated_cost = CASE WHEN ?::numeric IS NULL THEN estimated_cost ELSE COALESCE(ROUND(
+            COALESCE(NULLIF(agreed_rate, 0)::numeric,
+                     (estimated_cost::numeric - COALESCE(short_notice_surcharge, 0)::numeric)
+                       / NULLIF(duration_hours, 0)::numeric)
+            * ?::numeric + COALESCE(short_notice_surcharge, 0)::numeric, 2), estimated_cost) END,
           caregiver_id = ?, status = 'confirmed', updated_at = NOW()
         WHERE id = ? AND status IN ('open', 'requested', 'pending')
-      `).run(proposal.proposed_date, proposal.proposed_time, proposal.caregiver_profile_id, req.params.id);
+      `).run(proposal.proposed_date, proposal.proposed_time, newHours, newHours, newHours, proposal.caregiver_profile_id, req.params.id);
 
       if (!applied || applied.changes === 0) return false;
 
