@@ -1,0 +1,32 @@
+// v1.152.0 — InPlace Hub helpers: settings cleaning, visit end times, and the "days she comes" label.
+const { cleanHub, addHours, weekdayLabel, relationLabel, parseSimpleMode } = require("../src/utils/simpleMode");
+
+test("cleanHub keeps known booleans and valid HH:MM only", () => {
+  expect(cleanHub(null)).toEqual({ on: false, faces: true, week: true, dimFrom: "21:00", dimTo: "07:00" });
+  expect(cleanHub({ on: true, faces: "yes", dimFrom: "9pm", dimTo: "06:15", x: 1 }))
+    .toEqual({ on: true, faces: true, week: true, dimFrom: "21:00", dimTo: "06:15" });
+});
+
+test("a record saved before the Hub existed reads as Hub off", () => {
+  expect(parseSimpleMode(JSON.stringify({ on: true, callUserIds: [] })).hub.on).toBe(false);
+});
+
+test("addHours", () => {
+  expect(addHours("10:00", 2.5)).toBe("12:30");
+  expect(addHours("22:30", 3)).toBe("01:30");
+  expect(addHours(null, 2)).toBeNull();
+});
+
+test("weekdayLabel reads Monday-first", () => {
+  // 2026-11-23 is a Monday, 11-26 a Thursday, 11-25 a Wednesday.
+  expect(weekdayLabel([])).toBeNull();
+  expect(weekdayLabel(["2026-11-25", "2026-12-02"])).toBe("Wednesdays");
+  expect(weekdayLabel(["2026-11-26", "2026-11-23"])).toBe("Mon and Thu");
+  expect(weekdayLabel(["2026-11-27", "2026-11-25", "2026-11-23"])).toBe("Mon, Wed, Fri");
+});
+
+test("relationLabel", () => {
+  expect(relationLabel("Son")).toBe("your son");
+  expect(relationLabel("Best friend from church")).toBe("Best friend from church");
+  expect(relationLabel("")).toBeNull();
+});

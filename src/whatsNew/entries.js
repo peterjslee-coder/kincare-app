@@ -31,6 +31,21 @@ const WINDOW_DAYS = 45;
 
 const ENTRIES = [
   {
+    id: "inplace-hub",
+    version: "1.152.0",
+    date: "2026-11-23",
+    audience: ["family"],
+    title: "InPlace Hub: your loved one's screen on a kitchen tablet",
+    body: "Turn a tablet on the counter into a little TV for your loved one: the date with the year, a big clock, who's here, the week ahead, and faces with names. It uses the same buttons you set for their Simple screen, and goes dark with a big clock at night.",
+    howTo: [
+      "Care Team, then Accessibility Options: turn on their Simple screen if it isn't already",
+      "Tick InPlace Hub, and choose Who's who, The week ahead and the night hours",
+      "On the tablet, install InPlace Care, sign in as them, and turn it sideways",
+    ],
+    examples: ["Jane comes Mon and Thu, with a photo", "Thursday: Thanksgiving at Sam's"],
+    preview: "inplaceHub",
+  },
+  {
     id: "ranked-caregiver-picker",
     version: "1.151.0",
     date: "2026-11-23",
