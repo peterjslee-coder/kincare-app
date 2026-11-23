@@ -207,22 +207,22 @@ Every job runs through `guardedPoller` → `withPollerLock` (`src/models/databas
 
 | Lock | Job | Interval | Declared |
 |---:|---|---|---|
-| 101 | Daily demo data refresh | 24 h | `src/server.js:1101` |
-| 102 | Session notification poller (every 60s) | 1 min | `src/server.js:1194` |
-| 103 | Session Accountability Poller | 1 min | `src/server.js:1477` |
-| 104 | Reimbursement push digest sweeper (v1.98.15) | 30 s | `src/server.js:1494` |
-| 105 | Auto-pay cron: charge overdue sessions | 5 min | `src/server.js:1586` |
-| 106 | Recurring reimbursements: generate due occurrences (v1.74.0) | 1 h | `src/server.js:1693` |
-| 107 | Care Tasks poller (v1.99.0) | 1 min | `src/server.js:1718` |
-| 108 | Care Events poller (v1.100.0) | 1 min | `src/server.js:1734` |
-| 109 | Kindred Reminder Delivery Poller | 1 min | `src/server.js:1508` |
-| 110 | Retention (v1.106.9, poller 110) | 24 h | `src/server.js:1771` |
-| 111 | (see src/server.js:1669) | 1 h | `src/server.js:1669` |
-| 112 | v1.106.13 — poller 112: proposals that nobody answered | 10 min | `src/server.js:1800` |
-| 113 | (see src/server.js:1843) | 1 min | `src/server.js:1843` |
-| 114 | Quiet hours summary (v1.107.3, poller 114) | 5 min | `src/server.js:1862` |
-| 115 | Recurring reimbursements: generate due occurrences (v1.74.0) | 1 h | `src/server.js:1706` |
-| 116 | Visit mileage: charge what is owed once the visit itself is paid (v1.126.1, poller 116) | 5 min | `src/server.js:1879` |
+| 101 | Daily demo data refresh | 24 h | `src/server.js:1085` |
+| 102 | Session notification poller (every 60s) | 1 min | `src/server.js:1178` |
+| 103 | Session Accountability Poller | 1 min | `src/server.js:1461` |
+| 104 | Reimbursement push digest sweeper (v1.98.15) | 30 s | `src/server.js:1478` |
+| 105 | Auto-pay cron: charge overdue sessions | 5 min | `src/server.js:1570` |
+| 106 | Recurring reimbursements: generate due occurrences (v1.74.0) | 1 h | `src/server.js:1677` |
+| 107 | Care Tasks poller (v1.99.0) | 1 min | `src/server.js:1702` |
+| 108 | Care Events poller (v1.100.0) | 1 min | `src/server.js:1718` |
+| 109 | Kindred Reminder Delivery Poller | 1 min | `src/server.js:1492` |
+| 110 | Retention (v1.106.9, poller 110) | 24 h | `src/server.js:1755` |
+| 111 | (see src/server.js:1653) | 1 h | `src/server.js:1653` |
+| 112 | v1.106.13 — poller 112: proposals that nobody answered | 10 min | `src/server.js:1784` |
+| 113 | (see src/server.js:1827) | 1 min | `src/server.js:1827` |
+| 114 | Quiet hours summary (v1.107.3, poller 114) | 5 min | `src/server.js:1846` |
+| 115 | Recurring reimbursements: generate due occurrences (v1.74.0) | 1 h | `src/server.js:1690` |
+| 116 | Visit mileage: charge what is owed once the visit itself is paid (v1.126.1, poller 116) | 5 min | `src/server.js:1863` |
 
 ---
 
@@ -366,7 +366,7 @@ State travels through `window`, not props. This table is the registry.
 | `window.__openRequestCareModal` | app.js, CareToolsSheet.js | 21 |
 | `window.__openTaskCreate` | — | 1 |
 | `window.__originalSearch` | app.js | 4 |
-| `window.__pendingCall` | app.js, Messages.js | 5 |
+| `window.__pendingCall` | app.js, Messages.js, RecipientPhone.js | 8 |
 | `window.__pendingConversation` | app.js, CheckinOverdueSheet.js, QuickAdd.js | 8 |
 | `window.__pendingFocus` | app.js, AttentionCard.js, CancelFeeSheet.js | 58 |
 | `window.__pendingLogVisit` | TeamNotes.js | 2 |

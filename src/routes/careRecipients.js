@@ -662,6 +662,7 @@ router.get("/:id/simple-mode", requireRole("family"), async (req, res) => {
       lastOpenedAt: (opens && opens.last_open) || null,
       opens7d: (opens && opens.opens_7d) || 0,
       hasOwnLogin: !!linkedUserId,
+      recipientUserId: linkedUserId || null, // v1.153.0 — so the leader can ring their screen
       on: mode.on,
       show: mode.show,
       callUserIds: mode.callUserIds,
@@ -670,6 +671,7 @@ router.get("/:id/simple-mode", requireRole("family"), async (req, res) => {
       maxButtons: sm.MAX_BUTTONS,
       maxCalls: sm.MAX_CALLS,
       hub: mode.hub, // v1.152.0 — InPlace Hub
+      callType: mode.callType, // v1.153.0 — in-app Call buttons: voice or video
       candidates: candidates.map((c) => ({ userId: c.userId, firstName: c.firstName, lastName: c.lastName, hasPhone: !!c.phone })),
     });
   } catch (err) {
@@ -692,8 +694,7 @@ router.put("/:id/simple-mode", requireRole("family"), async (req, res) => {
     const candidates = new Map((await sm.callCandidates(db, cr.id, linkedUserId)).map((c) => [c.userId, c]));
     const bad = ids.filter((id) => !candidates.has(id));
     if (bad.length) return res.status(400).json({ error: "Call buttons can only ring people on the care team" });
-    const noPhone = ids.filter((id) => !candidates.get(id).phone).map((id) => candidates.get(id).firstName);
-    if (noPhone.length) return res.status(400).json({ error: `${noPhone.join(", ")} has no phone number on their account yet` });
+    // v1.153.0 — Call buttons are in-app calls now, so a phone number is no longer needed.
     // v1.130.1 — what's on the screen. A partial `show` keeps the other ticks as they were.
     const prev = sm.parseSimpleMode(cr.simple_mode);
     const show = sm.cleanShow({ ...prev.show, ...(req.body.show && typeof req.body.show === "object" ? req.body.show : {}) });
@@ -718,6 +719,7 @@ router.put("/:id/simple-mode", requireRole("family"), async (req, res) => {
       return res.status(400).json({ error: `Up to ${sm.MAX_BUTTONS} big buttons. Untick one first.` });
     }
     // v1.152.0 — InPlace Hub settings ride in the same record; a partial `hub` keeps the rest.
+    const callType = req.body.callType === "video" ? "video" : req.body.callType === "voice" ? "voice" : prev.callType;
     const hub = sm.cleanHub({ ...prev.hub, ...(req.body.hub && typeof req.body.hub === "object" ? req.body.hub : {}) });
     let textConversationId = prev.textConversationId;
     if (show.text && linkedUserId && textUserIds.length) {
@@ -728,7 +730,7 @@ router.put("/:id/simple-mode", requireRole("family"), async (req, res) => {
     }
 
     await db.prepare("UPDATE care_recipients SET simple_mode = ?, updated_at = NOW() WHERE id = ?")
-      .run(JSON.stringify({ on, callUserIds: ids, show, clearedNoteId, textUserIds, textConversationId, hub }), cr.id);
+      .run(JSON.stringify({ on, callUserIds: ids, show, clearedNoteId, textUserIds, textConversationId, hub, callType }), cr.id);
 
     // Messages ticked on: the person can only message someone they are connected to, and an
     // account the leader set up (v1.129.4) was never connected to anyone. Connect them to the
@@ -753,7 +755,7 @@ router.put("/:id/simple-mode", requireRole("family"), async (req, res) => {
         emitToUser(linkedUserId, "simple_screen_refresh", { reason: "settings" });
       }
     }
-    res.json({ on, callUserIds: ids, show, textUserIds, textConversationId, hub, noteCleared: !!clearedNoteId && req.body.clearNote === true });
+    res.json({ on, callUserIds: ids, show, textUserIds, textConversationId, hub, callType, noteCleared: !!clearedNoteId && req.body.clearNote === true });
   } catch (err) {
     captureException(err, { where: "careRecipients: put simple-mode" });
     res.status(500).json({ error: "Couldn't save the phone settings" });

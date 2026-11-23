@@ -31,6 +31,21 @@ const WINDOW_DAYS = 45;
 
 const ENTRIES = [
   {
+    id: "simple-screen-calls",
+    version: "1.153.0",
+    date: "2026-11-23",
+    audience: ["family"],
+    title: "Call your loved one's Simple screen or Hub in InPlace",
+    body: "Their Call buttons now ring your InPlace app, voice or video, so they work on a Wi-Fi tablet too. When you call them, their screen shows your face with one big Answer button.",
+    howTo: [
+      "Care Team, then Accessibility Options: tick Call buttons and pick who they ring",
+      "Choose whether calls start as Voice or Video",
+      "To call them, tap Voice call or Video call on the same card",
+    ],
+    examples: ["Mom taps Call Sam on the kitchen tablet", "Video call Mom to say good morning"],
+    preview: "simpleCalls",
+  },
+  {
     id: "inplace-hub",
     version: "1.152.0",
     date: "2026-11-23",
