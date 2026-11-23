@@ -836,6 +836,7 @@ app.use("/api/kindred", require("./routes/kindred"));
 app.use("/api/care-tasks", careTasksRouter);
 app.use("/api/care-events", careEventsRouter);
 app.use("/api/care-todos", require("./routes/careTodos")); // v1.109.9 — one-time to-dos for the next visit
+app.use("/api/handoffs", require("./routes/handoffs")); // v1.154.0 — the note one caregiver leaves the next
 app.use("/api/whats-new", require("./routes/whatsNew")); // v1.112.4 — the What's New splash
 app.use("/api/care-tools", require("./routes/careTools")); // v1.114.0 — care tools come with care booked through InPlace
 app.use("/api/legal", require("./routes/legal"));
@@ -845,7 +846,7 @@ app.use("/api/safety", require("./routes/safety"));
 
 // ─── App version check (lightweight, no auth) ───
 const { cancelPassedPrivateOffers, releaseExpiredExclusiveOffers } = require("./utils/exclusiveOffers");
-const APP_VERSION = "1.153.3";
+const APP_VERSION = "1.154.0";
 app.get("/api/version", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({ version: APP_VERSION, minAppVersion: MIN_APP_VERSION });
@@ -1826,6 +1827,58 @@ async function start() {
     setTimeout(runConditionPrompts, 45 * 1000);
     setInterval(runConditionPrompts, 60 * 1000);
     console.log("  Settled-in condition poller started (asks 15m after check-in, every 60s)");
+  }
+
+  // ─── Hand-off prompt (v1.154.0, poller 117) ───
+  //
+  // Pete, 11/23: "prompt for notes and handoff situation 15 minutes prior." Every minute: a
+  // visit in progress, fifteen minutes or less from its scheduled end, with someone else's
+  // visit for the same person starting within the hour after it, and no hand-off written yet.
+  // Marked sent whether or not the push lands — her visit card keeps offering regardless.
+  {
+    const runHandoffPrompts = guardedPoller(117, async () => {
+      const { nextVisitAfter, promptDue } = require("./utils/handoff");
+      const { sendPushToUser: pushFn } = require("./routes/push");
+      const db = await getDb();
+      const rows = await db.prepare(`
+        SELECT cs.id, cs.care_recipient_id, cs.caregiver_id, cs.scheduled_date, cs.scheduled_time,
+               cs.duration_hours, vl.id AS visit_log_id, cp.user_id AS caregiver_user_id,
+               cr.timezone AS care_timezone
+          FROM care_sessions cs
+          JOIN visit_logs vl ON vl.session_id = cs.id
+          JOIN caregiver_profiles cp ON cp.id = cs.caregiver_id
+          JOIN care_recipients cr ON cr.id = cs.care_recipient_id
+         WHERE cs.status = 'in_progress'
+           AND vl.check_out_time IS NULL
+           AND vl.handoff_prompt_sent_at IS NULL
+           AND COALESCE(vl.is_test, 0) = 0
+           AND NOT EXISTS (SELECT 1 FROM visit_handoffs h WHERE h.from_session_id = cs.id)
+         LIMIT 200
+      `).all();
+      let n = 0;
+      for (const s of rows) {
+        if (!promptDue(s, s.care_timezone)) continue;
+        const next = await nextVisitAfter(db, s);
+        if (!next) continue;
+        await db.prepare(
+          "UPDATE visit_logs SET handoff_prompt_sent_at = NOW() WHERE id = ? AND handoff_prompt_sent_at IS NULL"
+        ).run(s.visit_log_id);
+        n++;
+        try {
+          await pushFn(s.caregiver_user_id, {
+            title: `${next.caregiverFirstName || "The next caregiver"} is next`,
+            body: "Leave a hand-off note before you go.",
+            data: { type: "handoff_prompt", sessionId: s.id, page: "dashboard" },
+          }, "handoff_prompt");
+        } catch (e) {
+          reportPollerFailure("hand-off prompt", e);
+        }
+      }
+      if (n > 0) console.log(`  [handoff] asked ${n} caregiver(s) for a hand-off note`);
+    });
+    setTimeout(runHandoffPrompts, 50 * 1000);
+    setInterval(runHandoffPrompts, 60 * 1000);
+    console.log("  Hand-off prompt poller started (15m before the end, every 60s)");
   }
 
   // ─── Quiet hours summary (v1.107.3, poller 114) ───

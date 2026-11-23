@@ -576,6 +576,12 @@ async function caregiverDashboard(db, userId, res) {
       vl.check_out_time,
       -- v1.153.3 — 'asleep' at check-in moves the awareness question to the fifteen-minute check
       (SELECT fvc.confirmation FROM first_visit_confirmations fvc WHERE fvc.session_id = cs.id LIMIT 1) AS first_visit_confirmation,
+      -- v1.154.0 — hand-offs: the one left FOR this visit, and whether she wrote hers
+      (SELECT h.id FROM visit_handoffs h WHERE h.to_session_id = cs.id AND h.skipped = 0 ORDER BY h.updated_at DESC LIMIT 1) AS incoming_handoff_id,
+      (SELECT h.read_at FROM visit_handoffs h WHERE h.to_session_id = cs.id AND h.skipped = 0 ORDER BY h.updated_at DESC LIMIT 1) AS incoming_handoff_read_at,
+      (SELECT hu.first_name FROM visit_handoffs h JOIN users hu ON hu.id = h.from_user_id WHERE h.to_session_id = cs.id AND h.skipped = 0 ORDER BY h.updated_at DESC LIMIT 1) AS incoming_handoff_from,
+      (SELECT h.id FROM visit_handoffs h WHERE h.from_session_id = cs.id) AS outgoing_handoff_id,
+      vl.handoff_prompt_sent_at,
       -- v1.106.41 — the caregiver's own card needs to know whether she is out right now, and
       -- how much of her paid break budget is left, without a second request per session.
       -- Aggregated in the SELECT rather than joined: a join against visit_breaks multiplies
@@ -928,6 +934,12 @@ async function caregiverDashboard(db, userId, res) {
         // not answered yet. The same helper the poller's sibling question uses.
         conditionReadDue: conditionReadDue(s),
         awarenessFollowUpDue: awarenessFollowUpDue(s),
+        // v1.154.0 — the hand-off note (src/utils/handoff.js)
+        incomingHandoff: s.incoming_handoff_id
+          ? { id: s.incoming_handoff_id, fromFirstName: s.incoming_handoff_from || null, readAt: s.incoming_handoff_read_at || null }
+          : null,
+        handoffAsked: !!s.handoff_prompt_sent_at,
+        handoffWritten: !!s.outgoing_handoff_id,
         // v1.106.41 — see src/utils/visitBreaks.js for the rule these numbers come from.
         onBreak: Number(s.open_breaks || 0) > 0,
         breakStartedAt: s.break_started_at || null,

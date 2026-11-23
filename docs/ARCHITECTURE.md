@@ -7,9 +7,9 @@ build red.
 
 Hand-written sections (§3 "Where is…") are preserved across regeneration; edit those freely.
 
-Structure at last generation: 647 HTTP routes across 68 mounts ·
-123 `CREATE TABLE` statements · 16 background jobs · 43 socket events
-(18 with no client listener) · 76 push event types · 66 `window.__*` globals.
+Structure at last generation: 650 HTTP routes across 69 mounts ·
+124 `CREATE TABLE` statements · 17 background jobs · 43 socket events
+(18 with no client listener) · 77 push event types · 66 `window.__*` globals.
 
 ---
 
@@ -70,6 +70,7 @@ JSX is *not* compiled in the browser; Babel-standalone is not loaded. Editing an
 | `/api/family-visits` | `src/routes/familyVisits.js` | 5 |  |
 | `/api/feedback` | `src/routes/feedback.js` | 6 |  |
 | `/api/geocode` | `src/routes/geocode.js` | 2 |  |
+| `/api/handoffs` | `src/routes/handoffs.js` | 3 |  |
 | `/api/help` | `src/routes/help.js` | 5 |  |
 | `/api/interviews` | `src/routes/interviews.js` | 10 |  |
 | `/api/ipai` | `src/routes/ipaiChat.js` | 2 |  |
@@ -207,22 +208,23 @@ Every job runs through `guardedPoller` → `withPollerLock` (`src/models/databas
 
 | Lock | Job | Interval | Declared |
 |---:|---|---|---|
-| 101 | Daily demo data refresh | 24 h | `src/server.js:1085` |
-| 102 | Session notification poller (every 60s) | 1 min | `src/server.js:1178` |
-| 103 | Session Accountability Poller | 1 min | `src/server.js:1461` |
-| 104 | Reimbursement push digest sweeper (v1.98.15) | 30 s | `src/server.js:1478` |
-| 105 | Auto-pay cron: charge overdue sessions | 5 min | `src/server.js:1570` |
-| 106 | Recurring reimbursements: generate due occurrences (v1.74.0) | 1 h | `src/server.js:1677` |
-| 107 | Care Tasks poller (v1.99.0) | 1 min | `src/server.js:1702` |
-| 108 | Care Events poller (v1.100.0) | 1 min | `src/server.js:1718` |
-| 109 | Kindred Reminder Delivery Poller | 1 min | `src/server.js:1492` |
-| 110 | Retention (v1.106.9, poller 110) | 24 h | `src/server.js:1755` |
-| 111 | (see src/server.js:1653) | 1 h | `src/server.js:1653` |
-| 112 | v1.106.13 — poller 112: proposals that nobody answered | 10 min | `src/server.js:1784` |
-| 113 | (see src/server.js:1827) | 1 min | `src/server.js:1827` |
-| 114 | Quiet hours summary (v1.107.3, poller 114) | 5 min | `src/server.js:1846` |
-| 115 | Recurring reimbursements: generate due occurrences (v1.74.0) | 1 h | `src/server.js:1690` |
-| 116 | Visit mileage: charge what is owed once the visit itself is paid (v1.126.1, poller 116) | 5 min | `src/server.js:1863` |
+| 101 | Daily demo data refresh | 24 h | `src/server.js:1086` |
+| 102 | Session notification poller (every 60s) | 1 min | `src/server.js:1179` |
+| 103 | Session Accountability Poller | 1 min | `src/server.js:1462` |
+| 104 | Reimbursement push digest sweeper (v1.98.15) | 30 s | `src/server.js:1479` |
+| 105 | Auto-pay cron: charge overdue sessions | 5 min | `src/server.js:1571` |
+| 106 | Recurring reimbursements: generate due occurrences (v1.74.0) | 1 h | `src/server.js:1678` |
+| 107 | Care Tasks poller (v1.99.0) | 1 min | `src/server.js:1703` |
+| 108 | Care Events poller (v1.100.0) | 1 min | `src/server.js:1719` |
+| 109 | Kindred Reminder Delivery Poller | 1 min | `src/server.js:1493` |
+| 110 | Retention (v1.106.9, poller 110) | 24 h | `src/server.js:1756` |
+| 111 | (see src/server.js:1654) | 1 h | `src/server.js:1654` |
+| 112 | v1.106.13 — poller 112: proposals that nobody answered | 10 min | `src/server.js:1785` |
+| 113 | (see src/server.js:1828) | 1 min | `src/server.js:1828` |
+| 114 | Quiet hours summary (v1.107.3, poller 114) | 5 min | `src/server.js:1899` |
+| 115 | Recurring reimbursements: generate due occurrences (v1.74.0) | 1 h | `src/server.js:1691` |
+| 116 | Visit mileage: charge what is owed once the visit itself is paid (v1.126.1, poller 116) | 5 min | `src/server.js:1916` |
+| 117 | (see src/server.js:1880) | 1 min | `src/server.js:1880` |
 
 ---
 
@@ -323,7 +325,9 @@ Opt-out key is `notification_prefs["push_" + eventType]`. Capability gating live
 
 `session_in_progress` · `team_join` · `time_change` · `time_proposal`
 
-`unblocked` · `upload_authority_confirmed` · `uploaded` · `waitlist_signup`
+`unblocked` · `upload_authority_confirmed` · `uploaded` · `visit_handoff`
+
+`waitlist_signup`
 
 ---
 

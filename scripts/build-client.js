@@ -101,6 +101,8 @@ const scripts = [
   "js/components/Messages.js",
   "js/components/RequestCareModal.js",
   "js/components/VisitReport.js", // v1.108.0 — before VisitDetailModal and CaretakerHub, which render it
+  // v1.154.0 — HandoffSheet / HandoffIncoming / HandoffReport (before both users)
+  "js/components/Handoff.js",
   "js/components/VisitDetailModal.js",
   "js/components/TwoFactorSetup.js",
   "js/components/CheckrEmailStart.js", // v1.131.0 — the background check by email; MyAccount and CaretakerHub use it
