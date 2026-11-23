@@ -564,7 +564,7 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
     padding: '8px 14px', borderRadius: 20, fontSize: 13, fontWeight: 600, cursor: 'pointer',
     border: selected ? '2px solid #1b6b5a' : '1px solid #e0e0e0',
     background: selected ? 'var(--color-success-bg)' : 'var(--bg-card)',
-    color: selected ? 'var(--role-color)' : 'var(--text-secondary)',
+    color: selected ? 'var(--role-text-on-tint)' : 'var(--text-secondary)',
     whiteSpace: 'nowrap', flexShrink: 0, transition: 'all 0.15s',
   });
 
@@ -617,7 +617,7 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
     if (days < 14) return 'last week';
     if (days < 31) return `${Math.floor(days / 7)} weeks ago`;
     const mon = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][a[1] - 1];
-    return `last ${mon}`;
+    return `in ${mon}`;
   };
   const initials = (name) => (name || '').split(' ').filter(Boolean).slice(0, 2).map(s => s[0].toUpperCase()).join('');
   // Betty's appointments that fall inside this visit (or on the day with no time set).
@@ -674,7 +674,7 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
               }} />
             ))}
           </div>
-          <h2 style={{ fontSize: 22, fontWeight: 700, color: 'var(--role-color)', margin: '0 0 8px' }}>{confirmationData.title}</h2>
+          <h2 style={{ fontSize: 22, fontWeight: 700, color: 'var(--role-text)', margin: '0 0 8px' }}>{confirmationData.title}</h2>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6, margin: '16px 0 24px' }}>
             {confirmationData.details.map((d, i) => (
               <div key={i} style={{
@@ -742,7 +742,7 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
               }}>
                 {step > i + 1 ? '\u2713' : i + 1}
               </div>
-              <span style={{ fontSize: 12, color: step === i + 1 ? 'var(--role-color)' : 'var(--text-muted)', fontWeight: step === i + 1 ? 600 : 400 }}>{label}</span>
+              <span style={{ fontSize: 12, color: step === i + 1 ? 'var(--role-text)' : 'var(--text-muted)', fontWeight: step === i + 1 ? 600 : 400 }}>{label}</span>
               {i === 0 && <div style={{ width: 20, height: 1, background: 'var(--border-light)', margin: '0 4px' }}></div>}
             </div>
           ))}
@@ -786,7 +786,7 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
               <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>Date</div>
               {date ? (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <div style={{ flex: 1, padding: '10px 14px', background: 'var(--bg-primary)', border: '1px solid var(--border-light)', borderRadius: 10, fontSize: 15, fontWeight: 600, color: 'var(--role-color)' }}>
+                  <div style={{ flex: 1, padding: '10px 14px', background: 'var(--bg-primary)', border: '1px solid var(--border-light)', borderRadius: 10, fontSize: 15, fontWeight: 600, color: 'var(--role-text)' }}>
                     {(() => { const p = date.split('-').map(Number); return new Date(p[0], p[1]-1, p[2]).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }); })()}
                   </div>
                   <button type="button" onClick={() => { onClose(); if (window.__navigateTo) window.__navigateTo('schedule'); }}
@@ -806,7 +806,7 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
               {/* Show existing sessions for selected date */}
               {date && sessionsByDate[date] && sessionsByDate[date].length > 0 && (
                 <div style={{ marginTop: 8, padding: '8px 10px', background: 'var(--bg-highlight)', border: '1px solid var(--border-light)', borderRadius: 8 }}>
-                  <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--role-color)', marginBottom: 4 }}>Already scheduled:</div>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--role-text)', marginBottom: 4 }}>Already scheduled:</div>
                   {sessionsByDate[date].sort((a, b) => (a.scheduled_time || '').localeCompare(b.scheduled_time || '')).map((s, si) => {
                     const t = s.scheduled_time ? (() => { const [h] = s.scheduled_time.split(':').map(Number); const ampm = h >= 12 ? 'p' : 'a'; const dh = h > 12 ? h - 12 : h === 0 ? 12 : h; return `${dh}${ampm}`; })() : '?';
                     const statusColors = { confirmed: 'var(--role-color)', in_progress: 'var(--color-warning)', completed: 'var(--text-secondary)', open: 'var(--accent-color)', requested: 'var(--accent-color)', pending: 'var(--accent-color)' };
@@ -867,7 +867,7 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
                                   cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0, transition: 'all 0.15s',
                                   border: isSubSelected ? '2px solid #1b6b5a' : '1px solid #e0e0e0',
                                   background: isSubSelected ? 'var(--color-success-bg)' : 'var(--bg-surface)',
-                                  color: isSubSelected ? 'var(--role-color)' : 'var(--text-muted)',
+                                  color: isSubSelected ? 'var(--role-text-on-tint)' : 'var(--text-muted)',
                                   minWidth: 36,
                                 }}>
                                 :{String(mins).padStart(2,'0')}
@@ -1006,7 +1006,7 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
                 <span>{(() => { const p = date.split('-').map(Number); return new Date(p[0], p[1]-1, p[2]).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }); })()}</span>
                 <span>{formatTime12(time)}</span>
                 <span>{duration}h</span>
-                {recurrence !== 'none' && <span style={{ color: 'var(--role-color)', fontWeight: 600 }}>{recurrence === 'weekly' ? 'Weekly' : recurrence === 'biweekly' ? 'Biweekly' : `${recurrenceDays.length}\u00D7/week`} x{recurrenceWeeks}</span>}
+                {recurrence !== 'none' && <span style={{ color: 'var(--role-text)', fontWeight: 600 }}>{recurrence === 'weekly' ? 'Weekly' : recurrence === 'biweekly' ? 'Biweekly' : `${recurrenceDays.length}\u00D7/week`} x{recurrenceWeeks}</span>}
               </div>
             </div>
 
@@ -1056,7 +1056,7 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
                     const facts = [
                       cg.rating ? `★ ${Number(cg.rating).toFixed(1)}${cg.reviewCount ? ` (${cg.reviewCount})` : ''}` : 'No ratings yet',
                       cg.visitCount > 0 ? `${cg.visitCount} visit${cg.visitCount === 1 ? '' : 's'}${recipientFirst ? ' with ' + recipientFirst : ''}` : (cg.distance || null),
-                      cg.visitCount > 0 && seen ? `last ${seen.replace(/^last /, '')}` : null,
+                      cg.visitCount > 0 && seen ? `seen ${seen}` : null,
                     ].filter(Boolean).join(' · ');
                     const bookedText = booked
                       ? (cg.booked && cg.booked.sameRecipient && cg.booked.time
@@ -1074,11 +1074,11 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
                         {cg.photo
                           ? <img src={cg.photo} alt="" style={{ width: 40, height: 40, borderRadius: 20, objectFit: 'cover', flexShrink: 0 }} />
                           : <span aria-hidden="true" style={{ width: 40, height: 40, borderRadius: 20, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                              background: 'var(--bg-primary)', color: 'var(--role-color)', fontWeight: 700, fontSize: 14, border: '1px solid var(--border-light)' }}>{initials(cg.name)}</span>}
+                              background: 'var(--bg-primary)', color: 'var(--role-text)', fontWeight: 700, fontSize: 14, border: '1px solid var(--border-light)' }}>{initials(cg.name)}</span>}
                         <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
                           <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>
                             {cg.name}
-                            {isBest && <span style={{ marginLeft: 6, fontSize: 11, fontWeight: 700, color: 'var(--role-color)', background: 'var(--color-success-bg)', border: '1px solid var(--role-color)', padding: '1px 6px', borderRadius: 8 }}>BEST MATCH</span>}
+                            {isBest && <span style={{ marginLeft: 6, fontSize: 11, fontWeight: 700, color: 'var(--role-text)', background: 'var(--bg-card)', border: '1px solid var(--role-text)', padding: '1px 6px', borderRadius: 8 }}>BEST MATCH</span>}
                           </span>
                           <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{bookedText || facts}</span>
                         </span>
@@ -1126,7 +1126,7 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
                         <div style={{ fontSize: 12, color: 'var(--text-secondary)', padding: '0 4px' }}>
                           {selectedCaregiver.name.split(' ')[0]} isn{'’'}t on schedule then. A higher rate makes a yes more likely.{' '}
                           <button type="button" onClick={() => setProposedRate(String(Math.round(localAvgRate * 1.25)))}
-                            style={{ background: 'none', border: 'none', color: 'var(--role-color)', fontWeight: 700, cursor: 'pointer', fontSize: 12, textDecoration: 'underline', padding: 0 }}>
+                            style={{ background: 'none', border: 'none', color: 'var(--role-text)', fontWeight: 700, cursor: 'pointer', fontSize: 12, textDecoration: 'underline', padding: 0 }}>
                             Offer ${Math.round(localAvgRate * 1.25)}/hr
                           </button>
                         </div>
@@ -1236,7 +1236,7 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
 
             {/* ── More options: overtime ── */}
             <button type="button" aria-expanded={showMoreOptions} onClick={() => setShowMoreOptions(!showMoreOptions)}
-              style={{ minHeight: 44, background: 'none', border: 'none', color: 'var(--role-color)', fontWeight: 600, fontSize: 14, cursor: 'pointer', textAlign: 'left', padding: '0 2px', marginBottom: 6 }}>
+              style={{ minHeight: 44, background: 'none', border: 'none', color: 'var(--role-text)', fontWeight: 600, fontSize: 14, cursor: 'pointer', textAlign: 'left', padding: '0 2px', marginBottom: 6 }}>
               {showMoreOptions ? 'Fewer options' : `More options · ${flexTiming === 'strict' ? 'Strict end' : flexTiming === 'open' ? 'Open-ended (+2 hrs)' : 'Flexible overtime (+30 min)'}`}
             </button>
             {showMoreOptions && (
@@ -1251,9 +1251,9 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
                     <button key={opt.id} type="button" aria-pressed={flexTiming === opt.id} onClick={() => setFlexTiming(opt.id)} style={{
                       flex: 1, padding: '8px 6px', borderRadius: 8, cursor: 'pointer', textAlign: 'center',
                       border: flexTiming === opt.id ? '2px solid var(--role-color)' : '1px solid var(--border-color)',
-                      background: flexTiming === opt.id ? 'var(--color-success-bg)' : 'transparent',
+                      background: 'transparent',
                     }}>
-                      <div style={{ fontSize: 12, fontWeight: 700, color: flexTiming === opt.id ? 'var(--role-color)' : 'var(--text-primary)' }}>{opt.label}</div>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: flexTiming === opt.id ? 'var(--role-text)' : 'var(--text-primary)' }}>{opt.label}</div>
                       <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 2 }}>{opt.desc}</div>
                     </button>
                   ))}
@@ -1274,7 +1274,7 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
                   <span style={{ fontWeight: 700 }}>
                     ${(displayCost.familyTotal || displayCost.total).toFixed(2)}
                     <button type="button" aria-expanded={showCostDetail} onClick={() => setShowCostDetail(!showCostDetail)}
-                      style={{ marginLeft: 8, background: 'none', border: 'none', color: 'var(--role-color)', fontWeight: 600, fontSize: 13, cursor: 'pointer', padding: 0 }}>
+                      style={{ marginLeft: 8, background: 'none', border: 'none', color: 'var(--role-text)', fontWeight: 600, fontSize: 13, cursor: 'pointer', padding: 0 }}>
                       {showCostDetail ? 'Hide' : 'Details'}
                     </button>
                   </span>
@@ -1334,8 +1334,8 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
             </div>
           )}
           {step === 2 && (
-            <button className="btn btn-primary" onClick={handleSubmit}>
-              {editDraft ? 'Save changes' : (selectedCaregiver ? `Offer to ${selectedCaregiver.name.split(' ')[0]}${proposedRate ? ` \u00B7 $${proposedRate}/hr` : ''}` : 'Post open request')}
+            <button className="btn btn-primary" onClick={handleSubmit} disabled={whoMode === 'pick' && !selectedCaregiver && !editDraft}>
+              {editDraft ? 'Save changes' : (whoMode === 'pick' && !selectedCaregiver) ? 'Choose a caregiver' : (selectedCaregiver ? `Offer to ${selectedCaregiver.name.split(' ')[0]}${proposedRate ? ` \u00B7 $${proposedRate}/hr` : ''}` : 'Post open request')}
             </button>
           )}
         </div>
