@@ -686,6 +686,11 @@ const VisitDetailModal = window.VisitDetailModal = ({ sessionId, role, onClose, 
                     );
                   })()}
 
+                  {/* v1.154.0 — the hand-off this caregiver left the next one, and whether it was read */}
+                  {typeof HandoffReport !== 'undefined' && (
+                    <HandoffReport sessionId={sessionId} timezone={data.session && data.session.care_timezone} />
+                  )}
+
                   {/* v1.149 — "Got it": Pete wants to know his sister and brother read these.
                       At the END of the report — read it, then say so. (v1.149.0 put it above
                       the caregiver's notes; caught on staging in v1.149.2's check.) */}

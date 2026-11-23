@@ -3780,6 +3780,33 @@ async function initializeDatabase() {
             AND (co.expires_at IS NULL OR co.expires_at > NOW())`,
       ],
     },
+    {
+      // v1.154.0 — the hand-off note. Pete, 11/23, the first day one caregiver handed over to
+      // another: "have the caretaker who's leaving fill out notes before the other caretaker
+      // shows up or checks in... prompt for notes and handoff situation 15 minutes prior."
+      // One row per outgoing visit. `skipped` = she chose Skip (the family sees that too).
+      id: "097_visit_handoffs",
+      statements: [
+        `CREATE TABLE IF NOT EXISTS visit_handoffs (
+           id TEXT PRIMARY KEY,
+           from_session_id TEXT NOT NULL REFERENCES care_sessions(id),
+           to_session_id TEXT REFERENCES care_sessions(id),
+           care_recipient_id TEXT NOT NULL REFERENCES care_recipients(id),
+           from_user_id TEXT NOT NULL REFERENCES users(id),
+           to_user_id TEXT REFERENCES users(id),
+           condition TEXT,
+           note TEXT,
+           snapshot TEXT,
+           skipped INTEGER NOT NULL DEFAULT 0,
+           created_at TIMESTAMPTZ DEFAULT NOW(),
+           updated_at TIMESTAMPTZ DEFAULT NOW(),
+           read_at TIMESTAMPTZ
+         )`,
+        `CREATE UNIQUE INDEX IF NOT EXISTS idx_visit_handoffs_from ON visit_handoffs(from_session_id)`,
+        `CREATE INDEX IF NOT EXISTS idx_visit_handoffs_to ON visit_handoffs(to_session_id)`,
+        `ALTER TABLE visit_logs ADD COLUMN IF NOT EXISTS handoff_prompt_sent_at TIMESTAMPTZ`,
+      ],
+    },
   ];
   for (const m of MIGRATIONS_V2) {
     if (applied.has(m.id)) continue;

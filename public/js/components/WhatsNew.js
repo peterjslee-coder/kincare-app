@@ -508,6 +508,21 @@ const WN_PREVIEWS = {
       </div>
     </div>
   ),
+  // v1.154.0 — the hand-off note from one caregiver to the next
+  handoffNote: () => (
+    <div>
+      <div style={{ ...wnCard, border: '1.5px solid var(--role-color)' }}>
+        <div style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--text-primary)' }}>Hand-off from Sam</div>
+        <div style={{ fontSize: 10, color: 'var(--text-secondary)' }}>Written 4:48 PM</div>
+        <div style={{ marginTop: 5 }}>
+          <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 8, background: 'var(--color-success-bg)', color: 'var(--text-primary)' }}>Napping</span>
+        </div>
+        <div style={{ fontSize: 11, color: 'var(--text-primary)', marginTop: 5 }}>Mom is napping until 5:30. The back door sticks.</div>
+        <div style={{ fontSize: 10.5, color: 'var(--text-secondary)', marginTop: 4 }}>Evening meds {'·'} Still due 6:00 PM</div>
+        <div style={{ marginTop: 6, textAlign: 'center', fontSize: 11, fontWeight: 700, padding: '6px 0', borderRadius: 7, background: 'var(--color-success)', color: 'var(--text-on-primary)' }}>Got it</div>
+      </div>
+    </div>
+  ),
   // v1.153.3 — asleep at check-in, asked again at fifteen minutes
   asleepCheckIn: () => (
     <div>

@@ -244,6 +244,24 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
   const [savingCondition, setSavingCondition] = useState(false);
   // v1.153.3 — asleep at check-in: "does she know you're here?" once she wakes. "Still asleep"
   // hides the card for 30 minutes on this phone; the server keeps the question open.
+  // v1.154.0 — the hand-off note. { s, then } — `then` is the check-out to continue with.
+  const [handoffFor, setHandoffFor] = useState(null);
+  // Check Out asks for the hand-off first when someone else is coming right after and none is
+  // written yet. Any failure to ask goes straight on to check-out: the note never blocks pay.
+  const beginCheckOut = async (s, go) => {
+    if (!s || s.handoffWritten) { go(); return; }
+    try {
+      const ctl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+      const timer = setTimeout(() => ctl && ctl.abort(), 4000);
+      const r = await apiFetch(`/api/handoffs/session/${s.id}`, ctl ? { signal: ctl.signal } : undefined);
+      clearTimeout(timer);
+      if (r?.ok) {
+        const d = await r.json();
+        if (d.next && !d.outgoing) { setHandoffFor({ s, then: go }); return; }
+      }
+    } catch (e) { /* go on to check-out */ }
+    go();
+  };
   const [awarenessSnooze, setAwarenessSnooze] = useState({});
   const [savingAwareness, setSavingAwareness] = useState(false);
   const answerAwareness = async (sessionId, answer) => {
@@ -1997,7 +2015,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                             Paused{s.breakStartedAt ? ` since ${TimezoneHelper.formatTimestamp(s.breakStartedAt, s.timezone, { hour: 'numeric', minute: '2-digit' }) || ''}` : ''}
                           </div>
                         )}
-                        <button onClick={() => {
+                        <button onClick={() => beginCheckOut(s, () => {
                           setCheckOutMood([]);
                           setCheckOutTags([]);
                           setCheckOutCareFeedback('');
@@ -2008,7 +2026,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                           setEarlyDepartureReason('');
                           setEarlyDepartureAcked(false);
                           setCheckOutSession(s);
-                        }} style={{
+                        })} style={{
                           padding: '10px 22px', background: 'var(--color-error)', color: 'var(--text-on-primary)', border: 'none',
                           borderRadius: '10px', fontSize: '14px', fontWeight: 600, cursor: 'pointer',
                           boxShadow: '0 2px 8px rgba(198,40,40,0.3)', whiteSpace: 'nowrap',
@@ -2219,6 +2237,24 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                           </div>
                         );
                       })()}
+                    </div>
+                  )}
+
+                  {/* ─── v1.154.0 — the hand-off: asked 15 minutes before the end ─── */}
+                  {isActive && s.handoffAsked && !s.handoffWritten && (
+                    <button data-testid="handoff-ask" onClick={(e) => { e.stopPropagation(); setHandoffFor({ s, then: null }); }}
+                      style={{
+                        marginTop: 10, width: '100%', minHeight: 48, padding: '10px 14px', borderRadius: 12, textAlign: 'left', cursor: 'pointer',
+                        border: '1.5px solid var(--role-color)', background: 'var(--bg-teal-light)', color: 'var(--text-primary)',
+                        font: 'inherit', fontSize: 14, fontWeight: 700,
+                      }}>
+                      Someone else is next {'—'} leave a hand-off note {'›'}
+                    </button>
+                  )}
+                  {/* The one left for this visit, before she checks in */}
+                  {!isActive && s.incomingHandoff && !s.incomingHandoff.readAt && typeof HandoffIncoming !== 'undefined' && (
+                    <div style={{ marginTop: 10 }} onClick={(e) => e.stopPropagation()}>
+                      <HandoffIncoming sessionId={s.id} timezone={s.timezone} />
                     </div>
                   )}
 
@@ -4058,6 +4094,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
               }
               setCheckInSession(s);
             } else if (s.action === 'check-out') {
+              beginCheckOut(s, () => {
               setCheckOutMood([]);
               setCheckOutTags([]);
               setCheckOutCareFeedback('');
@@ -4078,6 +4115,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                 });
               }
               setCheckOutSession(s);
+              });
             } else {
               setVisitLogSession(s);
             }
@@ -4089,6 +4127,22 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
 
         </div>{/* end lock-content */}
       </div>{/* end onboarding-content-lock */}
+
+      {/* v1.154.0 — the hand-off note, before check-out or from the visit card */}
+      {handoffFor && typeof HandoffSheet !== 'undefined' && (
+        <HandoffSheet
+          sessionId={handoffFor.s.id}
+          timezone={handoffFor.s.timezone}
+          checkingOut={!!handoffFor.then}
+          onClose={() => setHandoffFor(null)}
+          onDone={async () => {
+            const then = handoffFor.then;
+            setHandoffFor(null);
+            try { const dr = await apiFetch('/api/dashboard'); if (dr?.ok) setData(await dr.json()); } catch {}
+            if (then) then();
+          }}
+        />
+      )}
 
       {/* Visit Log Modal */}
       {visitLogSession && (
@@ -4273,6 +4327,11 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                     return [bd?.sessionServiceType, when].filter(Boolean).join(' · ');
                   })()
                 ),
+
+                // v1.154.0 — the hand-off from the caregiver before her comes first of all.
+                (typeof HandoffIncoming !== 'undefined')
+                  ? React.createElement(HandoffIncoming, { sessionId: checkInSession.id, timezone: checkInSession.timezone })
+                  : null,
 
                 // v1.109.9 — the to-dos the family left for whoever came next (e4cd314a). Read here,
                 // before she starts, so the stove gets locked on THIS visit, not the next one.

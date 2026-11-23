@@ -31,6 +31,37 @@ const WINDOW_DAYS = 45;
 
 const ENTRIES = [
   {
+    id: "handoff-caregiver",
+    version: "1.154.0",
+    date: "2026-11-23",
+    audience: ["caregiver"],
+    title: "Hand-off notes for the next caregiver",
+    body: "When someone else comes right after you, the app asks you 15 minutes before you leave for a quick hand-off note. The next caregiver reads it first thing at check-in.",
+    howTo: [
+      "Tap \"leave a hand-off note\" on your visit, or wait for Check Out to ask",
+      "Tap how they are right now; meals, meds and to-dos fill in from your day",
+      "Add anything the next caregiver should know, then Send",
+      "Coming in after someone? Their note is at the top of your check-in: tap Got it",
+    ],
+    examples: ["Mom is napping, wake Mom by 5:30", "The back door sticks, lift the handle"],
+    preview: "handoffNote",
+  },
+  {
+    id: "handoff-family",
+    version: "1.154.0",
+    date: "2026-11-23",
+    audience: ["family"],
+    title: "See what one caregiver handed to the next",
+    body: "When two visits run back to back, the first caregiver can leave the next one a hand-off note. It shows in the visit report, with the time the next caregiver read it.",
+    howTo: [
+      "Open the earlier caregiver's visit from Home or the Schedule",
+      "Scroll to Hand-off: the note, how they were, and what was still due",
+      "A green check shows when the next caregiver read it",
+    ],
+    examples: ["Sam to Jane at 5:00: \"Mom is napping\"", "Jane read it at 4:57"],
+    preview: "handoffNote",
+  },
+  {
     id: "asleep-at-check-in",
     version: "1.153.3",
     date: "2026-11-23",

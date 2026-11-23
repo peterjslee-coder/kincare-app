@@ -78,6 +78,7 @@ async function seed({ force = false, demoOnly = false } = {}) {
         const sp = sessionIds.map(() => '?').join(',');
         await db.prepare(`DELETE FROM visit_photos WHERE visit_log_id IN (SELECT id FROM visit_logs WHERE session_id IN (${sp}))`).run(...sessionIds);
         await trySavepoint(() => db.prepare(`DELETE FROM visit_trips WHERE session_id IN (${sp})`).run(...sessionIds)); // v1.126.1
+        await trySavepoint(() => db.prepare(`DELETE FROM visit_handoffs WHERE from_session_id IN (${sp}) OR to_session_id IN (${sp})`).run(...sessionIds, ...sessionIds)); // v1.154.0
         await db.prepare(`DELETE FROM visit_logs WHERE session_id IN (${sp})`).run(...sessionIds);
         await db.prepare(`DELETE FROM session_offers WHERE session_id IN (${sp})`).run(...sessionIds);
         await db.prepare(`DELETE FROM reviews WHERE session_id IN (${sp})`).run(...sessionIds);
