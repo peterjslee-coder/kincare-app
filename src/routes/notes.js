@@ -102,12 +102,12 @@ router.get("/:careRecipientId", async (req, res) => {
     categories: safeJson(n.categories, []),
     ai_highlights: safeJson(n.ai_highlights, null),
   })));
-  // v1.148.0 — who has tapped "Got it", and who has not yet. Also after the visibility filter.
+  // v1.149.0 — who has tapped "Got it". Also after the visibility filter.
   // A failure here costs the receipts, never the notes.
   let withReceipts = withReactions;
   try {
     withReceipts = await require("../utils/readReceipts").attachNoteReceipts(db, withReactions, {
-      recipientId, viewerId: req.user.id,
+      viewerId: req.user.id,
     });
   } catch (e) { captureException(e, { where: "notes: read receipts" }); }
   res.json({ notes: withReceipts });

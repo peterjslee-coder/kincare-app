@@ -72,12 +72,13 @@ const notesFor = (who) => h.request.get(`/api/notes/${recipientId}`).set(h.auth(
 const names = (list) => list.map((r) => r.name.split(" ")[0]).sort();
 
 describe("care notes", () => {
-  test("before anyone reads it, the writer sees both siblings under Not yet", async () => {
+  test("before anyone reads it, nobody is listed — and nobody is ever listed as NOT having read it", async () => {
     const res = await notesFor(owner);
     expect(res.status).toBe(200);
     const n = res.body.notes.find((x) => x.id === noteId);
     expect(n.readReceipts.readBy).toEqual([]);
-    expect(names(n.readReceipts.notYet)).toEqual(["Deborah", "Mike"]);
+    // Pete, 11/22: "I don't care who hasn't seen it." The block carries no such list at all.
+    expect(Object.keys(n.readReceipts).sort()).toEqual(["canMark", "myReadAt", "readBy", "readByMe"]);
     // Pete wrote it; he is never asked to confirm it.
     expect(n.readReceipts.canMark).toBe(false);
   });
@@ -91,11 +92,9 @@ describe("care notes", () => {
     expect(res.status).toBe(200);
     expect(res.body.readReceipts.readByMe).toBe(true);
     expect(names(res.body.readReceipts.readBy)).toEqual(["Deborah"]);
-    expect(names(res.body.readReceipts.notYet)).toEqual(["Mike"]);
 
     const seenByPete = (await notesFor(owner)).body.notes.find((x) => x.id === noteId);
     expect(names(seenByPete.readReceipts.readBy)).toEqual(["Deborah"]);
-    expect(names(seenByPete.readReceipts.notYet)).toEqual(["Mike"]);
   });
 
   test("tapping twice leaves one receipt; Undo takes it away", async () => {
@@ -107,7 +106,7 @@ describe("care notes", () => {
     const res = await unmark(bro, "note", noteId);
     expect(res.status).toBe(200);
     expect(res.body.readReceipts.readByMe).toBe(false);
-    expect(names(res.body.readReceipts.notYet)).toEqual(["Mike"]);
+    expect(names(res.body.readReceipts.readBy)).toEqual(["Deborah"]);
   });
 
   test("the writer cannot mark their own note", async () => {
@@ -120,10 +119,9 @@ describe("care notes", () => {
     expect((await h.request.get(`/api/read-receipts/note/${noteId}`).set(h.auth(stranger.token))).status).toBe(404);
   });
 
-  test("an old note gets no button and no Not yet list", async () => {
+  test("an old note gets no button", async () => {
     const n = (await notesFor(sis)).body.notes.find((x) => x.id === oldNoteId);
     expect(n.readReceipts.canMark).toBe(false);
-    expect(n.readReceipts.notYet).toEqual([]);
   });
 
   test("an unknown target type is refused", async () => {
@@ -132,11 +130,12 @@ describe("care notes", () => {
 });
 
 describe("visit reports", () => {
-  test("a sibling can mark a finished visit read; the caregiver is never on Not yet", async () => {
+  test("a sibling can mark a finished visit read; the caregiver cannot mark her own", async () => {
     const res = await mark(bro, "session", sessionId);
     expect(res.status).toBe(200);
     expect(names(res.body.readReceipts.readBy)).toEqual(["Mike"]);
-    expect(names(res.body.readReceipts.notYet)).toEqual(["Deborah", "Pete"]);
+    expect(res.body.readReceipts.notYet).toBeUndefined();
+    expect((await mark(cg, "session", sessionId)).status).not.toBe(200);
   });
 
   test("a visit that has not happened has nothing to mark", async () => {

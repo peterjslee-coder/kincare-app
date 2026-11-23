@@ -2,7 +2,7 @@
 //
 // Pete: "a big green 'Got it! - Mark Read'" on care notes and visit reports, so he can see
 // whether his sister and brother are reading. POST marks, DELETE undoes, GET reconciles.
-// Every answer is the whole block (readBy / notYet / readByMe / canMark), never a delta.
+// Every answer is the whole block (readBy / readByMe / myReadAt / canMark), never a delta.
 //
 // Authorisation lives in utils/readReceipts.js TARGETS — the same rule that decides whether
 // this person may READ the thing. 404 when they may not (utils/access.js convention).

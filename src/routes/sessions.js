@@ -2842,7 +2842,9 @@ router.post("/:id/check-out", blockWhileImpersonating("end a real visit and sett
           if (userId === req.user.id) continue;
           await sendPushToUser(userId, {
             title: "Session Complete",
-            body: `${caregiverName} has checked out from ${session.recipient_first_name}'s session${durationStr ? ` (${durationStr})` : ""}${overtimeNote}`,
+            // v1.149.1 — the tap opens the visit report with its Got it button (Dashboard claims
+            // `session:` focus and opens VisitDetailModal), so the push says so.
+            body: `${caregiverName} has checked out from ${session.recipient_first_name}'s session${durationStr ? ` (${durationStr})` : ""}${overtimeNote} Tap to read the visit report.`,
             tag: famTag,
             data: { type: "session_complete", sessionId: req.params.id, page: "dashboard" },
           }, "session_complete");
@@ -5372,7 +5374,7 @@ router.get("/:id", async (req, res) => {
     }
   } catch (e) { captureException(e, { where: "sessions: canEditInstructions" }); }
 
-  // v1.148.0 — "Got it" on the visit report: who has read it, who has not yet.
+  // v1.149.0 — "Got it" on the visit report: who has read it.
   let readReceipts = null;
   try {
     if (session.status === "completed") {

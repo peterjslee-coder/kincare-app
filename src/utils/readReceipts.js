@@ -10,14 +10,17 @@
 //
 // Same shape as utils/reactions.js: the TARGETS table is the whitelist AND the authorisation
 // rule. Each entry says how to find the care recipient, who wrote the thing (they never need to
-// mark their own), whether a given person may read it, and who the expected readers are.
+// mark their own), and whether a given person may read it.
+//
+// v1.149.1 — Pete: "I don't care who hasn't seen it. I care who has seen it and marked that
+// they've read it." There is no "Not yet" list, and nothing here works one out: the only
+// names a receipt ever carries are the people who tapped.
 
 const crypto = require("crypto");
 
-// The big button, and the "Not yet" list, only for things from the last two weeks. Without a
-// window, the day this ships every note in Betty's history would grow a green button and
-// every one of them would say "Not yet: everyone" — a wall of nagging about things nobody
-// was ever asked to confirm. "Seen by" shows on everything, whatever its age.
+// The big button only for things from the last two weeks. Without a window, the day this
+// ships every note in Betty's history would grow a green button — a wall of asks about things
+// nobody was ever asked to confirm. "Seen by" shows on everything, whatever its age.
 const ASK_WINDOW_DAYS = 14;
 
 function withinAskWindow(createdAt, now = Date.now()) {
@@ -36,13 +39,12 @@ const TARGETS = {
       return { recipientId: row.care_recipient_id, authorId: row.author_id, createdAt: row.created_at, row };
     },
     // The notes list's own rule, row by row — an observation hidden from someone must not be
-    // markable (or listed as "Not yet") for them either.
+    // markable for them either.
     async mayRead(db, t, userId) {
       const { noteAccess, noteRowReadable } = require("./noteVisibility");
       const na = await noteAccess(db, t.recipientId, userId);
       return noteRowReadable(na, t.row);
     },
-    cap: "READ_NOTES",
   },
   session: {
     async load(db, id) {
@@ -70,7 +72,6 @@ const TARGETS = {
       const { can, CAP } = require("./capabilities");
       return can(await recipientCapabilities(db, t.recipientId, userId), CAP.READ_VISITS);
     },
-    cap: "READ_VISITS",
   },
 };
 
@@ -96,38 +97,14 @@ async function receiptsForMany(db, targetType, ids) {
 }
 
 /**
- * Everyone expected to read things about this recipient: holders of the capability, minus the
- * person themselves (their own simple phone is not "the team"). Names only; one query each for
- * the people, then the capability walk utils/access already does for push fan-out.
+ * The block the client draws: who has read it, and whether the viewer is the one who should
+ * be offered the button.
  */
-async function audienceFor(db, recipientId, capName) {
-  const { usersWithCapability } = require("./access");
-  const { CAP } = require("./capabilities");
-  const ids = await usersWithCapability(db, recipientId, CAP[capName]);
-  if (!ids.length) return [];
-  const cr = await db.prepare("SELECT linked_user_id FROM care_recipients WHERE id = ?").get(recipientId);
-  const rows = await db.prepare(
-    "SELECT id, first_name, last_name, role FROM users WHERE id = ANY(?) ORDER BY first_name"
-  ).all(ids);
-  return rows
-    .filter((u) => u.role !== "care_for" && (!cr || u.id !== cr.linked_user_id))
-    .map((u) => ({ userId: u.id, name: nameOf(u) }));
-}
-
-/**
- * The block the client draws: who has read it, who has not yet (recent things only), and
- * whether the viewer is the one who should be offered the button.
- */
-function shapeBlock({ readBy, audience, authorId, createdAt, viewerId, mayRead }) {
-  const readIds = new Set(readBy.map((r) => r.userId));
+function shapeBlock({ readBy, authorId, createdAt, viewerId, mayRead }) {
   const recent = withinAskWindow(createdAt);
-  const notYet = recent
-    ? audience.filter((a) => a.userId !== authorId && !readIds.has(a.userId)).map((a) => ({ userId: a.userId, name: a.name }))
-    : [];
   const mine = readBy.find((r) => r.userId === viewerId) || null;
   return {
     readBy,
-    notYet,
     readByMe: !!mine,
     myReadAt: mine ? mine.readAt : null,
     // The writer never confirms their own note; a caregiver never confirms her own report.
@@ -137,27 +114,19 @@ function shapeBlock({ readBy, audience, authorId, createdAt, viewerId, mayRead }
 
 /**
  * Attach `readReceipts` to every note in a list that has already been through the visibility
- * filter. One receipts query for the page; one audience walk per recipient, not per note.
+ * filter (so the viewer may read each one). One receipts query for the whole page.
  */
-async function attachNoteReceipts(db, notes, { recipientId, viewerId }) {
+async function attachNoteReceipts(db, notes, { viewerId }) {
   const list = notes || [];
   if (!list.length) return list;
-  const { noteAccess, noteRowReadable } = require("./noteVisibility");
   const by = await receiptsForMany(db, "note", list.map((n) => n.id));
-  const audience = await audienceFor(db, recipientId, "READ_NOTES");
-  // An observation may be hidden from some of the audience — ask each person's own rule once.
-  const access = {};
-  for (const a of audience) access[a.userId] = await noteAccess(db, recipientId, a.userId);
-  return list.map((n) => {
-    const aud = audience.filter((a) => noteRowReadable(access[a.userId], n));
-    return {
-      ...n,
-      readReceipts: shapeBlock({
-        readBy: by[n.id] || [], audience: aud, authorId: n.author_id,
-        createdAt: n.created_at, viewerId, mayRead: true,
-      }),
-    };
-  });
+  return list.map((n) => ({
+    ...n,
+    readReceipts: shapeBlock({
+      readBy: by[n.id] || [], authorId: n.author_id,
+      createdAt: n.created_at, viewerId, mayRead: true,
+    }),
+  }));
 }
 
 /** The block for one target, or null when it has none (not finished, not readable). */
@@ -168,15 +137,8 @@ async function blockFor(db, targetType, targetId, viewerId) {
   if (!t || t.notReady) return null;
   const mayRead = await T.mayRead(db, t, viewerId);
   const by = await receiptsForMany(db, targetType, [targetId]);
-  let audience = await audienceFor(db, t.recipientId, T.cap);
-  if (targetType === "note") {
-    const { noteAccess, noteRowReadable } = require("./noteVisibility");
-    const keep = [];
-    for (const a of audience) if (noteRowReadable(await noteAccess(db, t.recipientId, a.userId), t.row)) keep.push(a);
-    audience = keep;
-  }
   return shapeBlock({
-    readBy: by[targetId] || [], audience, authorId: t.authorId,
+    readBy: by[targetId] || [], authorId: t.authorId,
     createdAt: t.createdAt, viewerId, mayRead,
   });
 }
@@ -197,5 +159,5 @@ async function unmarkRead(db, { targetType, targetId, userId }) {
 
 module.exports = {
   ASK_WINDOW_DAYS, TARGETS, isKnownTarget, withinAskWindow, shapeBlock,
-  receiptsForMany, audienceFor, attachNoteReceipts, blockFor, markRead, unmarkRead,
+  receiptsForMany, attachNoteReceipts, blockFor, markRead, unmarkRead,
 };
