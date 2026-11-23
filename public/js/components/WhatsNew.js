@@ -466,6 +466,16 @@ const WN_PREVIEWS = {
   ),
   // v1.147.0 — the Undo bar after accepting a visit
   // v1.150.0 — start and end set the visit; length is worked out
+  // v1.153.0 — in-app calls on the Simple screen and the Hub
+  simpleCalls: () => (
+    <div style={{ background: '#1f1a16', borderRadius: 12, padding: '14px 10px', textAlign: 'center', color: '#f3ebe0' }}>
+      <div style={{ width: 44, height: 44, borderRadius: 22, margin: '0 auto', border: '3px solid #e8b04a', background: 'var(--role-color-light, #f3e5f5)', color: 'var(--role-color)', fontSize: 18, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>S</div>
+      <div style={{ fontSize: 15, fontWeight: 800, marginTop: 6 }}>Sam is calling</div>
+      <div style={{ fontSize: 10.5, color: '#cbbfae' }}>Video call</div>
+      <div style={{ margin: '8px auto 4px', width: '80%', background: '#1b7a3d', color: '#fff', borderRadius: 20, padding: '6px 0', fontSize: 13, fontWeight: 800 }}>{'\u{1F4DE}'} Answer</div>
+      <div style={{ fontSize: 10.5, color: '#cbbfae' }}>Not now</div>
+    </div>
+  ),
   // v1.152.0 — InPlace Hub: the Simple screen as a little TV on the counter
   inplaceHub: () => (
     <div style={{ background: '#1d1b19', borderRadius: 12, padding: 6 }}>

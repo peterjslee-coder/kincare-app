@@ -210,25 +210,9 @@ function callInviteThrottled(socketId) {
   return recent.length > CALL_INVITES_PER_MIN;
 }
 
+// v1.153.0 — the rule lives in utils/callPolicy.js so it can be tested; see there.
 async function mayCall(callerId, targetUserId) {
-  if (!callerId || !targetUserId || callerId === targetUserId) return false;
-  const db = await getDb();
-  const [me, them] = await Promise.all([
-    db.prepare("SELECT is_admin, first_name, last_name FROM users WHERE id = ?").get(callerId),
-    db.prepare("SELECT is_admin, COALESCE(is_active,1) AS is_active FROM users WHERE id = ?").get(targetUserId),
-  ]);
-  if (!them || !them.is_active) return false;
-  try {
-    const { isBlockedBetween } = require("./utils/blocks");
-    if (await isBlockedBetween(db, callerId, targetUserId)) return false;
-  } catch { /* blocks unavailable — fall through to the membership test */ }
-  if (me?.is_admin || them.is_admin) return true;
-  const shared = await db.prepare(`
-    SELECT 1 FROM conversation_members a
-    JOIN conversation_members b ON a.conversation_id = b.conversation_id
-    WHERE a.user_id = ? AND b.user_id = ? LIMIT 1
-  `).get(callerId, targetUserId);
-  return !!shared;
+  return require("./utils/callPolicy").mayCall(await getDb(), callerId, targetUserId);
 }
 
 io.on("connection", (socket) => {
@@ -861,7 +845,7 @@ app.use("/api/safety", require("./routes/safety"));
 
 // ─── App version check (lightweight, no auth) ───
 const { cancelPassedPrivateOffers, releaseExpiredExclusiveOffers } = require("./utils/exclusiveOffers");
-const APP_VERSION = "1.152.0";
+const APP_VERSION = "1.153.0";
 app.get("/api/version", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({ version: APP_VERSION, minAppVersion: MIN_APP_VERSION });

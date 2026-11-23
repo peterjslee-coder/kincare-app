@@ -67,13 +67,15 @@ test("only the leader reads or changes the phone settings", async () => {
   expect(ids).not.toContain(mom.user.id);
 });
 
-test("call buttons ring only team members with a phone number", async () => {
+test("call buttons ring only team members (in-app since v1.153.0, so no phone number needed)", async () => {
   const put = (body) => h.request.put(`/api/care-recipients/${recipientId}/simple-mode`).set(h.auth(leader.token)).send(body);
   expect((await put({ on: true, callUserIds: [stranger.user.id] })).status).toBe(400);
-  expect((await put({ on: true, callUserIds: [sister.user.id] })).status).toBe(400); // no phone
+  const noPhone = await put({ on: true, callUserIds: [sister.user.id], show: { calls: true }, callType: "video" });
+  expect(noPhone.status).toBe(200);
+  expect(noPhone.body.callType).toBe("video");
   const ok = await put({ on: true, callUserIds: [leader.user.id], show: { calls: true } });
   expect(ok.status).toBe(200);
-  expect(ok.body).toMatchObject({ on: true, callUserIds: [leader.user.id] });
+  expect(ok.body).toMatchObject({ on: true, callUserIds: [leader.user.id], callType: "video" }); // kept
 });
 
 test("a note FOR her goes only to her phone, says who and never what", async () => {

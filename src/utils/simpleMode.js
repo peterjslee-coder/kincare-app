@@ -86,10 +86,15 @@ function parseSimpleMode(text) {
   const clearedNoteId = v && typeof v.clearedNoteId === "string" ? v.clearedNoteId : null;
   const tIds = v && Array.isArray(v.textUserIds) ? v.textUserIds.filter((x) => typeof x === "string") : [];
   const textConversationId = v && typeof v.textConversationId === "string" ? v.textConversationId : null;
+  // v1.153.0 — Call buttons ring the person's InPlace app (Twilio), voice unless the leader
+  // picked video. They used to hand a number to the phone's dialer, which a Wi-Fi tablet does
+  // not have and Assistive Access would not allow.
+  const callType = v && v.callType === "video" ? "video" : "voice";
   return {
     on, callUserIds: [...new Set(ids)].slice(0, MAX_CALLS), show: cleanShow(v && v.show), clearedNoteId,
     textUserIds: [...new Set(tIds)].slice(0, MAX_TEXT), textConversationId,
     hub: cleanHub(v && v.hub),
+    callType,
   };
 }
 
@@ -155,7 +160,8 @@ async function simpleScreenFor(db, recipient, linkedUserId, todayStr) {
     const byId = new Map(candidates.map((c) => [c.userId, c]));
     callContacts = mode.callUserIds
       .map((id) => byId.get(id))
-      .filter((c) => c && c.phone)
+      .filter(Boolean)
+      // v1.153.0 — an in-app call needs no phone number; `phone` stays for older clients.
       .map((c) => ({ userId: c.userId, firstName: c.firstName, phone: c.phone, photo: c.photo }));
   }
 
@@ -194,7 +200,7 @@ async function simpleScreenFor(db, recipient, linkedUserId, todayStr) {
   let hub = null;
   if (mode.hub.on) hub = await hubScreenFor(db, recipient, linkedUserId, todayStr, mode.hub);
 
-  return { on: true, show, callContacts, comingUp, noteForYou, lastSent, text, hub };
+  return { on: true, show, callContacts, callType: mode.callType, comingUp, noteForYou, lastSent, text, hub };
 }
 
 // "10:00" + 2.5 h → "12:30". Care-location wall-clock arithmetic on naive strings; a visit that

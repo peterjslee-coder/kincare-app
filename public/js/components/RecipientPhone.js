@@ -188,6 +188,121 @@ const SimpleFace = ({ photo, name, size = 56, ring }) => {
   );
 };
 
+// ─── v1.153.0 — in-app calls on the Simple screen and InPlace Hub ───
+//
+// Pete, 11/23: "I want calling in app. I want her to be able to receive video and voice
+// calls." Answering used to live only inside Messages, so a call to her rang nowhere she could
+// pick it up, and her Call buttons handed a number to a dialer a Wi-Fi tablet does not have.
+// This is the same Twilio calling Messages uses (VideoCallOverlay), hosted by her screen: a
+// full-screen "Peter is calling" with one big Answer, and Call buttons that ring the person's
+// InPlace app. While she has Messages open, Messages hosts calls instead (`enabled` false), so a
+// call never draws twice.
+const useSimpleCallHost = (enabled, { answers = true } = {}) => {
+  const idle = { active: false, roomName: null, callType: null, remoteParticipantName: null, remoteParticipantPhoto: null, callDirection: null, otherId: null };
+  const [callState, setCallState] = useState(idle);
+  const [incoming, setIncoming] = useState(null);
+  const [ringStatus, setRingStatus] = useState(null);
+  const activeRef = React.useRef(false);
+  activeRef.current = callState.active;
+
+  useEffect(() => {
+    if (!enabled || typeof onSocketEvent !== 'function') return undefined;
+    // A call that arrived as a push while the screen was off (app.js parks it here).
+    if (answers) try { if (window.__pendingCall) { setIncoming(window.__pendingCall); window.__pendingCall = null; } } catch { /* nothing waiting */ }
+    const offs = [
+      onSocketEvent('call_ring_status', (d) => setRingStatus(d?.via || null)),
+      answers && onSocketEvent('call_incoming', (d) => {
+        if (typeof warmVideoSdk === 'function') warmVideoSdk();
+        if (activeRef.current) return;
+        setIncoming(d);
+        setTimeout(() => setIncoming((p) => (p && p.roomName === d.roomName ? null : p)), 45000);
+      }),
+      onSocketEvent('call_ended', () => { setIncoming(null); setCallState(idle); }),
+      onSocketEvent('call_declined', () => { setIncoming(null); setCallState(idle); }),
+    ];
+    return () => offs.forEach((o) => o && o());
+  }, [enabled]);
+
+  // Ring out loud while the card is up: a call is the one thing allowed to make a noise.
+  useEffect(() => {
+    if (!incoming) return undefined;
+    let ctx = null; let timer = null; let stopped = false;
+    try {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if (Ctx) {
+        ctx = new Ctx();
+        if (ctx.state === 'suspended' && ctx.resume) ctx.resume().catch(() => {});
+        const burst = () => {
+          if (stopped || !ctx) return;
+          [0, 0.5].forEach((off) => {
+            const t0 = ctx.currentTime + off;
+            const osc = ctx.createOscillator(); const gain = ctx.createGain();
+            osc.type = 'sine'; osc.frequency.setValueAtTime(880, t0);
+            gain.gain.setValueAtTime(0, t0); gain.gain.linearRampToValueAtTime(0.25, t0 + 0.04);
+            gain.gain.setValueAtTime(0.25, t0 + 0.34); gain.gain.linearRampToValueAtTime(0, t0 + 0.4);
+            osc.connect(gain); gain.connect(ctx.destination); osc.start(t0); osc.stop(t0 + 0.45);
+          });
+        };
+        burst(); timer = setInterval(burst, 3000);
+      }
+    } catch { /* no audio — the card is still there */ }
+    return () => { stopped = true; if (timer) clearInterval(timer); try { if (ctx && ctx.close) ctx.close(); } catch { /* gone */ } };
+  }, [incoming]);
+
+  const startCall = (person, callType) => {
+    if (!person || !window._socket) return false;
+    if (typeof warmVideoSdk === 'function') warmVideoSdk();
+    const roomName = 'inplace-simple-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8);
+    window._socket.emit('call_invite', { targetUserId: person.userId, roomName, callType });
+    setRingStatus(null);
+    setCallState({ active: true, roomName, callType, remoteParticipantName: person.firstName, remoteParticipantPhoto: person.photo || null, callDirection: 'outgoing', otherId: person.userId });
+    return true;
+  };
+  const answer = () => {
+    if (!incoming) return;
+    setCallState({ active: true, roomName: incoming.roomName, callType: incoming.callType, remoteParticipantName: incoming.callerName, remoteParticipantPhoto: incoming.callerPhoto || null, callDirection: 'incoming', otherId: incoming.callerId });
+    if (window._socket) window._socket.emit('call_accept', { callerId: incoming.callerId, roomName: incoming.roomName });
+    setIncoming(null);
+  };
+  const decline = () => {
+    if (incoming && window._socket) window._socket.emit('call_decline', { callerId: incoming.callerId, roomName: incoming.roomName });
+    setIncoming(null);
+  };
+  const endCall = () => {
+    if (callState.active && callState.otherId && window._socket) {
+      window._socket.emit('call_hangup', { targetUserId: callState.otherId, roomName: callState.roomName });
+    }
+    setCallState(idle);
+  };
+
+  let ui = null;
+  if (enabled && (incoming || callState.active)) {
+    const first = incoming ? String(incoming.callerName || 'Someone').split(' ')[0] : '';
+    const card = incoming ? (
+      <div role="dialog" aria-label={`${first} is calling`} data-testid="simple-incoming-call"
+        style={{ position: 'fixed', inset: 0, zIndex: 10050, background: '#1f1a16', color: '#f3ebe0', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 'min(4vh, 28px)', padding: 24, textAlign: 'center' }}>
+        <SimpleFace photo={incoming.callerPhoto} name={first} size={Math.round(Math.min(window.innerHeight * 0.26, 220))} ring="#e8b04a" />
+        <div style={{ fontSize: 'min(7vh, 48px)', fontWeight: 800 }}>{first} is calling</div>
+        <div style={{ fontSize: 'min(3.6vh, 26px)', color: '#cbbfae' }}>{incoming.callType === 'video' ? 'Video call' : 'Voice call'}</div>
+        <button onClick={answer} data-testid="simple-answer-call"
+          style={{ minWidth: 'min(70vw, 520px)', minHeight: 'min(14vh, 110px)', borderRadius: 60, border: 'none', background: '#1b7a3d', color: '#fff', fontSize: 'min(6vh, 42px)', fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit' }}>
+          {'📞'} Answer
+        </button>
+        <button onClick={decline}
+          style={{ minHeight: 56, padding: '0 36px', borderRadius: 40, border: '2px solid #6b5d4f', background: 'transparent', color: '#f3ebe0', fontSize: 'min(3.6vh, 24px)', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+          Not now
+        </button>
+      </div>
+    ) : null;
+    const overlay = callState.active && typeof VideoCallOverlay !== 'undefined'
+      ? React.createElement(VideoCallOverlay, { callState, onEndCall: endCall, currentUserId: null, ringStatus })
+      : null;
+    const node = <>{card}{overlay}</>;
+    ui = typeof ReactDOM !== 'undefined' && ReactDOM.createPortal ? ReactDOM.createPortal(node, document.body) : node;
+  }
+  return { startCall, ui };
+};
+
 // ─── v1.152.0 — InPlace Hub ───
 //
 // Pete, 11/23: a Galaxy Tab A11 on a 3D-printed stand, "a little TV that stays on the counter".
@@ -218,7 +333,7 @@ const hubLine = (c) => {
   return `${c.title}${c.location ? ` at ${c.location}` : ''}`;
 };
 
-const HubBoard = ({ hub, first, now, show, calls, note, s, failed, readFlash, reading, acking, unread, awake, onWake, onRead, onAck, onText, onTell, onMessages }) => {
+const HubBoard = ({ hub, first, now, show, calls, note, s, failed, readFlash, reading, acking, unread, awake, onWake, onRead, onAck, onText, onTell, onMessages, onCall }) => {
   const today = hub.today;
   const days = hub.days || [];
   const todayItems = days.filter((d) => d.date === today);
@@ -377,9 +492,9 @@ const HubBoard = ({ hub, first, now, show, calls, note, s, failed, readFlash, re
       {hasButtons && (
         <div style={{ gridColumn: '1 / 3', display: 'flex', gap: '2vw' }}>
           {calls.map((c) => (
-            <a key={c.userId} href={`tel:${c.phone}`} style={btn('var(--color-success, #1b7a3d)', '#fff')} aria-label={`Call ${c.firstName}`}>
+            <button key={c.userId} onClick={() => onCall && onCall(c, s.callType || 'voice')} style={btn('var(--color-success, #1b7a3d)', '#fff')} aria-label={`Call ${c.firstName}`}>
               <SimpleFace photo={c.photo} name={c.firstName} size={Math.round(window.innerHeight * 0.07)} ring="#fff" /> Call {c.firstName}
-            </a>
+            </button>
           ))}
           {show.text && s.text && (
             <button onClick={onText} style={btn('var(--role-color)', 'var(--text-on-primary)')} aria-label={`Text ${simpleNames(s.text.to)}`}>
@@ -403,7 +518,7 @@ const HubBoard = ({ hub, first, now, show, calls, note, s, failed, readFlash, re
   );
 };
 
-const SimpleView = window.SimpleView = ({ initial }) => {
+const SimpleViewInner = ({ initial, onPanelChange, startCall }) => {
   const [data, setData] = useState(initial || null);
   const [loading, setLoading] = useState(!initial);
   const [failed, setFailed] = useState(false);
@@ -422,6 +537,9 @@ const SimpleView = window.SimpleView = ({ initial }) => {
     window.addEventListener('orientationchange', onResize);
     return () => { window.removeEventListener('resize', onResize); window.removeEventListener('orientationchange', onResize); };
   }, []);
+
+  // v1.153.0 — the call host (SimpleView) steps aside while Messages, which hosts its own calls, is open.
+  useEffect(() => { if (onPanelChange) onPanelChange(panel); }, [panel]);
 
   // v1.130.1 — tell the family the screen was looked at (and that the note on it was seen).
   // Only on an open or a return to the front, never on the minute refresh: a phone lying on
@@ -714,7 +832,7 @@ const SimpleView = window.SimpleView = ({ initial }) => {
         readFlash={readFlash} reading={reading} acking={acking} unread={unread}
         awake={Date.now() < wakeUntil} onWake={() => setWakeUntil(Date.now() + 120000)}
         onRead={markRead} onAck={ackText} onText={openText}
-        onTell={() => setPanel('tell')} onMessages={() => setPanel('messages')} />
+        onTell={() => setPanel('tell')} onMessages={() => setPanel('messages')} onCall={startCall} />
     );
   }
 
@@ -754,11 +872,12 @@ const SimpleView = window.SimpleView = ({ initial }) => {
         </button>
       )}
 
+      {/* v1.153.0 — an InPlace call to their app, not a number handed to a dialer. */}
       {calls.map((c) => (
-        <a key={c.userId} href={`tel:${c.phone}`} style={{ ...bigBtn('var(--color-success, #1b7a3d)', '#fff'), justifyContent: 'flex-start', padding: '10px 18px' }} aria-label={`Call ${c.firstName}`}>
+        <button key={c.userId} onClick={() => startCall && startCall(c, s.callType || 'voice')} style={{ ...bigBtn('var(--color-success, #1b7a3d)', '#fff'), justifyContent: 'flex-start', padding: '10px 18px' }} aria-label={`Call ${c.firstName}`}>
           <SimpleFace photo={c.photo} name={c.firstName} size={68} ring="#fff" />
-          <span style={{ flex: 1, textAlign: 'center' }}><span aria-hidden="true" style={{ fontSize: 30 }}>{'📞'}</span> Call {c.firstName}</span>
-        </a>
+          <span style={{ flex: 1, textAlign: 'center' }}><span aria-hidden="true" style={{ fontSize: 30 }}>{s.callType === 'video' ? '🎥' : '📞'}</span> Call {c.firstName}</span>
+        </button>
       ))}
 
       {/* v1.130.2 — a message waiting: show it on the home screen, big, so it is not missed.
@@ -831,6 +950,19 @@ const SimpleView = window.SimpleView = ({ initial }) => {
   );
 };
 
+// v1.153.0 — the screen the person sees, wrapped in the call host so a call can reach them on
+// every panel but Messages (which hosts its own).
+const SimpleView = window.SimpleView = (props) => {
+  const [panel, setPanel] = useState(null);
+  const host = useSimpleCallHost(panel !== 'messages');
+  return (
+    <>
+      <SimpleViewInner {...props} onPanelChange={setPanel} startCall={host.startCall} />
+      {host.ui}
+    </>
+  );
+};
+
 // v1.130.1 — "Mon 8:05 PM" style, and the read/seen line under a note.
 const simpleClock = (iso) => {
   if (!iso) return '';
@@ -859,7 +991,7 @@ const noteStatusLine = (n, name) => {
 const SIMPLE_SECTIONS = [
   ['notesFromFamily', 'Notes from the family', 'The latest note you leave shows big at the top.'],
   ['text', 'Text button', 'A big button that texts the people you pick below, as one group. You all see the whole thread in Messages; NAME sees only their last text and your replies.'],
-  ['calls', 'Call buttons', 'Big buttons that ring the people you pick below. They don\u2019t work inside iPhone Assistive Access yet; use the Calls app there.'],
+  ['calls', 'Call buttons', 'Big buttons that ring the people you pick below in their InPlace app, as a voice or video call.'],
   ['messages', 'Messages', 'Read and send messages with the care team.'],
   ['tellFamily', 'Tell the family', 'One-tap notes like "I’m hungry" or "I have pain", or typed. You get a "tap to read" notice; pain and "I need help" come as needs attention.'],
   ['comingUp', 'Coming up', 'Today\u2019s and tomorrow\u2019s visits and appointments, like "Haircut at Angie\u2019s — 1:00 PM".'],
@@ -877,6 +1009,9 @@ const SimpleModeSettings = window.SimpleModeSettings = ({ recipientId, firstName
   const [sending, setSending] = useState(false);
   const [lastNote, setLastNote] = useState(null);
   const [hub, setHub] = useState(null); // v1.152.0 — InPlace Hub
+  const [callType, setCallType] = useState('voice'); // v1.153.0
+  // v1.153.0 — ring their screen from here. Outgoing only: answering stays with Messages.
+  const callHost = useSimpleCallHost(true, { answers: false });
   const name = firstName || 'them';
 
   const load = async () => {
@@ -884,7 +1019,7 @@ const SimpleModeSettings = window.SimpleModeSettings = ({ recipientId, firstName
       const res = await apiFetch(`/api/care-recipients/${recipientId}/simple-mode`);
       if (res?.ok) {
         const d = await res.json();
-        setCfg(d); setOn(d.on); setPicked(d.callUserIds || []); setTextPicked(d.textUserIds || []); setShow(d.show || {}); setLastNote(d.lastNote || null); setHub(d.hub || null);
+        setCfg(d); setOn(d.on); setPicked(d.callUserIds || []); setTextPicked(d.textUserIds || []); setShow(d.show || {}); setLastNote(d.lastNote || null); setHub(d.hub || null); setCallType(d.callType || 'voice');
       }
     } catch { /* the card stays in its loading state */ }
   };
@@ -904,6 +1039,7 @@ const SimpleModeSettings = window.SimpleModeSettings = ({ recipientId, firstName
       if (res?.ok) {
         setOn(d.on); setPicked(d.callUserIds); setTextPicked(d.textUserIds || []); setShow(d.show || show);
         if (d.hub) setHub(d.hub);
+        if (d.callType) setCallType(d.callType);
         if (patch.clearNote) setLastNote(null);
         showToast(okText, 'success');
       } else showToast(d?.error || 'Could not save', 'error');
@@ -973,6 +1109,20 @@ const SimpleModeSettings = window.SimpleModeSettings = ({ recipientId, firstName
               : <>{name} hasn't opened the simple screen yet.</>}
           </div>
 
+          {/* v1.153.0 — call their screen (Simple screen or Hub) in InPlace */}
+          {cfg.recipientUserId && (
+            <div style={{ display: 'flex', gap: 8, margin: '0 0 14px', flexWrap: 'wrap' }}>
+              {[['voice', '📞 Voice call'], ['video', '🎥 Video call']].map(([t, l]) => (
+                <button key={t} data-testid={`call-recipient-${t}`}
+                  onClick={() => { if (!callHost.startCall({ userId: cfg.recipientUserId, firstName: name, photo: cfg.recipientPhoto || null }, t)) showToast('Not connected right now. Try again in a moment.', 'error'); }}
+                  style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid var(--role-color)', background: 'var(--bg-card)', color: 'var(--role-color)', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
+                  {l} {name}
+                </button>
+              ))}
+            </div>
+          )}
+          {callHost.ui}
+
           {/* v1.152.0 — InPlace Hub: the same screen on a tablet on the kitchen counter */}
           {hub && (
             <div data-testid="hub-settings" style={{ margin: '0 0 16px', padding: '12px 14px', borderRadius: 10, border: '1px solid var(--border-color)', background: 'var(--bg-surface)' }}>
@@ -1036,9 +1186,19 @@ const SimpleModeSettings = window.SimpleModeSettings = ({ recipientId, firstName
               <div style={sub}>Who the call buttons ring (up to {cfg.maxCalls})</div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 14 }}>
                 {cfg.candidates.map((c) => (
-                  <label key={c.userId} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: c.hasPhone ? 'var(--text-primary)' : 'var(--text-muted)', cursor: c.hasPhone ? 'pointer' : 'default' }}>
-                    <input type="checkbox" disabled={!c.hasPhone || saving} checked={picked.includes(c.userId)} onChange={() => togglePerson(c.userId)} style={{ width: 16, height: 16, accentColor: 'var(--role-color)' }} />
-                    {c.firstName} {c.lastName}{!c.hasPhone && ' — no phone number on their account'}
+                  <label key={c.userId} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text-primary)', cursor: 'pointer' }}>
+                    <input type="checkbox" disabled={saving} checked={picked.includes(c.userId)} onChange={() => togglePerson(c.userId)} style={{ width: 16, height: 16, accentColor: 'var(--role-color)' }} />
+                    {c.firstName} {c.lastName}
+                  </label>
+                ))}
+              </div>
+              {/* v1.153.0 — in-app calls: voice or video */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 14, fontSize: 13, color: 'var(--text-primary)', margin: '-6px 0 14px' }}>
+                <span style={{ color: 'var(--text-secondary)' }}>Calls start as</span>
+                {[['voice', 'Voice'], ['video', 'Video']].map(([v, l]) => (
+                  <label key={v} style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+                    <input type="radio" name={`calltype-${recipientId}`} disabled={saving} checked={(callType || 'voice') === v} onChange={() => save({ callType: v })} style={{ accentColor: 'var(--role-color)' }} />
+                    {l}
                   </label>
                 ))}
               </div>
