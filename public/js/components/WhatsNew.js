@@ -466,6 +466,38 @@ const WN_PREVIEWS = {
   ),
   // v1.147.0 — the Undo bar after accepting a visit
   // v1.150.0 — start and end set the visit; length is worked out
+  // v1.152.0 — InPlace Hub: the Simple screen as a little TV on the counter
+  inplaceHub: () => (
+    <div style={{ background: '#1d1b19', borderRadius: 12, padding: 6 }}>
+      <div style={{ background: 'var(--bg-surface)', borderRadius: 7, padding: 8, display: 'grid', gridTemplateColumns: '1.1fr 1fr', gap: 6 }}>
+        <div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+            <div style={{ fontSize: 9.5, color: 'var(--text-secondary)', lineHeight: 1.2 }}>Monday<br />March 2, 2026</div>
+            <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--text-primary)' }}>10:45</div>
+          </div>
+          <div style={{ ...wnCard, marginTop: 5, padding: '5px 7px', fontSize: 10.5, fontWeight: 700, color: 'var(--text-primary)' }}>Jane is here <span style={{ fontWeight: 400, color: 'var(--text-secondary)' }}>until 1:00 PM</span></div>
+          <div style={{ ...wnCard, padding: '5px 7px', fontSize: 10, color: 'var(--text-primary)' }}>
+            <div style={{ fontSize: 8.5, fontWeight: 800, color: 'var(--text-secondary)' }}>THIS WEEK</div>
+            <div>Wed {'·'} Sam comes at 2:30</div>
+            <div>Thu {'·'} Lunch at the diner</div>
+          </div>
+        </div>
+        <div style={{ ...wnCard, padding: '5px 7px' }}>
+          <div style={{ fontSize: 8.5, fontWeight: 800, color: 'var(--text-secondary)' }}>WHO'S WHO</div>
+          <div style={{ display: 'flex', gap: 6, marginTop: 4, justifyContent: 'center' }}>
+            {[['Jane', 'Mon and Thu'], ['Sam', 'your son']].map(([n, l]) => (
+              <div key={n} style={{ textAlign: 'center' }}>
+                <div style={{ width: 24, height: 24, borderRadius: 12, margin: '0 auto', background: 'var(--role-color-light, #f3e5f5)', color: 'var(--role-color)', fontSize: 11, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{n[0]}</div>
+                <div style={{ fontSize: 9.5, fontWeight: 700, color: 'var(--text-primary)' }}>{n}</div>
+                <div style={{ fontSize: 8, color: 'var(--text-secondary)' }}>{l}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div style={{ gridColumn: '1 / 3', background: 'var(--role-color)', color: 'var(--text-on-primary)', borderRadius: 7, fontSize: 10.5, fontWeight: 800, textAlign: 'center', padding: '4px 0' }}>{'\u{1F4AC}'} Text my family</div>
+      </div>
+    </div>
+  ),
   // v1.151.0 — Request care, step 2: open request first, then the ranked list with stars
   rankedPicker: () => (
     <div>

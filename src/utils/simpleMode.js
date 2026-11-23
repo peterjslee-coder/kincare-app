@@ -50,6 +50,32 @@ const SECTIONS = Object.freeze({
   tellFamily: false,    // "I'm hungry", "My shoulder hurts" — a note FROM them to the team
 });
 
+// ─── v1.152.0 — InPlace Hub: the same screen on a tablet on the kitchen counter ───
+//
+// Pete, 11/23: a Galaxy Tab A11 on a 3D-printed stand, "a little TV that stays on the counter".
+// "Almost look only...but should mimic/compliment what's on mom's app" — so the Hub is not a
+// second set of settings for the buttons: it draws the Simple screen's buttons as they are, and
+// adds the big date WITH the year, who is here, the week ahead, and faces with names ("Tina and
+// a pic of her would be helpful to remind mom of who's who"). The leader turns it on and picks
+// what it shows; the tablet shows it when it is held sideways and wide (see SimpleView).
+// Lives inside simple_mode as `hub`, so it needs no column and goes with the record.
+const HUB_DEFAULTS = Object.freeze({
+  on: false,
+  faces: true,   // "Who's who": faces and names
+  week: true,    // the next seven days, not just today and tomorrow
+  dimFrom: "21:00", // the screen goes dark with a big clock after this...
+  dimTo: "07:00",   // ...and brightens again at this
+});
+const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
+function cleanHub(raw) {
+  const out = { ...HUB_DEFAULTS };
+  if (raw && typeof raw === "object") {
+    for (const k of ["on", "faces", "week"]) if (typeof raw[k] === "boolean") out[k] = raw[k];
+    for (const k of ["dimFrom", "dimTo"]) if (typeof raw[k] === "string" && HHMM.test(raw[k])) out[k] = raw[k];
+  }
+  return out;
+}
+
 function parseSimpleMode(text) {
   let v = null;
   try { v = text ? JSON.parse(text) : null; } catch { v = null; }
@@ -63,6 +89,7 @@ function parseSimpleMode(text) {
   return {
     on, callUserIds: [...new Set(ids)].slice(0, MAX_CALLS), show: cleanShow(v && v.show), clearedNoteId,
     textUserIds: [...new Set(tIds)].slice(0, MAX_TEXT), textConversationId,
+    hub: cleanHub(v && v.hub),
   };
 }
 
@@ -163,7 +190,112 @@ async function simpleScreenFor(db, recipient, linkedUserId, todayStr) {
   let text = null;
   if (show.text && mode.textConversationId) text = await textScreenFor(db, mode, linkedUserId);
 
-  return { on: true, show, callContacts, comingUp, noteForYou, lastSent, text };
+  // v1.152.0 — the Hub's extra pieces only travel when the Hub is on.
+  let hub = null;
+  if (mode.hub.on) hub = await hubScreenFor(db, recipient, linkedUserId, todayStr, mode.hub);
+
+  return { on: true, show, callContacts, comingUp, noteForYou, lastSent, text, hub };
+}
+
+// "10:00" + 2.5 h → "12:30". Care-location wall-clock arithmetic on naive strings; a visit that
+// runs past midnight just reads as the next morning's time, which is what a clock would say.
+function addHours(timeStr, hours) {
+  if (!/^\d{1,2}:\d{2}/.test(String(timeStr || ""))) return null;
+  const [h, m] = String(timeStr).split(":").map(Number);
+  if (!Number.isFinite(h) || !Number.isFinite(Number(hours))) return null;
+  const total = ((h * 60 + (m || 0) + Math.round(Number(hours) * 60)) % 1440 + 1440) % 1440;
+  return `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
+}
+
+function addDays(dateStr, n) {
+  const d = new Date(`${dateStr}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+
+const WEEKDAY_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const WEEKDAY_LONG = ["Sundays", "Mondays", "Tuesdays", "Wednesdays", "Thursdays", "Fridays", "Saturdays"];
+/** The days a caregiver comes, from their upcoming visits: "Wednesdays", "Mon and Thu", "Mon, Wed, Fri". */
+function weekdayLabel(dates) {
+  const days = [...new Set(dates.map((d) => new Date(`${d}T12:00:00Z`).getUTCDay()))];
+  // Monday first: a week on a kitchen calendar starts on Monday.
+  days.sort((a, b) => ((a + 6) % 7) - ((b + 6) % 7));
+  if (days.length === 0) return null;
+  if (days.length === 1) return WEEKDAY_LONG[days[0]];
+  const short = days.map((d) => WEEKDAY_SHORT[d]);
+  if (short.length === 2) return `${short[0]} and ${short[1]}`;
+  return short.join(", ");
+}
+
+/** "son" → "your son"; anything longer than a word is shown as the leader wrote it. */
+function relationLabel(label) {
+  const t = String(label || "").trim();
+  if (!t) return null;
+  return /^[A-Za-z-]+$/.test(t) ? `your ${t.toLowerCase()}` : t;
+}
+
+async function hubScreenFor(db, recipient, linkedUserId, todayStr, hubCfg) {
+  const out = { on: true, faces: hubCfg.faces, week: hubCfg.week, dimFrom: hubCfg.dimFrom, dimTo: hubCfg.dimTo, today: todayStr, here: null, days: [], people: [] };
+
+  // Who is here right now: a visit in progress today.
+  const here = await db.prepare(`
+    SELECT cs.scheduled_time, cs.duration_hours, u.id AS who_id, u.first_name AS who, ${photoSql()}
+    FROM care_sessions cs
+    JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+    JOIN users u ON cp.user_id = u.id
+    WHERE cs.care_recipient_id = ? AND cs.status = 'in_progress' AND cs.scheduled_date = ?
+    ORDER BY cs.scheduled_time ASC LIMIT 1
+  `).get(recipient.id, todayStr);
+  if (here) {
+    out.here = { firstName: here.who, photo: photoUrl({ id: here.who_id, has_photo: here.has_photo }), until: addHours(here.scheduled_time, here.duration_hours) };
+  }
+
+  // Today plus the next six days when "week" is ticked; today and tomorrow otherwise.
+  out.days = await comingUpFor(db, recipient.id, todayStr, hubCfg.week ? 7 : 2, 24);
+
+  if (hubCfg.faces) {
+    const people = [];
+    const seen = new Set([linkedUserId]);
+    // Caregivers first: they are the faces she is most likely to need a name for. Visits from
+    // the last 30 days through the next 14; the days they come are read from the upcoming ones.
+    const cgRows = await db.prepare(`
+      SELECT u.id, u.first_name, cs.scheduled_date, cs.status, ${photoSql()}
+      FROM care_sessions cs
+      JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+      JOIN users u ON cp.user_id = u.id
+      WHERE cs.care_recipient_id = ? AND cs.status IN ('confirmed', 'in_progress', 'completed')
+        AND cs.scheduled_date >= ? AND cs.scheduled_date <= ?
+      ORDER BY cs.scheduled_date ASC
+    `).all(recipient.id, addDays(todayStr, -30), addDays(todayStr, 13));
+    const cg = new Map();
+    for (const r of cgRows) {
+      if (!cg.has(r.id)) cg.set(r.id, { userId: r.id, firstName: r.first_name, photo: photoUrl(r), upcoming: [], today: false });
+      const c = cg.get(r.id);
+      if (r.scheduled_date >= todayStr && r.status !== "completed") c.upcoming.push(r.scheduled_date);
+      if (r.scheduled_date === todayStr) c.today = true;
+    }
+    const cgList = [...cg.values()].sort((a, b) => (b.today - a.today) || (b.upcoming.length - a.upcoming.length));
+    for (const c of cgList) {
+      seen.add(c.userId);
+      people.push({ userId: c.userId, firstName: c.firstName, photo: c.photo, label: weekdayLabel(c.upcoming) || "your caregiver", today: c.today });
+    }
+    // Then the family: the record's owner and the care team, with the label the team gave them.
+    const labels = new Map((await db.prepare(`
+      SELECT ctm.user_id, ctm.relationship_label, ctm.role
+      FROM care_team_members ctm JOIN care_teams ct ON ctm.care_team_id = ct.id
+      WHERE ct.care_recipient_id = ?
+    `).all(recipient.id)).map((r) => [r.user_id, r]));
+    const fam = (await callCandidates(db, recipient.id, linkedUserId))
+      .sort((a, b) => ((labels.get(b.userId) || {}).role === "leader") - ((labels.get(a.userId) || {}).role === "leader"));
+    for (const f of fam) {
+      if (seen.has(f.userId)) continue;
+      seen.add(f.userId);
+      const l = labels.get(f.userId);
+      people.push({ userId: f.userId, firstName: f.firstName, photo: f.photo, label: relationLabel(l && l.relationship_label) || "family", today: false });
+    }
+    out.people = people.slice(0, 6);
+  }
+  return out;
 }
 
 // ─── v1.130.2 — the Text button ───
@@ -237,15 +369,10 @@ async function textScreenFor(db, mode, linkedUserId) {
 // next day's events... if she had an appointment, it would show like 'Haircut at Angies - 1PM'
 // ... That way I can put Church pickup on there and she'll be reminded." Care-location dates and
 // times are naive strings (CLAUDE.md timezone principle), so they compare as strings.
-function nextDayStr(dateStr) {
-  const d = new Date(`${dateStr}T12:00:00Z`);
-  d.setUTCDate(d.getUTCDate() + 1);
-  return d.toISOString().slice(0, 10);
-}
-
-async function comingUpFor(db, recipientId, todayStr) {
+async function comingUpFor(db, recipientId, todayStr, days = 2, limit = 8) {
   const recipient = { id: recipientId };
-  const tomorrowStr = nextDayStr(todayStr);
+  // v1.152.0 — the Hub asks for seven days; the phone keeps today and tomorrow.
+  const tomorrowStr = addDays(todayStr, days - 1);
   const sessions = await db.prepare(`
     SELECT cs.id, cs.scheduled_date AS date, cs.scheduled_time AS time, cs.status,
            u.id AS who_id, u.first_name AS who, ${photoSql()}
@@ -255,21 +382,21 @@ async function comingUpFor(db, recipientId, todayStr) {
     WHERE cs.care_recipient_id = ? AND cs.scheduled_date >= ? AND cs.scheduled_date <= ?
       AND cs.status IN ('confirmed', 'in_progress')
     ORDER BY cs.scheduled_date ASC, cs.scheduled_time ASC
-    LIMIT 8
+    LIMIT ${Number(limit) | 0}
   `).all(recipient.id, todayStr, tomorrowStr);
   const events = await db.prepare(`
     SELECT id, title, event_date AS date, event_time AS time, location
     FROM care_events
     WHERE care_recipient_id = ? AND is_active = 1 AND event_date >= ? AND event_date <= ?
     ORDER BY event_date ASC, event_time ASC NULLS LAST
-    LIMIT 8
+    LIMIT ${Number(limit) | 0}
   `).all(recipient.id, todayStr, tomorrowStr);
   return [
     ...sessions.map((s) => ({ kind: "visit", id: s.id, date: s.date, time: s.time || null, who: s.who || null, whoPhoto: s.who_id ? photoUrl({ id: s.who_id, has_photo: s.has_photo }) : null, inProgress: s.status === "in_progress" })),
     ...events.map((e) => ({ kind: "appointment", id: e.id, date: e.date, time: e.time || null, title: e.title, location: e.location || null })),
   ]
     .sort((a, b) => (a.date + (a.time || "99:99")).localeCompare(b.date + (b.time || "99:99")))
-    .slice(0, 8);
+    .slice(0, limit);
 }
 
-module.exports = { MAX_CALLS, MAX_TEXT, MAX_BUTTONS, bigButtonCount, SECTIONS, parseSimpleMode, cleanShow, callCandidates, simpleScreenFor, telDigits };
+module.exports = { HUB_DEFAULTS, cleanHub, addHours, weekdayLabel, relationLabel, MAX_CALLS, MAX_TEXT, MAX_BUTTONS, bigButtonCount, SECTIONS, parseSimpleMode, cleanShow, callCandidates, simpleScreenFor, telDigits };
