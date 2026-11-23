@@ -199,9 +199,23 @@ router.put("/authorizations/:id", requireAdmin, async (req, res) => {
       const attAdminStatus = action === 'approve' ? 'approved' : 'rejected';
       await db.prepare(`
         UPDATE attestations SET admin_status = ?, admin_notes = ?, admin_reviewed_by = ?, admin_reviewed_at = NOW()
-        WHERE care_recipient_id = ? ORDER BY created_at DESC LIMIT 1
+        WHERE id = (SELECT id FROM attestations WHERE care_recipient_id = ? ORDER BY created_at DESC LIMIT 1)
       `).run(attAdminStatus, notes || null, req.user.id, id);
+      // v1.150.2 — Postgres has no UPDATE ... ORDER BY ... LIMIT. The old form threw here,
+      // AFTER consent_status had already been set, so an approve half-saved and answered 500.
+    }
 
+    // v1.150.2 — an admin decision closes any outreach link still waiting for an answer.
+    // Without this the unanswered link kept the recipient in Needs-you forever (11/23: a
+    // hospice family approved by hand, card never cleared). Same "supersede" move as
+    // send-outreach uses when a new link replaces an old one.
+    if (action === 'approve' || action === 'reject') {
+      await db.prepare(
+        "UPDATE consent_outreach SET expires_at = NOW() WHERE care_recipient_id = ? AND recipient_response IS NULL AND (expires_at IS NULL OR expires_at > NOW())"
+      ).run(id);
+    }
+
+    if (recipient.authorization_tier === 'tier3') {
       // If rejecting, also unpause bookings if they were paused
       if (action === 'reject') {
         await db.prepare(
@@ -354,8 +368,10 @@ router.get("/consent/pending", requireAdmin, async (req, res) => {
           AND cr.consent_status IN ('attested', 'pending')
           AND COALESCE(att.admin_status, 'pending') = 'pending')
         OR
-        -- Outreach sent but no response yet
-        (co.id IS NOT NULL AND co.recipient_response IS NULL AND co.responded_at IS NULL)
+        -- Outreach sent but no response yet, and nobody has decided yet. v1.150.2: once an
+        -- admin has decided, an unanswered link is history, not a task.
+        (co.id IS NOT NULL AND co.recipient_response IS NULL AND co.responded_at IS NULL
+          AND COALESCE(cr.consent_status, 'pending') NOT IN ('verified', 'rejected', 'revoked'))
         OR
         -- Bookings currently paused (needs admin resolution)
         (cr.bookings_paused = 1)
