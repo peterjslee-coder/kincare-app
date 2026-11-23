@@ -154,6 +154,15 @@ const lovedOneRoute = window.lovedOneRoute = (page, focus, careTeamId) => {
 const pickLovedOne = window.pickLovedOne = async (recipients) => {
   const list = recipients || [];
   if (list.length < 2) { window.__pendingLovedOneTeamId = null; return list[0] || null; }
+  // v1.149.1 — a note or visit push names the person it is about. With two people cared for
+  // (Pete has Betty and his mother-in-law), "Deborah left a note" about the second opened on
+  // the first: the note was never on screen and the jump to it waited forever. Found testing
+  // the Got it button on staging. TeamNotes already honoured this; Betty's page never read it.
+  const wantRecipient = window.__pendingNoteRecipientId;
+  if (wantRecipient) {
+    const hit = list.find((x) => x.id === wantRecipient);
+    if (hit) { window.__pendingNoteRecipientId = null; window.__pendingLovedOneTeamId = null; return hit; }
+  }
   const focus = typeof window.__pendingFocus === 'string' ? window.__pendingFocus : '';
   const wantTeam = window.__pendingLovedOneTeamId;
   window.__pendingLovedOneTeamId = null;
