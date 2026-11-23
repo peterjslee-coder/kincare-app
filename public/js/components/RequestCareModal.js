@@ -57,6 +57,23 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
   const [showCareHistory, setShowCareHistory] = useState(false);
   const [privateOnly, setPrivateOnly] = useState(false); // don't open to others if caregiver declines
   const [flexTiming, setFlexTiming] = useState('flexible'); // 'strict' | 'flexible' | 'open'
+  // v1.151.0 — step 2, thinned. Open request is the default; "pick" opens the ranked list.
+  const [whoMode, setWhoMode] = useState(() => (selectedCaregiver ? 'pick' : 'open'));
+  // A caregiver handed in from outside (an edit, "Book again") arrives as {caregiverId, name};
+  // once the ranked list loads, swap in the full entry so visits, stars and the intro-call
+  // rule read the real record.
+  useEffect(() => {
+    if (!selectedCaregiver || !matchedCaregivers.length) return;
+    const full = matchedCaregivers.find(cg => cg.caregiverId === selectedCaregiver.caregiverId);
+    if (full && full !== selectedCaregiver && selectedCaregiver.visitCount === undefined) setSelectedCaregiver(full);
+  }, [matchedCaregivers]);
+  const [showLapsed, setShowLapsed] = useState(false);
+  const [showMoreOptions, setShowMoreOptions] = useState(false);
+  const [showCostDetail, setShowCostDetail] = useState(false);
+  const [editingRate, setEditingRate] = useState(false);
+  const [rateDraft, setRateDraft] = useState('');
+  const [visitEvents, setVisitEvents] = useState([]);
+  const [rideEventIds, setRideEventIds] = useState([]);
 
   // ─── v1.129.2 — Edit request (Pete, 11/17) ───
   // "I want to be able to edit the details of the appointment after I've sent it… change it from
@@ -104,6 +121,7 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
         setEditScope(scope);
         applyRecurrenceFromDraft(d, scope);
         setSelectedCaregiver(d.offeredTo ? { caregiverId: d.offeredTo.caregiverId, name: d.offeredTo.name } : null);
+        setWhoMode(d.offeredTo ? 'pick' : 'open');
         setPrivateOnly(!!d.privateOnly);
         setProposedRate(d.proposedRate != null ? String(d.proposedRate) : '');
         setInterviewRequired(!!d.interviewRequired);
@@ -284,7 +302,10 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
     if (rates.length > 0) {
       const avg = Math.round(rates.reduce((a, b) => a + b, 0) / rates.length);
       setLocalAvgRate(avg);
-      if (!proposedRate) setProposedRate(String(avg));
+      // v1.151.0 — Pete: "I want the offer to start at $23 unless I change it." The family's
+      // last offer, remembered on the account, beats the local average.
+      const saved = window.__uiPrefs ? Number(window.__uiPrefs['booking.offerRate']) : NaN;
+      if (!proposedRate) setProposedRate(String(Number.isFinite(saved) && saved > 0 ? Math.round(saved) : avg));
     }
   }, [assignedCaregivers, time]);
 
@@ -296,7 +317,7 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
   // session history + formal assignments + nearby available caregivers
   const findMatchingCaregivers = async () => {
     if (!date || !time || !duration || !serviceType) return;
-    setLoadingCaregivers(true);
+    setLoadingCaregivers(true); // the list stays on screen while it refreshes (v1.151.0)
     const parseTime24 = (t) => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
     const requestStart = parseTime24(time);
     const requestEnd = requestStart + Number(duration) * 60;
@@ -321,8 +342,12 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
 
     try {
       // Fetch smart suggestions (session history + assigned + nearby)
-      const params = selectedRecipientId ? `?careRecipientId=${selectedRecipientId}` : '';
-      const suggestRes = await apiFetch(`/api/assignments/suggestions${params}`);
+      const qs = new URLSearchParams();
+      if (selectedRecipientId) qs.set('careRecipientId', selectedRecipientId);
+      // v1.151.0 — the visit itself, so anyone already booked then is marked.
+      qs.set('date', date); qs.set('time', time); qs.set('durationHours', String(duration));
+      if (editDraft?.sessionId) qs.set('excludeSessionId', editDraft.sessionId);
+      const suggestRes = await apiFetch(`/api/assignments/suggestions?${qs.toString()}`);
       let allSuggestions = [];
       if (suggestRes?.ok) {
         const data = await suggestRes.json();
@@ -344,8 +369,10 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
       }
 
       // Check availability for each and build display list
+      // v1.151.0 — availability for everyone at once, not one request after another.
+      const avails = await Promise.all(allSuggestions.map(cg => checkAvailability(cg.caregiver_profile_id)));
       const matches = [];
-      for (const cg of allSuggestions) {
+      for (const [ci, cg] of allSuggestions.entries()) {
         const cgName = `${cg.first_name} ${cg.last_name}`;
         const hasSkill = caregiverMatchesService(cgName, serviceType);
         const rate = cg.hourly_rate || 30;
@@ -353,7 +380,7 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
         const rateNighttime = cg.rate_nighttime || rate;
         const rateOvernight = cg.rate_overnight || rate;
         const hasTieredRates = rateDaytime !== rateNighttime || rateDaytime !== rateOvernight;
-        const avail = await checkAvailability(cg.caregiver_profile_id);
+        const avail = avails[ci];
         const source = cg.source || 'assigned';
         matches.push({
           name: cgName, caregiverId: cg.caregiver_profile_id, userId: cg.caregiver_user_id,
@@ -365,28 +392,16 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
           source: source,
           visitCount: cg.visit_count || 0,
           distance: cg.distance ? `${cg.distance} mi` : null,
-          rating: cg.rating_avg, reviewCount: cg.rating_count,
+          rating: Number(cg.rating_avg) || 0, reviewCount: Number(cg.rating_count) || 0,
+          // v1.151.0 — what the ranked list reads
+          recentVisits: Number(cg.recent_visits) || 0,
+          lastCompleted: cg.last_completed_visit || null,
+          booked: cg.booked || null,
+          dayRate: rateDaytime,
         });
       }
 
-      // Sort: history caregivers first (by visit count), then assigned, then nearby
-      // Within each group: available+skill > available > unavailable
-      matches.sort((a, b) => {
-        // History caregivers always first
-        if (a.source === 'history' && b.source !== 'history') return -1;
-        if (b.source === 'history' && a.source !== 'history') return 1;
-        // Then assigned
-        if (a.source === 'assigned' && b.source === 'nearby') return -1;
-        if (b.source === 'assigned' && a.source === 'nearby') return 1;
-        // Within same source: visit count (more visits = better match)
-        if (a.visitCount !== b.visitCount) return b.visitCount - a.visitCount;
-        // Then availability
-        if (a.available && !b.available) return -1;
-        if (b.available && !a.available) return 1;
-        if (a.skillMatch && !b.skillMatch) return -1;
-        if (b.skillMatch && !a.skillMatch) return 1;
-        return 0;
-      });
+      // v1.151.0 — the order is BookingRank.rank at render time (bookingRank.js).
 
       setMatchedCaregivers(matches);
     } catch (err) { console.error('Caregiver matching error:', err); setMatchedCaregivers([]); }
@@ -418,7 +433,9 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
     if (!recipientId) { setSubmitError('No care recipient found. Please add a care recipient first.'); return; }
     const body = {
       careRecipientId: recipientId, serviceType: resolvedServiceType, scheduledDate: date, scheduledTime: time,
-      durationHours: Number(duration), specialInstructions: instructions || undefined,
+      durationHours: Number(duration),
+      // v1.151.0 — rides tagged on the person's appointments go to the caregiver with the notes.
+      specialInstructions: [instructions, ...rideLines].filter(t => t && String(t).trim()).join('\n') || undefined,
       status: isOpenRequest ? 'open' : undefined,
       recurrenceRule: recurrence !== 'none' ? recurrence : undefined,
       recurrenceWeeks: recurrence !== 'none' ? parseInt(recurrenceWeeks) : undefined,
@@ -431,11 +448,12 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
     };
     if (proposedRate && parseFloat(proposedRate) > 0) body.proposedRate = parseFloat(proposedRate);
     if (flexTiming && flexTiming !== 'flexible') body.flexTiming = flexTiming; // default is flexible, only send if different
-    if (interviewRequired) { body.interviewRequired = true; body.interviewType = interviewType; }
+    if (interviewRequired && showInterview) { body.interviewRequired = true; body.interviewType = interviewType; }
     try {
       const response = await apiFetch('/api/sessions', { method: 'POST', body: JSON.stringify(body) });
       if (response?.ok) {
         window.dispatchEvent(new CustomEvent('sessions-updated'));
+        if (body.proposedRate && window.__setUiPref) window.__setUiPref('booking.offerRate', Math.round(body.proposedRate));
         const details = [];
         if (isOpenRequest) {
           details.push('Open \u2014 waiting for caregiver match');
@@ -476,10 +494,29 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
     return `${displayH}:${m.toString().padStart(2, '0')} ${ampm}`;
   };
 
-  // Trigger caregiver matching + cost preview when entering step 2
+  // v1.151.0 — Pete: "I click down in pay, and it loads caregivers again and makes the screen
+  // flash around." The caregivers depend on WHEN and WHO it is for, never on the rate, so
+  // they load on their own effect; the price is the only thing a rate change refreshes.
+  useEffect(() => {
+    if (step === 2 && date && time && duration && serviceType && hasCaregiverData) findMatchingCaregivers();
+  }, [step, selectedRecipientId, hasCaregiverData]);
+
+  // The person's appointments, to tag the ones inside this visit.
+  useEffect(() => {
+    const rid = selectedRecipientId || (careRecipients[0] && careRecipients[0].id);
+    if (step !== 2 || !rid) return;
+    let gone = false;
+    (async () => {
+      try {
+        const res = await apiFetch(`/api/care-events/recipient/${rid}`);
+        if (res?.ok) { const d = await res.json(); if (!gone) setVisitEvents(d.events || []); }
+      } catch (e) { /* tags are a convenience; the request still works without them */ }
+    })();
+    return () => { gone = true; };
+  }, [step, selectedRecipientId, careRecipients.length]);
+
   useEffect(() => {
     if (step === 2 && date && time && duration && serviceType) {
-      if (hasCaregiverData) findMatchingCaregivers(); // fetches both care team + nearby
       // Fetch cost preview
       const fetchCost = async () => {
         try {
@@ -494,7 +531,8 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
           if (res?.ok) setCostPreview(await res.json());
         } catch (err) { console.error('Cost preview error:', err); }
       };
-      fetchCost();
+      const t = setTimeout(fetchCost, 250);
+      return () => clearTimeout(t);
     }
   }, [step, selectedCaregiver, proposedRate, selectedRecipientId]);
 
@@ -550,6 +588,50 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
   // Resolve actual service type for submission (handles "other:text" format)
   const resolvedServiceType = serviceType === 'other' && otherCareText.trim()
     ? `other:${otherCareText.trim()}` : serviceType;
+
+  // ─── v1.151.0 — step 2, thinned (Pete, 11/23) ───
+  // "Post as open request should lead this screen, with an obvious offer to a specific
+  // caregiver" → the two choices are the first thing on the step; the ranked list opens under
+  // the second. The ranking itself is window.BookingRank (public/js/bookingRank.js).
+  const recipientFirst = (careRecipients.find(r => r.id === selectedRecipientId) || careRecipients[0] || {}).first_name || '';
+  const weekdayName = (() => {
+    const p = (date || '').split('-').map(Number);
+    if (p.length !== 3 || !p.every(Number.isFinite)) return '';
+    return ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][new Date(Date.UTC(p[0], p[1] - 1, p[2], 12)).getUTCDay()];
+  })();
+  const rankedCaregivers = (typeof BookingRank !== 'undefined') ? BookingRank.rank(matchedCaregivers) : matchedCaregivers;
+  const bestCaregiver = (typeof BookingRank !== 'undefined') ? BookingRank.bestMatch(rankedCaregivers) : null;
+  const savedOfferRate = (() => {
+    const v = window.__uiPrefs ? Number(window.__uiPrefs['booking.offerRate']) : NaN;
+    return Number.isFinite(v) && v > 0 ? v : null;
+  })();
+  // An intro call only makes sense the first time this caregiver and this person meet.
+  const showInterview = !!selectedCaregiver && !(selectedCaregiver.visitCount > 0);
+  const lastSeenLabel = (d) => {
+    if (!d || !todayStr) return '';
+    const a = d.split('-').map(Number), b = todayStr.split('-').map(Number);
+    const days = Math.round((Date.UTC(b[0], b[1] - 1, b[2]) - Date.UTC(a[0], a[1] - 1, a[2])) / 86400000);
+    if (days < 0) return '';
+    if (days === 0) return 'today';
+    if (days < 7) return 'this week';
+    if (days < 14) return 'last week';
+    if (days < 31) return `${Math.floor(days / 7)} weeks ago`;
+    const mon = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][a[1] - 1];
+    return `last ${mon}`;
+  };
+  const initials = (name) => (name || '').split(' ').filter(Boolean).slice(0, 2).map(s => s[0].toUpperCase()).join('');
+  // Betty's appointments that fall inside this visit (or on the day with no time set).
+  const visitStartMin = (() => { const [h, m] = (time || '').split(':').map(Number); return Number.isFinite(h) ? h * 60 + (m || 0) : null; })();
+  const visitEndMin = visitStartMin != null && Number(duration) > 0 ? visitStartMin + Math.round(Number(duration) * 60) : null;
+  const eventsDuringVisit = (visitEvents || []).filter(ev => {
+    if (ev.event_date !== date) return false;
+    if (!ev.event_time) return true;
+    const [h, m] = ev.event_time.split(':').map(Number);
+    const t = h * 60 + (m || 0);
+    return visitStartMin != null && visitEndMin != null && t >= visitStartMin && t < visitEndMin;
+  });
+  const rideLines = eventsDuringVisit.filter(ev => rideEventIds.includes(ev.id)).map(ev =>
+    `Ride needed: ${ev.title}${ev.event_time ? ' at ' + formatTime12(ev.event_time) : ''}${ev.location ? ' (' + ev.location + ')' : ''}`);
 
   // Loading state
   if (assignedCaregivers === null) {
@@ -928,284 +1010,299 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
               </div>
             </div>
 
-            {/* Caregiver selection */}
+            {/* ── Who should come? (v1.151.0) — open request first, then a specific caregiver ── */}
             {hasCaregiverData && (
-              <div style={{ marginBottom: 16 }}>
-                <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>Choose a caregiver</div>
-                {loadingCaregivers ? (
-                  <div style={{ padding: 20, textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>Finding caregivers...</div>
-                ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    {(() => {
-                      const hasTeam = matchedCaregivers.some(cg => cg.isTeam);
-                      const hasNearby = matchedCaregivers.some(cg => !cg.isTeam);
-                      const showHeaders = hasTeam && hasNearby;
-                      const recipFirst = (careRecipients.find(r => r.id === selectedRecipientId) || {}).first_name || '';
-                      return React.createElement(React.Fragment, null,
-                        // Section header: care team / previous caregivers
-                        showHeaders && React.createElement('div', {
-                          style: { fontSize: 11, fontWeight: 600, color: 'var(--role-color)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: -2 }
-                        }, recipFirst ? `${recipFirst}'s caregivers` : 'Previous caregivers'),
-                        // Team / history caregivers
-                        ...matchedCaregivers.filter(cg => cg.isTeam).map((cg, idx) =>
-                          React.createElement('button', {
-                            key: `team-${idx}`, type: 'button',
-                            onClick: () => setSelectedCaregiver(cg),
-                            style: {
-                              padding: 12, border: selectedCaregiver?.caregiverId === cg.caregiverId ? '2px solid #1b6b5a' : '1px solid #e0e0e0',
-                              borderRadius: 10, background: selectedCaregiver?.caregiverId === cg.caregiverId ? 'var(--color-success-bg)' : 'var(--bg-card)',
-                              cursor: 'pointer', textAlign: 'left',
-                            }
-                          },
-                            React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' } },
-                              React.createElement('div', null,
-                                React.createElement('div', { style: { fontWeight: 600, fontSize: 14, color: 'var(--text-primary)' } }, cg.name),
-                                React.createElement('div', { style: { fontSize: 12, color: 'var(--role-color)', fontWeight: 500, marginTop: 2 } },
-                                  cg.rate,
-                                  cg.visitCount > 0 ? ` · ${cg.visitCount} visit${cg.visitCount !== 1 ? 's' : ''}` : ''
-                                )
-                              ),
-                              React.createElement('div', null,
-                                cg.available && cg.skillMatch && React.createElement('span', { style: { background: 'var(--color-success-bg)', color: 'var(--role-color)', padding: '3px 8px', borderRadius: 16, fontSize: 11, fontWeight: 600 } }, 'Best Match'),
-                                cg.available && !cg.skillMatch && React.createElement('span', { style: { background: 'var(--color-warning-bg)', color: 'var(--color-warning)', padding: '3px 8px', borderRadius: 16, fontSize: 11, fontWeight: 600 } }, 'Available'),
-                                !cg.available && React.createElement('span', { style: { background: 'var(--color-warning-bg)', color: 'var(--color-warning)', padding: '3px 8px', borderRadius: 16, fontSize: 11, fontWeight: 600 } }, 'Off This Day')
-                              )
-                            ),
-                            !cg.available && React.createElement('div', { style: { fontSize: 11, color: 'var(--role-color)', marginTop: 3, fontWeight: 500 } }, 'You can still request \u2014 they can accept or propose a different time'),
-                            cg.openToInterview && React.createElement('div', { style: { fontSize: 11, color: 'var(--role-color)', marginTop: 3 } }, 'Open to intro call')
-                          )
-                        ),
-                        // Section header: nearby
-                        hasNearby && React.createElement('div', {
-                          style: { fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 4, marginBottom: -2 }
-                        }, 'Nearby caregivers'),
-                        // Nearby caregivers
-                        ...matchedCaregivers.filter(cg => !cg.isTeam).map((cg, idx) =>
-                          React.createElement('button', {
-                            key: `nearby-${idx}`, type: 'button',
-                            onClick: () => setSelectedCaregiver(cg),
-                            style: {
-                              padding: 12, border: selectedCaregiver?.caregiverId === cg.caregiverId ? '2px solid #1b6b5a' : '1px solid #e0e0e0',
-                              borderRadius: 10, background: selectedCaregiver?.caregiverId === cg.caregiverId ? 'var(--color-success-bg)' : 'var(--bg-card)',
-                              cursor: 'pointer', textAlign: 'left',
-                            }
-                          },
-                            React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' } },
-                              React.createElement('div', null,
-                                React.createElement('div', { style: { fontWeight: 600, fontSize: 14, color: 'var(--text-primary)' } }, cg.name),
-                                React.createElement('div', { style: { fontSize: 12, color: 'var(--text-muted)', fontWeight: 500, marginTop: 2 } },
-                                  cg.rate, cg.distance ? ` · ${cg.distance}` : '', cg.rating ? ` · ${cg.rating}\u2605` : ''
-                                )
-                              ),
-                              React.createElement('div', null,
-                                cg.available && cg.skillMatch && React.createElement('span', { style: { background: 'var(--color-success-bg)', color: 'var(--role-color)', padding: '3px 8px', borderRadius: 16, fontSize: 11, fontWeight: 600 } }, 'Best Match'),
-                                cg.available && !cg.skillMatch && React.createElement('span', { style: { background: 'var(--color-warning-bg)', color: 'var(--color-warning)', padding: '3px 8px', borderRadius: 16, fontSize: 11, fontWeight: 600 } }, 'Available'),
-                                !cg.available && React.createElement('span', { style: { background: 'var(--color-warning-bg)', color: 'var(--color-warning)', padding: '3px 8px', borderRadius: 16, fontSize: 11, fontWeight: 600 } }, 'Off This Day')
-                              )
-                            ),
-                            !cg.available && React.createElement('div', { style: { fontSize: 11, color: 'var(--role-color)', marginTop: 3, fontWeight: 500 } }, 'You can still request \u2014 they can accept or propose a different time')
-                          )
-                        )
-                      );
-                    })()}
-                    <button type="button" onClick={() => { setSelectedCaregiver(null); setPrivateOnly(false); }}
-                      style={{
-                        padding: 10, border: !selectedCaregiver ? '2px solid #e8724a' : '1px dashed #e8724a', borderRadius: 10,
-                        background: !selectedCaregiver ? 'var(--bg-warm)' : 'var(--bg-card)', cursor: 'pointer', textAlign: 'center',
-                        fontSize: 13, color: 'var(--accent-color)', fontWeight: 600,
-                      }}>
-                      Post as open request
-                      <div style={{ fontSize: 11, fontWeight: 400, color: 'var(--text-muted)', marginTop: 1 }}>Any caregiver can respond</div>
-                    </button>
-                  </div>
-                )}
+              <div role="radiogroup" aria-label="Who should come" style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 14 }}>
+                <button type="button" role="radio" aria-checked={whoMode === 'open'} data-testid="who-open"
+                  onClick={() => { setWhoMode('open'); setSelectedCaregiver(null); setPrivateOnly(false); setInterviewRequired(false); }}
+                  style={{ display: 'flex', gap: 12, alignItems: 'center', padding: 14, borderRadius: 14, cursor: 'pointer', textAlign: 'left',
+                    background: 'var(--bg-card)', border: whoMode === 'open' ? '2px solid var(--role-color)' : '1px solid var(--border-color)' }}>
+                  <span aria-hidden="true" style={{ width: 22, height: 22, borderRadius: 11, flexShrink: 0, boxSizing: 'border-box',
+                    border: whoMode === 'open' ? '7px solid var(--role-color)' : '2px solid var(--text-muted)' }} />
+                  <span style={{ display: 'flex', flexDirection: 'column' }}>
+                    <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>Post as open request</span>
+                    <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{recipientFirst ? `${recipientFirst}'s caregivers see it` : 'Caregivers see it'}; the first to accept gets it</span>
+                  </span>
+                </button>
+                <button type="button" role="radio" aria-checked={whoMode === 'pick'} data-testid="who-pick"
+                  onClick={() => { setWhoMode('pick'); if (!selectedCaregiver && bestCaregiver) setSelectedCaregiver(bestCaregiver); }}
+                  style={{ display: 'flex', gap: 12, alignItems: 'center', padding: 14, borderRadius: 14, cursor: 'pointer', textAlign: 'left',
+                    background: 'var(--bg-card)', border: whoMode === 'pick' ? '2px solid var(--role-color)' : '1px solid var(--border-color)' }}>
+                  <span aria-hidden="true" style={{ width: 22, height: 22, borderRadius: 11, flexShrink: 0, boxSizing: 'border-box',
+                    border: whoMode === 'pick' ? '7px solid var(--role-color)' : '2px solid var(--text-muted)' }} />
+                  <span style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
+                    <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>Offer to a specific caregiver</span>
+                    <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+                      {loadingCaregivers && !matchedCaregivers.length ? 'Finding caregivers…'
+                        : bestCaregiver ? `Best match: ${bestCaregiver.name.split(' ')[0]} · free ${weekdayName || 'that day'}${bestCaregiver.rating ? ` · ★ ${Number(bestCaregiver.rating).toFixed(1)}` : ''}`
+                        : 'Choose who to ask first'}
+                    </span>
+                  </span>
+                </button>
+
+                {whoMode === 'pick' && (() => {
+                  const groups = [
+                    { id: 'available', label: `Free ${weekdayName || 'that day'}` },
+                    { id: 'off', label: `Usually off ${weekdayName ? weekdayName + 's' : 'that day'} · can still ask` },
+                    { id: 'new', label: recipientFirst ? `New to ${recipientFirst}` : 'New caregivers' },
+                    { id: 'lapsed', label: recipientFirst ? `Not with ${recipientFirst} lately` : 'Not lately', folded: true },
+                    { id: 'booked', label: 'Already booked then' },
+                  ];
+                  const row = (cg) => {
+                    const picked = selectedCaregiver?.caregiverId === cg.caregiverId;
+                    const isBest = bestCaregiver && bestCaregiver.caregiverId === cg.caregiverId;
+                    const booked = cg.group === 'booked';
+                    const seen = lastSeenLabel(cg.lastCompleted);
+                    const facts = [
+                      cg.rating ? `★ ${Number(cg.rating).toFixed(1)}${cg.reviewCount ? ` (${cg.reviewCount})` : ''}` : 'No ratings yet',
+                      cg.visitCount > 0 ? `${cg.visitCount} visit${cg.visitCount === 1 ? '' : 's'}${recipientFirst ? ' with ' + recipientFirst : ''}` : (cg.distance || null),
+                      cg.visitCount > 0 && seen ? `last ${seen.replace(/^last /, '')}` : null,
+                    ].filter(Boolean).join(' · ');
+                    const bookedText = booked
+                      ? (cg.booked && cg.booked.sameRecipient && cg.booked.time
+                        ? `Booked with ${recipientFirst || 'them'} ${formatTime12(cg.booked.time)}`
+                        : 'Booked elsewhere then')
+                      : null;
+                    return (
+                      <button key={cg.caregiverId} type="button" disabled={booked} aria-pressed={picked}
+                        data-testid={`cg-${cg.group}`}
+                        onClick={() => { if (!booked) setSelectedCaregiver(cg); }}
+                        style={{ display: 'flex', gap: 12, alignItems: 'center', padding: '10px 12px', borderRadius: 12, textAlign: 'left',
+                          cursor: booked ? 'not-allowed' : 'pointer', opacity: booked ? 0.65 : 1,
+                          background: picked ? 'var(--color-success-bg)' : 'var(--bg-card)',
+                          border: picked ? '2px solid var(--role-color)' : '1px solid var(--border-color)' }}>
+                        {cg.photo
+                          ? <img src={cg.photo} alt="" style={{ width: 40, height: 40, borderRadius: 20, objectFit: 'cover', flexShrink: 0 }} />
+                          : <span aria-hidden="true" style={{ width: 40, height: 40, borderRadius: 20, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                              background: 'var(--bg-primary)', color: 'var(--role-color)', fontWeight: 700, fontSize: 14, border: '1px solid var(--border-light)' }}>{initials(cg.name)}</span>}
+                        <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                          <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>
+                            {cg.name}
+                            {isBest && <span style={{ marginLeft: 6, fontSize: 11, fontWeight: 700, color: 'var(--role-color)', background: 'var(--color-success-bg)', border: '1px solid var(--role-color)', padding: '1px 6px', borderRadius: 8 }}>BEST MATCH</span>}
+                          </span>
+                          <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{bookedText || facts}</span>
+                        </span>
+                        <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>{cg.dayRate ? `$${cg.dayRate}` : ''}</span>
+                      </button>
+                    );
+                  };
+                  return (
+                    <div data-testid="ranked-list" style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 2 }}>
+                      {loadingCaregivers && !matchedCaregivers.length && (
+                        <div style={{ padding: 16, textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>Finding caregivers{'…'}</div>
+                      )}
+                      {groups.map(g => {
+                        const items = rankedCaregivers.filter(cg => cg.group === g.id);
+                        if (!items.length) return null;
+                        if (g.folded && !showLapsed && !items.some(cg => cg.caregiverId === selectedCaregiver?.caregiverId)) {
+                          return (
+                            <button key={g.id} type="button" onClick={() => setShowLapsed(true)}
+                              style={{ minHeight: 44, borderRadius: 12, border: '1px dashed var(--border-color)', background: 'transparent', cursor: 'pointer',
+                                display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '0 14px', color: 'var(--text-secondary)', fontSize: 14, fontWeight: 600 }}>
+                              <span>{g.label} ({items.length})</span>
+                              <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-muted)' }}>{items.map(cg => cg.name.split(' ')[0]).join(' · ')}</span>
+                            </button>
+                          );
+                        }
+                        return (
+                          <React.Fragment key={g.id}>
+                            <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: 0.4, textTransform: 'uppercase', padding: '6px 4px 0',
+                              color: g.id === 'available' ? 'var(--color-success)' : 'var(--text-tertiary)' }}>{g.label}</div>
+                            {items.map(row)}
+                          </React.Fragment>
+                        );
+                      })}
+                      {!loadingCaregivers && !rankedCaregivers.length && (
+                        <div style={{ padding: 12, fontSize: 13, color: 'var(--text-muted)' }}>No caregivers to offer this to yet. Post it as an open request.</div>
+                      )}
+                      {selectedCaregiver && (
+                        <label style={{ display: 'flex', gap: 10, alignItems: 'center', fontSize: 14, color: 'var(--text-secondary)', padding: '6px 4px', cursor: 'pointer' }}>
+                          <input type="checkbox" checked={!privateOnly} onChange={(e) => setPrivateOnly(!e.target.checked)}
+                            style={{ width: 20, height: 20, margin: 0, accentColor: 'var(--role-color)' }} />
+                          If {selectedCaregiver.name.split(' ')[0]} says no, post it as open
+                        </label>
+                      )}
+                      {selectedCaregiver && !selectedCaregiver.available && localAvgRate && (
+                        <div style={{ fontSize: 12, color: 'var(--text-secondary)', padding: '0 4px' }}>
+                          {selectedCaregiver.name.split(' ')[0]} isn{'’'}t on schedule then. A higher rate makes a yes more likely.{' '}
+                          <button type="button" onClick={() => setProposedRate(String(Math.round(localAvgRate * 1.25)))}
+                            style={{ background: 'none', border: 'none', color: 'var(--role-color)', fontWeight: 700, cursor: 'pointer', fontSize: 12, textDecoration: 'underline', padding: 0 }}>
+                            Offer ${Math.round(localAvgRate * 1.25)}/hr
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
             )}
 
-            {/* Repeat caregiver nudge with expandable care history */}
-            {selectedCaregiver && visitCounts[selectedCaregiver.caregiverId] && visitCounts[selectedCaregiver.caregiverId].count > 0 && (() => {
-              const vc = visitCounts[selectedCaregiver.caregiverId];
-              const cgFirst = selectedCaregiver.name.split(' ')[0];
-              const recipientFirst = (careRecipients.find(r => r.id === selectedRecipientId) || {}).first_name || 'your loved one';
-              const moodDot = (mood) => {
-                const colors = { great: 'var(--color-success)', good: '#8bc34a', okay: '#ffeb3b', low: 'var(--color-warning)', difficult: 'var(--color-error)' };
-                return React.createElement('span', { title: mood || 'unknown', style: { display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: colors[mood] || 'var(--border-light)', marginRight: 2 } });
-              };
-              return React.createElement('div', { style: { background: 'var(--color-purple-bg)', border: '1px solid #ce93d8', borderRadius: 8, padding: '8px 12px', marginBottom: 12 } },
-                React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' } },
-                  React.createElement('span', { style: { fontSize: 12, color: 'var(--color-purple)', fontWeight: 600 } },
-                    `\uD83D\uDD01 ${cgFirst} has cared for ${recipientFirst} ${vc.count} time${vc.count > 1 ? 's' : ''}`
-                  ),
-                  careHistory && careHistory.visits.length > 0 && React.createElement('button', {
-                    type: 'button',
-                    onClick: () => setShowCareHistory(!showCareHistory),
-                    style: { background: 'none', border: 'none', color: 'var(--color-purple)', fontSize: 11, fontWeight: 600, cursor: 'pointer', textDecoration: 'underline', padding: 0 }
-                  }, showCareHistory ? 'Hide history' : 'View history')
-                ),
-                interviewRequired && React.createElement('div', { style: { fontSize: 11, color: 'var(--color-purple)', marginTop: 4 } },
-                  `An interview may not be needed \u2014 ${cgFirst} is a repeat caregiver.`
-                ),
-                showCareHistory && careHistory && React.createElement('div', { style: { marginTop: 8, borderTop: '1px solid #ce93d8', paddingTop: 8 } },
-                  careHistory.visits.map((v, i) => React.createElement('div', { key: i, style: { fontSize: 11, padding: '4px 0', borderBottom: i < careHistory.visits.length - 1 ? '1px solid #e1bee7' : 'none' } },
-                    React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' } },
-                      React.createElement('span', { style: { fontWeight: 600, color: 'var(--color-purple)' } }, v.scheduled_date),
-                      React.createElement('span', { style: { display: 'flex', alignItems: 'center', gap: 2 } },
-                        moodDot(v.arrival_mood), '\u2192 ', moodDot(v.departure_mood),
-                        v.actual_cost && React.createElement('span', { style: { marginLeft: 6, color: 'var(--text-secondary)' } }, `$${Math.round(v.actual_cost || v.estimated_cost)}`)
-                      )
-                    ),
-                    v.summary && React.createElement('div', { style: { color: 'var(--text-secondary)', marginTop: 2, lineHeight: 1.3 } }, v.summary.slice(0, 120) + (v.summary.length > 120 ? '...' : ''))
-                  ))
-                )
-              );
-            })()}
-
-            {/* Interview toggle */}
-            <div style={{ marginBottom: 12, padding: '10px 12px', background: 'var(--bg-primary)', borderRadius: 8, border: '1px solid #e0e0e0' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{'\uD83C\uDFA5'} Request Interview</div>
-                  <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2 }}>Quick video or audio call before the appointment</div>
-                </div>
-                <button type="button" onClick={() => setInterviewRequired(!interviewRequired)} style={{
-                  width: 44, height: 24, borderRadius: 12, border: 'none', cursor: 'pointer', transition: 'all 0.2s',
-                  background: interviewRequired ? 'var(--role-color)' : 'var(--border-light)', position: 'relative',
-                }}>
-                  <div style={{ width: 18, height: 18, borderRadius: '50%', background: 'var(--bg-surface)', position: 'absolute', top: 3,
-                    left: interviewRequired ? 23 : 3, transition: 'left 0.2s' }} />
-                </button>
+            {/* ── During this visit: the person's own appointments (v1.151.0) ── */}
+            {eventsDuringVisit.length > 0 && (
+              <div data-testid="events-during" style={{ marginBottom: 14, padding: '12px 14px', borderRadius: 14, background: 'var(--color-warning-bg)', border: '1px solid var(--color-warning)' }}>
+                <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: 0.4, color: 'var(--text-primary)', marginBottom: 6 }}>DURING THIS VISIT</div>
+                {eventsDuringVisit.map(ev => {
+                  const on = rideEventIds.includes(ev.id);
+                  return (
+                    <div key={ev.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 0' }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>{ev.title}{ev.event_time ? ` · ${formatTime12(ev.event_time)}` : ''}</div>
+                        {ev.location && <div style={{ fontSize: 12, color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ev.location}</div>}
+                      </div>
+                      <button type="button" aria-pressed={on}
+                        onClick={() => setRideEventIds(on ? rideEventIds.filter(id => id !== ev.id) : [...rideEventIds, ev.id])}
+                        style={{ minHeight: 36, padding: '0 12px', borderRadius: 18, cursor: 'pointer', fontSize: 13, fontWeight: 700,
+                          background: on ? 'var(--role-color)' : 'var(--bg-card)', color: on ? 'var(--text-on-primary)' : 'var(--text-primary)',
+                          border: on ? '1px solid var(--role-color)' : '1px solid var(--border-color)' }}>
+                        {on ? '✓ Needs a ride' : 'Needs a ride?'}
+                      </button>
+                    </div>
+                  );
+                })}
+                {rideEventIds.length > 0 && <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4 }}>The ride goes in the caregiver{'’'}s notes for this visit.</div>}
               </div>
-              {interviewRequired && (
-                <div style={{ marginTop: 8, display: 'flex', gap: 6 }}>
-                  {[{ v: 'video', l: '\uD83D\uDCF9 Video' }, { v: 'audio', l: '\uD83D\uDD0A Audio' }].map(opt => (
-                    <button key={opt.v} type="button" onClick={() => setInterviewType(opt.v)} style={pill(interviewType === opt.v)}>
-                      {opt.l}
+            )}
+
+            {/* ── Your offer — remembered on your account (v1.151.0) ── */}
+            <div style={{ marginBottom: 14, padding: '12px 14px', borderRadius: 14, background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
+              {!editingRate ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: 0.4, color: 'var(--text-tertiary)' }}>YOUR OFFER</div>
+                    <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', marginTop: 2 }}>
+                      {proposedRate ? `$${proposedRate}/hr` : 'Caregiver’s own rate'}
+                      {proposedRate && savedOfferRate && Number(proposedRate) === savedOfferRate && <span style={{ fontWeight: 500, color: 'var(--text-secondary)' }}> {'·'} your usual</span>}
+                    </div>
+                    {shortNotice && <div style={{ fontSize: 12, color: 'var(--color-warning)', marginTop: 2, fontWeight: 600 }}>Short notice: +20% rush added</div>}
+                  </div>
+                  <button type="button" onClick={() => { setRateDraft(proposedRate || (localAvgRate ? String(localAvgRate) : '')); setEditingRate(true); }}
+                    style={{ minHeight: 44, padding: '0 14px', borderRadius: 10, border: '1px solid var(--border-color)', background: 'var(--bg-surface)', color: 'var(--text-primary)', fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>
+                    Change
+                  </button>
+                </div>
+              ) : (
+                <div>
+                  <label htmlFor="offer-rate" style={{ fontSize: 12, fontWeight: 700, letterSpacing: 0.4, color: 'var(--text-tertiary)' }}>YOUR OFFER PER HOUR</label>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}>
+                    <span style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-secondary)' }}>$</span>
+                    <input id="offer-rate" type="number" inputMode="numeric" step="1" min="15" max="500" value={rateDraft}
+                      onChange={(e) => setRateDraft(e.target.value)}
+                      style={{ width: 80, padding: '8px', borderRadius: 8, border: '2px solid var(--role-color)', fontSize: 16, fontWeight: 600, textAlign: 'center', background: 'var(--bg-surface)', color: 'var(--text-primary)' }} />
+                    <button type="button" onClick={() => {
+                        const v = parseFloat(rateDraft);
+                        if (v >= 15 && v <= 500) {
+                          setProposedRate(String(Math.round(v)));
+                          if (window.__setUiPref) window.__setUiPref('booking.offerRate', Math.round(v));
+                        }
+                        setEditingRate(false);
+                      }}
+                      style={{ minHeight: 44, padding: '0 16px', borderRadius: 10, border: 'none', background: 'var(--role-color)', color: 'var(--text-on-primary)', fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>
+                      Done
                     </button>
-                  ))}
-                  <div style={{ fontSize: 11, color: 'var(--text-tertiary)', alignSelf: 'center', marginLeft: 4 }}>5 min max</div>
+                  </div>
+                  <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 6 }}>
+                    {localAvgRate ? `Local average $${localAvgRate}/hr. ` : ''}We{'’'}ll start your next request here too.
+                  </div>
                 </div>
               )}
             </div>
 
-            {/* Rate nudge for off-schedule caregiver */}
-            {selectedCaregiver && !selectedCaregiver.available && (
-              <div style={{ background: 'var(--color-warning-bg)', borderRadius: 8, padding: '8px 12px', marginBottom: 12, fontSize: 12, color: 'var(--text-brown)', display: 'flex', gap: 8, alignItems: 'center' }}>
-                <span style={{ fontSize: 16 }}>{'\uD83D\uDCA1'}</span>
-                <span><strong>{selectedCaregiver.name}</strong> isn't on schedule. A higher rate makes it more likely they'll accept.
-                  {localAvgRate && (
-                    <button type="button" onClick={() => setProposedRate(String(Math.round(localAvgRate * 1.25)))}
-                      style={{ display: 'inline', marginLeft: 4, background: 'none', border: 'none', color: 'var(--accent-color)', fontWeight: 700, cursor: 'pointer', fontSize: 12, textDecoration: 'underline', padding: 0 }}>
-                      Bump to ${Math.round(localAvgRate * 1.25)}/hr
-                    </button>
-                  )}
-                </span>
-              </div>
-            )}
-
-            {/* Private request toggle — only show when a specific caregiver is selected */}
-            {selectedCaregiver && (
-              <div onClick={() => setPrivateOnly(!privateOnly)} style={{
-                marginBottom: 12, padding: '10px 12px', borderRadius: 8, cursor: 'pointer',
-                background: privateOnly ? 'rgba(27, 107, 90, 0.08)' : 'var(--bg-surface)',
-                border: privateOnly ? '2px solid #1b6b5a' : '1px solid #e0e0e0',
-                display: 'flex', alignItems: 'center', gap: 10, transition: 'all 0.15s',
-              }}>
-                <div style={{
-                  width: 20, height: 20, borderRadius: 4, flexShrink: 0,
-                  border: privateOnly ? '2px solid #1b6b5a' : '2px solid #ccc',
-                  background: privateOnly ? '#1b6b5a' : 'transparent',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  transition: 'all 0.15s',
-                }}>
-                  {privateOnly && React.createElement('span', { style: { color: '#fff', fontSize: 13, fontWeight: 700, lineHeight: 1 } }, '\u2713')}
-                </div>
-                <div>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>
-                    {selectedCaregiver.name.split(' ')[0]} only — don't open to others
-                  </div>
-                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>
-                    {privateOnly ? 'If they can\'t do it, the request will be cancelled instead of posted publicly' : 'If unchecked, the request opens to all caregivers after 1 hour'}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Flex timing policy */}
-            <div style={{ marginBottom: 12, padding: '10px 12px', background: 'var(--bg-surface)', borderRadius: 8, border: '1px solid #e0e0e0' }}>
-              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6 }}>Overtime Flexibility</div>
-              <div style={{ display: 'flex', gap: 6 }}>
-                {[
-                  { id: 'strict', label: 'Strict', desc: 'End on time' },
-                  { id: 'flexible', label: 'Flexible', desc: 'Up to +30 min' },
-                  { id: 'open', label: 'Open-ended', desc: 'Up to +2 hrs' },
-                ].map(opt => (
-                  <div key={opt.id} onClick={() => setFlexTiming(opt.id)} style={{
-                    flex: 1, padding: '8px 6px', borderRadius: 8, cursor: 'pointer', textAlign: 'center',
-                    border: flexTiming === opt.id ? '2px solid #1b6b5a' : '1px solid #ddd',
-                    background: flexTiming === opt.id ? 'rgba(27, 107, 90, 0.06)' : 'transparent',
-                    transition: 'all 0.15s',
-                  }}>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: flexTiming === opt.id ? '#1b6b5a' : 'var(--text-primary)' }}>{opt.label}</div>
-                    <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>{opt.desc}</div>
-                  </div>
-                ))}
-              </div>
-              <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 6 }}>
-                {flexTiming === 'strict' ? 'Caregiver checks out at the scheduled end time. No overtime charges.' :
-                 flexTiming === 'flexible' ? 'Caregiver can stay up to 30 extra minutes if needed. Overtime billed in 5-min increments at the same rate.' :
-                 'Caregiver can stay up to 2 extra hours. Great for unpredictable days. Overtime billed in 5-min increments.'}
-              </div>
-            </div>
-
-            {/* Offered rate */}
-            <div style={{ marginBottom: 12, padding: '10px 12px', background: 'var(--bg-surface)', borderRadius: 8, border: selectedCaregiver && !selectedCaregiver.available ? '2px solid #e8724a' : '1px solid #e0e0e0' }}>
-              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6 }}>Your Offered Rate</div>
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                <span style={{ fontSize: 16, color: 'var(--text-secondary)', fontWeight: 600 }}>$</span>
-                <input type="number" step="1" min="15" max="500" value={proposedRate} onChange={e => setProposedRate(e.target.value)}
-                  placeholder={localAvgRate ? String(localAvgRate) : '25'}
-                  style={{ width: 72, padding: '6px 8px', borderRadius: 8, border: '2px solid #1b6b5a', fontSize: 16, fontWeight: 600, textAlign: 'center' }} />
-                <span style={{ fontSize: 13, color: 'var(--text-tertiary)' }}>/hr</span>
-                {proposedRate && duration && (
-                  <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--role-color)' }}>= ${(parseFloat(proposedRate) * Number(duration)).toFixed(0)} total</span>
-                )}
-              </div>
-              {localAvgRate && <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 4 }}>Avg local rate: ${localAvgRate}/hr</div>}
-              {shortNotice && <div style={{ fontSize: 11, color: 'var(--accent-color)', marginTop: 2, fontWeight: 500 }}>{'\u26A1'} Short notice +20% surcharge added below</div>}
-            </div>
-
-            {/* Cost breakdown — compact */}
-            {displayCost && (
-              <div style={{ marginBottom: 12, padding: '10px 12px', background: 'var(--bg-primary)', borderRadius: 8, fontSize: 13 }}>
-                {displayCost.tierBreakdown?.map((t, i) => {
-                  const tierLabel = t.tier === 'daytime' ? 'Day' : t.tier === 'nighttime' ? 'Eve' : 'Night';
-                  return (
-                    <div key={i} style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-secondary)', marginBottom: 2 }}>
-                      <span>{t.hours}h {tierLabel} @ ${t.rate}/hr</span><span>${t.amount.toFixed(2)}</span>
-                    </div>
-                  );
-                })}
-                {displayCost.surcharge > 0 && (
-                  <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--accent-color)', fontWeight: 500, marginBottom: 2 }}>
-                    <span>{'\u26A1'} Rush fee</span><span>+${displayCost.surcharge.toFixed(2)}</span>
-                  </div>
-                )}
-                {displayCost.platformFee > 0 && (
-                  <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-tertiary)', marginBottom: 2 }}>
-                    <span>Service fee ({displayCost.platformFeePercent || 20}%)</span><span>${((displayCost.platformFee || 0) - (displayCost.surchargeBreakdown?.platform || 0)).toFixed(2)}</span>
-                  </div>
-                )}
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700, color: 'var(--role-color)', borderTop: '1px solid #e0e0e0', paddingTop: 4, marginTop: 4, fontSize: 15 }}>
-                  <span>You pay</span><span>${(displayCost.familyTotal || displayCost.total).toFixed(2)}</span>
-                </div>
-              </div>
-            )}
-
-            {/* Special instructions */}
+            {/* ── Notes for the caregiver ── */}
             <div style={{ marginBottom: 12 }}>
-              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>Notes for caregiver (optional)</div>
-              <textarea className="modal-textarea" value={instructions} onChange={(e) => setInstructions(e.target.value)} placeholder="Any special notes..." rows={2} style={{ fontSize: 13 }}></textarea>
+              <label htmlFor="caregiver-notes" style={{ display: 'block', fontSize: 12, fontWeight: 700, color: 'var(--text-tertiary)', letterSpacing: 0.4, marginBottom: 4 }}>NOTES FOR CAREGIVER (OPTIONAL)</label>
+              <textarea id="caregiver-notes" className="modal-textarea" value={instructions} onChange={(e) => setInstructions(e.target.value)} placeholder="Any special notes..." rows={2} style={{ fontSize: 13 }}></textarea>
             </div>
+
+            {/* ── Intro call: only the first time this caregiver and this person meet ── */}
+            {showInterview && (
+              <div style={{ marginBottom: 12, padding: '10px 12px', background: 'var(--bg-card)', borderRadius: 12, border: '1px solid var(--border-color)' }}>
+                <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
+                  <span>
+                    <span style={{ display: 'block', fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>Intro call first</span>
+                    <span style={{ display: 'block', fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>{selectedCaregiver.name.split(' ')[0]} hasn{'’'}t cared for {recipientFirst || 'them'} yet. A 5-minute video or audio call before the visit.</span>
+                  </span>
+                  <input type="checkbox" checked={interviewRequired} onChange={(e) => setInterviewRequired(e.target.checked)}
+                    style={{ width: 22, height: 22, margin: 0, accentColor: 'var(--role-color)', flexShrink: 0 }} />
+                </label>
+                {interviewRequired && (
+                  <div style={{ marginTop: 8, display: 'flex', gap: 6 }}>
+                    {[{ v: 'video', l: 'Video' }, { v: 'audio', l: 'Audio' }].map(opt => (
+                      <button key={opt.v} type="button" onClick={() => setInterviewType(opt.v)} style={pill(interviewType === opt.v)}>{opt.l}</button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ── More options: overtime ── */}
+            <button type="button" aria-expanded={showMoreOptions} onClick={() => setShowMoreOptions(!showMoreOptions)}
+              style={{ minHeight: 44, background: 'none', border: 'none', color: 'var(--role-color)', fontWeight: 600, fontSize: 14, cursor: 'pointer', textAlign: 'left', padding: '0 2px', marginBottom: 6 }}>
+              {showMoreOptions ? 'Fewer options' : `More options · ${flexTiming === 'strict' ? 'Strict end' : flexTiming === 'open' ? 'Open-ended (+2 hrs)' : 'Flexible overtime (+30 min)'}`}
+            </button>
+            {showMoreOptions && (
+              <div style={{ marginBottom: 12, padding: '10px 12px', background: 'var(--bg-card)', borderRadius: 12, border: '1px solid var(--border-color)' }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6 }}>Overtime</div>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  {[
+                    { id: 'strict', label: 'Strict', desc: 'End on time' },
+                    { id: 'flexible', label: 'Flexible', desc: 'Up to +30 min' },
+                    { id: 'open', label: 'Open-ended', desc: 'Up to +2 hrs' },
+                  ].map(opt => (
+                    <button key={opt.id} type="button" aria-pressed={flexTiming === opt.id} onClick={() => setFlexTiming(opt.id)} style={{
+                      flex: 1, padding: '8px 6px', borderRadius: 8, cursor: 'pointer', textAlign: 'center',
+                      border: flexTiming === opt.id ? '2px solid var(--role-color)' : '1px solid var(--border-color)',
+                      background: flexTiming === opt.id ? 'var(--color-success-bg)' : 'transparent',
+                    }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: flexTiming === opt.id ? 'var(--role-color)' : 'var(--text-primary)' }}>{opt.label}</div>
+                      <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 2 }}>{opt.desc}</div>
+                    </button>
+                  ))}
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 6 }}>
+                  {flexTiming === 'strict' ? 'Caregiver checks out at the scheduled end time. No overtime charges.' :
+                   flexTiming === 'flexible' ? 'Caregiver can stay up to 30 extra minutes if needed. Overtime billed in 5-min increments at the same rate.' :
+                   'Caregiver can stay up to 2 extra hours. Overtime billed in 5-min increments.'}
+                </div>
+              </div>
+            )}
+
+            {/* ── You pay: one line, details on tap ── */}
+            {displayCost && (
+              <div style={{ marginBottom: 8, padding: '10px 12px', background: 'var(--bg-primary)', borderRadius: 10, fontSize: 13 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 15, color: 'var(--text-primary)' }}>
+                  <span>You pay {'·'} {duration} hr{Number(duration) === 1 ? '' : 's'}</span>
+                  <span style={{ fontWeight: 700 }}>
+                    ${(displayCost.familyTotal || displayCost.total).toFixed(2)}
+                    <button type="button" aria-expanded={showCostDetail} onClick={() => setShowCostDetail(!showCostDetail)}
+                      style={{ marginLeft: 8, background: 'none', border: 'none', color: 'var(--role-color)', fontWeight: 600, fontSize: 13, cursor: 'pointer', padding: 0 }}>
+                      {showCostDetail ? 'Hide' : 'Details'}
+                    </button>
+                  </span>
+                </div>
+                {showCostDetail && (
+                  <div style={{ marginTop: 6, borderTop: '1px solid var(--border-light)', paddingTop: 6 }}>
+                    {displayCost.tierBreakdown?.map((t, i) => {
+                      const tierLabel = t.tier === 'daytime' ? 'Day' : t.tier === 'nighttime' ? 'Eve' : 'Night';
+                      return (
+                        <div key={i} style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-secondary)', marginBottom: 2 }}>
+                          <span>{t.hours}h {tierLabel} @ ${t.rate}/hr</span><span>${t.amount.toFixed(2)}</span>
+                        </div>
+                      );
+                    })}
+                    {displayCost.surcharge > 0 && (
+                      <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--color-warning)', fontWeight: 500, marginBottom: 2 }}>
+                        <span>Rush fee</span><span>+${displayCost.surcharge.toFixed(2)}</span>
+                      </div>
+                    )}
+                    {displayCost.platformFee > 0 && (
+                      <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-secondary)', marginBottom: 2 }}>
+                        <span>Service fee ({displayCost.platformFeePercent || 20}%)</span><span>${((displayCost.platformFee || 0) - (displayCost.surchargeBreakdown?.platform || 0)).toFixed(2)}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
 
             {!selectedCaregiver && !hasCaregiverData && (
               <div style={{ padding: 10, background: 'var(--color-warning-bg)', borderRadius: 8, fontSize: 12, color: 'var(--text-brown)', marginBottom: 8 }}>
@@ -1238,7 +1335,7 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
           )}
           {step === 2 && (
             <button className="btn btn-primary" onClick={handleSubmit}>
-              {editDraft ? 'Save changes' : (selectedCaregiver ? (selectedCaregiver.available ? 'Confirm Booking' : 'Send Offer') : 'Post Care Request')}
+              {editDraft ? 'Save changes' : (selectedCaregiver ? `Offer to ${selectedCaregiver.name.split(' ')[0]}${proposedRate ? ` \u00B7 $${proposedRate}/hr` : ''}` : 'Post open request')}
             </button>
           )}
         </div>

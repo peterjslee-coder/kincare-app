@@ -29,6 +29,9 @@ const scripts = [
   // v1.123.0 — window.TimeChange: what a time change changes, in words. Isomorphic — the
   // server requires the same file for the push and the Needs-you title.
   "js/timeChange.js",
+  // v1.151.0 — window.BookingRank: who to offer a visit to first. Isomorphic — the server
+  // requires it for the already-booked overlap check.
+  "js/bookingRank.js",
   // v1.117.0 — journey tracking (window.InPlaceJourney). Own file: it runs at load and listens
   // to the document, and utils.js is sliced into Node-side tests that have no document.
   "js/journey.js",

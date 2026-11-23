@@ -4,6 +4,8 @@ const { getDb } = require("../models/database");
 const { authenticate, requireRole } = require("../middleware/auth");
 const { coarsenCoordinate } = require("../utils/geocode");
 const { recipientForLinkedUser } = require("../utils/linkedAccount"); // stale-link sweep
+const { getTodayStringInZone } = require("../utils/timezone");
+const BookingRank = require("../../public/js/bookingRank"); // v1.151.0 — overlap + 30-day window
 
 const router = express.Router();
 router.use(authenticate);
@@ -138,6 +140,14 @@ router.get("/suggestions", async (req, res) => {
     const db = await getDb();
     const { careRecipientId } = req.query;
     const userId = req.user.id;
+    // v1.151.0 — the visit being booked, so a caregiver already busy then is marked, never
+    // offered as the best match. Naive care-location values, the same shape sessions store.
+    const want = {
+      date: /^\d{4}-\d{2}-\d{2}$/.test(String(req.query.date || '')) ? String(req.query.date) : null,
+      time: /^\d{1,2}:\d{2}$/.test(String(req.query.time || '')) ? String(req.query.time) : null,
+      durationHours: Math.min(24, Math.max(0, parseFloat(req.query.durationHours) || 0)),
+    };
+    const excludeSessionId = typeof req.query.excludeSessionId === 'string' ? req.query.excludeSessionId : null;
     const activeRole = req.user.activeRole || req.user.role;
 
     // Resolve care recipient: explicit param, or auto from role
@@ -151,6 +161,14 @@ router.get("/suggestions", async (req, res) => {
     const me = await db.prepare("SELECT is_demo FROM users WHERE id = ?").get(userId);
     const isDemo = me && me.is_demo ? 1 : 0;
 
+    // v1.151.0 — "recent" is a COMPLETED visit in the last 30 days, counted in the care
+    // location's calendar. A visit booked for next month is not currency ("nudge to currency").
+    let recentCutoff = null;
+    if (recipientId) {
+      const tzRow = await db.prepare("SELECT timezone FROM care_recipients WHERE id = ?").get(recipientId);
+      recentCutoff = BookingRank.minusDays(getTodayStringInZone(tzRow?.timezone || undefined), 30);
+    }
+
     // 1) Caregivers from session history + assignments for this recipient
     //    This catches both formally assigned AND anyone who has cared for this person before
     const knownCaregivers = recipientId ? await db.prepare(`
@@ -162,6 +180,8 @@ router.get("/suggestions", async (req, res) => {
         cp.location_city, cp.location_state,
         COUNT(DISTINCT cs.id) AS visit_count,
         MAX(cs.scheduled_date) AS last_visit,
+        COUNT(DISTINCT CASE WHEN cs.status = 'completed' AND cs.scheduled_date >= ? THEN cs.id END) AS recent_visits,
+        MAX(CASE WHEN cs.status = 'completed' THEN cs.scheduled_date END) AS last_completed_visit,
         COALESCE(MAX(CASE WHEN ca.is_active = 1 THEN 1 ELSE 0 END), 0) AS is_assigned,
         COALESCE(MAX(CASE WHEN ca.is_favorite = 1 THEN 1 ELSE 0 END), 0) AS is_favorite,
         COALESCE(AVG(CASE WHEN r.rating IS NOT NULL THEN r.rating END), 0) AS avg_family_rating
@@ -198,6 +218,9 @@ router.get("/suggestions", async (req, res) => {
         AND COALESCE(u.is_active, 1) = 1
         AND COALESCE(u.is_demo, 0) = ?
         AND COALESCE(cp.account_paused, 0) = 0
+        -- v1.151.0 — never yourself: a family member who also holds a caregiver profile was
+        -- listed in their own booking picker as "Available".
+        AND cp.user_id <> ?
       GROUP BY cp.id, cp.user_id, u.first_name, u.last_name,
         cp.hourly_rate, cp.rate_daytime, cp.rate_nighttime, cp.rate_overnight,
         cp.specialties, cp.certifications, cp.open_to_interview,
@@ -207,7 +230,7 @@ router.get("/suggestions", async (req, res) => {
         COALESCE(MAX(CASE WHEN ca.is_favorite = 1 THEN 1 ELSE 0 END), 0) DESC,
         COUNT(DISTINCT cs.id) DESC,
         MAX(cs.scheduled_date) DESC
-    `).all(recipientId, recipientId, userId, userId, userId, isDemo) : [];
+    `).all(recentCutoff || '9999-12-31', recipientId, recipientId, userId, userId, userId, isDemo, userId) : [];
 
     const knownIds = new Set(knownCaregivers.map(c => c.caregiver_profile_id));
 
@@ -238,9 +261,10 @@ router.get("/suggestions", async (req, res) => {
             AND COALESCE(cp.account_paused, 0) = 0
             AND cp.onboarding_complete = 1
             AND cp.latitude IS NOT NULL AND cp.longitude IS NOT NULL
+            AND cp.user_id <> ?
           ORDER BY cp.rating_avg DESC
           LIMIT 20
-        `).all(isDemo);
+        `).all(isDemo, userId);
 
         // Filter by distance in JS (haversine)
         const toRad = (d) => d * Math.PI / 180;
@@ -285,12 +309,42 @@ router.get("/suggestions", async (req, res) => {
       distance: null,
     }));
 
-    res.json({
-      suggestions: [
-        ...formatKnown.map(c => ({ ...c, source: c.visit_count > 0 ? 'history' : 'assigned' })),
-        ...nearbyCaregivers.map(c => ({ ...c, source: 'nearby' })),
-      ],
-    });
+    const suggestions = [
+      ...formatKnown.map(c => ({ ...c, source: c.visit_count > 0 ? 'history' : 'assigned' })),
+      ...nearbyCaregivers.map(c => ({ ...c, source: 'nearby', recent_visits: 0, last_completed_visit: null })),
+    ];
+
+    // v1.151.0 — already booked then? Confirmed or in-progress visits on that day, or the day
+    // before (an overnight runs into the morning), for anyone in the list, for ANY family.
+    // Only the fact of the clash leaves the server — the time too only when the clash is with
+    // this same person's own visit.
+    if (want.date && want.time && want.durationHours > 0 && suggestions.length) {
+      const ids = suggestions.map(c => c.caregiver_profile_id);
+      const prev = BookingRank.minusDays(want.date, 1);
+      const rows = await db.prepare(`
+        SELECT cs.id, cs.caregiver_id, cs.care_recipient_id, cs.scheduled_date, cs.scheduled_time, cs.duration_hours
+        FROM care_sessions cs
+        WHERE cs.caregiver_id IN (${ids.map(() => '?').join(',')})
+          AND cs.status IN ('confirmed', 'in_progress')
+          AND cs.scheduled_date IN (?, ?)
+      `).all(...ids, want.date, prev);
+      const busy = new Map();
+      for (const r of rows) {
+        if (excludeSessionId && r.id === excludeSessionId) continue;
+        const theirs = { date: r.scheduled_date, time: r.scheduled_time, durationHours: r.duration_hours };
+        if (!BookingRank.overlaps(theirs, want)) continue;
+        const sameRecipient = !!recipientId && r.care_recipient_id === recipientId;
+        const had = busy.get(r.caregiver_id);
+        if (!had || (sameRecipient && !had.sameRecipient)) {
+          busy.set(r.caregiver_id, sameRecipient
+            ? { sameRecipient: true, date: r.scheduled_date, time: r.scheduled_time, durationHours: Number(r.duration_hours) }
+            : { sameRecipient: false });
+        }
+      }
+      for (const c of suggestions) c.booked = busy.get(c.caregiver_profile_id) || null;
+    }
+
+    res.json({ suggestions });
   } catch (err) {
     console.error("Caregiver suggestions error:", err);
     res.status(500).json({ error: "Failed to get suggestions" });

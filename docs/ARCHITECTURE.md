@@ -388,14 +388,14 @@ State travels through `window`, not props. This table is the registry.
 | `window.__sandboxMode` | app.js | 2 |
 | `window.__sessionIsPersistent` | app.js | 2 |
 | `window.__setSessionActive` | app.js | 4 |
-| `window.__setUiPref` | uiPrefs.js | 7 |
+| `window.__setUiPref` | uiPrefs.js | 11 |
 | `window.__setUiPrefs` | app.js, uiPrefs.js | 7 |
 | `window.__showToast` | VisitDetailModal.js, WhatsNew.js, utils.js | 16 |
 | `window.__skipPopstate` | VisitDetailModal.js | 3 |
 | `window.__startCaregiverTour` | app.js | 11 |
 | `window.__startImpersonation` | app.js | 3 |
 | `window.__swApplyPendingUpdate` | — | 5 |
-| `window.__uiPrefs` | uiPrefs.js | 11 |
+| `window.__uiPrefs` | uiPrefs.js | 15 |
 | `window.__viewCaregiverId` | app.js, Caregivers.js | 3 |
 | `window.__visitGeoAllowed` | FamilyVisitLog.js | 1 |
 | `window.__visitHaversineFeet` | FamilyVisitLog.js | 1 |
