@@ -1,5 +1,5 @@
 // v1.152.0 — InPlace Hub helpers: settings cleaning, visit end times, and the "days she comes" label.
-const { cleanHub, addHours, weekdayLabel, relationLabel, parseSimpleMode } = require("../src/utils/simpleMode");
+const { cleanHub, addHours, weekdayLabel, nextVisitLabel, relationLabel, parseSimpleMode } = require("../src/utils/simpleMode");
 
 test("cleanHub keeps known booleans and valid HH:MM only", () => {
   expect(cleanHub(null)).toEqual({ on: false, faces: true, week: true, dimFrom: "21:00", dimTo: "07:00" });
@@ -31,4 +31,11 @@ test("relationLabel", () => {
   expect(relationLabel("Son")).toBe("your son");
   expect(relationLabel("Best friend from church")).toBe("Best friend from church");
   expect(relationLabel("")).toBeNull();
+});
+
+test("nextVisitLabel: Today, Tomorrow, then the weekday", () => {
+  expect(nextVisitLabel("2026-11-23", "2026-11-23")).toBe("Today");
+  expect(nextVisitLabel("2026-11-24", "2026-11-23")).toBe("Tomorrow");
+  expect(nextVisitLabel("2026-11-26", "2026-11-23")).toBe("Thursday");
+  expect(nextVisitLabel(null, "2026-11-23")).toBe("your caregiver");
 });

@@ -101,7 +101,7 @@ test("her dashboard carries who is here, seven days, and faces with names", asyn
   expect(hub.days.filter((x) => x.kind === "visit").map((x) => x.date)).toEqual([soon(0), soon(3)]);
   // Faces (v1.153.1): only caregivers coming this week — Tina, labelled with her days. No family.
   expect(hub.people).toHaveLength(1);
-  expect(hub.people[0]).toMatchObject({ firstName: "Tina", today: true });
+  expect(hub.people[0]).toMatchObject({ firstName: "Tina", today: true, label: "Today" });
   expect(hub.people.map((p) => p.firstName)).not.toContain("Pete");
   expect(hub.people.map((p) => p.userId)).not.toContain(mom.user.id);
   // The phone list stays today and tomorrow.
