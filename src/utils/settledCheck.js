@@ -60,4 +60,16 @@ function conditionReadDue(row, { minutes = SETTLED_MINUTES, now = new Date() } =
   return Number.isFinite(since) && since >= minutes;
 }
 
-module.exports = { SETTLED_MINUTES, visitsDueConditionRead, conditionReadDue };
+/**
+ * v1.153.3 — she was asleep when the caregiver checked in, so "does she know you're here?" had
+ * no answer then. It joins the fifteen-minute check and keeps offering until it gets one,
+ * whether or not the mood question has been answered.
+ */
+function awarenessFollowUpDue(row, { minutes = SETTLED_MINUTES, now = new Date() } = {}) {
+  if (!row || !row.check_in_time || row.check_out_time) return false;
+  if (row.first_visit_confirmation !== 'asleep') return false;
+  const since = (now - new Date(row.check_in_time)) / 60000;
+  return Number.isFinite(since) && since >= minutes;
+}
+
+module.exports = { SETTLED_MINUTES, visitsDueConditionRead, conditionReadDue, awarenessFollowUpDue };

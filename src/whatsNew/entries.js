@@ -31,6 +31,21 @@ const WINDOW_DAYS = 45;
 
 const ENTRIES = [
   {
+    id: "asleep-at-check-in",
+    version: "1.153.3",
+    date: "2026-11-23",
+    audience: ["caregiver"],
+    title: "Checking in while they're asleep",
+    body: "On a first visit, the check-in now has an \"asleep\" answer when you can't ask yet whether they know you're there. Nothing is flagged; fifteen minutes in, the app asks again so you can answer once they're up.",
+    howTo: [
+      "At check-in, pick \"is asleep — I'll ask when they wake\"",
+      "Fifteen minutes in, answer \"Yes, they know I'm here\" once they're up",
+      "Still sleeping? Tap \"Still asleep\" and it asks again in 30 minutes",
+    ],
+    examples: ["Mom was napping when I got there", "Sam was still in bed at 8"],
+    preview: "asleepCheckIn",
+  },
+  {
     id: "simple-screen-calls",
     version: "1.153.0",
     date: "2026-11-23",

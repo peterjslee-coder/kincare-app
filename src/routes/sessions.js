@@ -5432,9 +5432,9 @@ router.post("/:sessionId/first-visit-confirm", async (req, res) => {
   try {
     const { confirmation, notes } = req.body;
 
-    const validConfirmations = ['yes', 'no', 'unable'];
+    const validConfirmations = ['yes', 'no', 'unable', 'asleep'];
     if (!confirmation || !validConfirmations.includes(confirmation)) {
-      return res.status(400).json({ error: "Confirmation must be 'yes', 'no', or 'unable'" });
+      return res.status(400).json({ error: "Confirmation must be 'yes', 'no', 'unable' or 'asleep'" });
     }
 
     const db = await getDb();
@@ -5466,8 +5466,25 @@ router.post("/:sessionId/first-visit-confirm", async (req, res) => {
       ON CONFLICT (session_id) DO NOTHING
     `).run(id, session.care_recipient_id, session.caregiver_profile_id, req.params.sessionId, confirmation, notes || null);
 
-    // If 'no' or 'unable', notify the family AND admin, pause future bookings
-    if (confirmation !== 'yes') {
+    // If 'no' or 'unable', notify the family AND admin, pause future bookings. 'asleep' is
+    // neither: the question moves to the fifteen-minute check (awareness-followup below).
+    if (confirmation === 'no' || confirmation === 'unable') {
+      await raiseAwarenessConcern(req, db, session, confirmation, notes);
+    }
+
+    res.json({ success: true, confirmation });
+  } catch (err) {
+    console.error("First-visit confirm error:", err);
+    res.status(500).json({ error: "Failed to submit first-visit confirmation" });
+  }
+});
+
+// v1.153.3 — the awareness concern, shared by the check-in answer and by the follow-up once a
+// person who was ASLEEP at check-in has woken (Pete, 11/23: "we need an option besides whether
+// or not Betty is aware. Because she was asleep."). 'no' / 'unable' pause bookings and alert the
+// family and admin; 'yes' and 'asleep' never call this.
+async function raiseAwarenessConcern(req, db, session, confirmation, notes) {
+    {
       const caregiverUser = await db.prepare("SELECT first_name, last_name FROM users WHERE id = ?").get(req.user.id);
       const caregiverName = caregiverUser ? `${caregiverUser.first_name} ${caregiverUser.last_name}` : "Caregiver";
       const recipient = await db.prepare("SELECT first_name, last_name FROM care_recipients WHERE id = ?").get(session.care_recipient_id);
@@ -5522,11 +5539,47 @@ router.post("/:sessionId/first-visit-confirm", async (req, res) => {
         console.error("First-visit admin notification error:", adminErr.message);
       }
     }
+}
 
+// ─── POST /api/sessions/:sessionId/awareness-followup ───
+// v1.153.3 — she was asleep at check-in; now the caregiver says whether she knows someone is
+// there. Only the assigned caregiver, and only while this visit's answer is still 'asleep'.
+router.post("/:sessionId/awareness-followup", async (req, res) => {
+  try {
+    const { confirmation, notes } = req.body || {};
+    if (!['yes', 'no', 'asleep'].includes(confirmation)) {
+      return res.status(400).json({ error: "Answer must be 'yes', 'no' or 'asleep'" });
+    }
+    const db = await getDb();
+    const session = await db.prepare(`
+      SELECT cs.*, cp.id AS caregiver_profile_id, cp.user_id AS caregiver_user_id
+      FROM care_sessions cs
+      LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+      WHERE cs.id = ?
+    `).get(req.params.sessionId);
+    if (!session) return res.status(404).json({ error: "Session not found" });
+    if (session.caregiver_user_id !== req.user.id) {
+      return res.status(403).json({ error: "Only the assigned caregiver can answer this" });
+    }
+    const row = await db.prepare(
+      "SELECT id, confirmation FROM first_visit_confirmations WHERE session_id = ?"
+    ).get(req.params.sessionId);
+    if (!row || row.confirmation !== 'asleep') {
+      return res.json({ success: true, confirmation: row ? row.confirmation : null, alreadyAnswered: true });
+    }
+    // Still asleep: nothing to record; her screen asks again later.
+    if (confirmation === 'asleep') return res.json({ success: true, confirmation: 'asleep' });
+    const cleanNotes = typeof notes === 'string' && notes.trim() ? notes.trim().slice(0, 2000) : null;
+    const upd = await db.prepare(
+      "UPDATE first_visit_confirmations SET confirmation = ?, notes = COALESCE(?, notes) WHERE id = ? AND confirmation = 'asleep'"
+    ).run(confirmation, cleanNotes, row.id);
+    if ((upd && upd.changes) > 0 && confirmation === 'no') {
+      await raiseAwarenessConcern(req, db, session, 'no', cleanNotes);
+    }
     res.json({ success: true, confirmation });
   } catch (err) {
-    console.error("First-visit confirm error:", err);
-    res.status(500).json({ error: "Failed to submit first-visit confirmation" });
+    console.error("Awareness follow-up error:", err);
+    res.status(500).json({ error: "Failed to save the answer" });
   }
 });
 

@@ -508,6 +508,22 @@ const WN_PREVIEWS = {
       </div>
     </div>
   ),
+  // v1.153.3 — asleep at check-in, asked again at fifteen minutes
+  asleepCheckIn: () => (
+    <div>
+      <div style={{ ...wnCard }}>
+        <div style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 6 }}>Is Mom aware you{'’'}re here?</div>
+        {['✅ Yes, they acknowledged me', '😴 Mom is asleep — I’ll ask when they wake'].map((t, i) => (
+          <div key={i} style={{ fontSize: 10.5, padding: '5px 7px', borderRadius: 6, marginTop: 4, color: 'var(--text-primary)',
+            border: i === 1 ? '1.5px solid var(--role-color)' : '1px solid var(--border-light)' }}>{t}</div>
+        ))}
+      </div>
+      <div style={{ ...wnCard, border: '1.5px solid var(--role-color)' }}>
+        <div style={{ fontSize: 10, color: 'var(--text-secondary)' }}>15 minutes later</div>
+        <div style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--text-primary)' }}>Mom was asleep when you arrived. Does Mom know you{'’'}re here now?</div>
+      </div>
+    </div>
+  ),
   // v1.151.0 — Request care, step 2: open request first, then the ranked list with stars
   rankedPicker: () => (
     <div>
