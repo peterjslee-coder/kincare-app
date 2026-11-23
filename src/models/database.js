@@ -3756,6 +3756,30 @@ async function initializeDatabase() {
         `ALTER TABLE time_proposals ADD COLUMN IF NOT EXISTS proposed_duration REAL`,
       ],
     },
+    {
+      // v1.150.2 — repair what the broken admin approve left behind. Until this release the
+      // tier-3 attestation update used UPDATE ... ORDER BY ... LIMIT, which Postgres rejects,
+      // so a hand approval verified the recipient but left the attestation "pending" and the
+      // outreach link open. Only rows an admin actually approved.
+      id: "096_admin_approved_consent_repair",
+      statements: [
+        `UPDATE attestations a SET admin_status = 'approved',
+            admin_reviewed_by = cr.consent_reviewed_by,
+            admin_reviewed_at = COALESCE(cr.consent_verified_at, NOW())
+           FROM care_recipients cr
+          WHERE cr.id = a.care_recipient_id
+            AND cr.consent_status = 'verified' AND cr.consent_method = 'admin_approved'
+            AND COALESCE(a.admin_status, 'pending') = 'pending'
+            AND a.id = (SELECT a2.id FROM attestations a2 WHERE a2.care_recipient_id = cr.id
+                         ORDER BY a2.created_at DESC LIMIT 1)`,
+        `UPDATE consent_outreach co SET expires_at = NOW()
+           FROM care_recipients cr
+          WHERE cr.id = co.care_recipient_id
+            AND cr.consent_status = 'verified' AND cr.consent_method = 'admin_approved'
+            AND co.recipient_response IS NULL
+            AND (co.expires_at IS NULL OR co.expires_at > NOW())`,
+      ],
+    },
   ];
   for (const m of MIGRATIONS_V2) {
     if (applied.has(m.id)) continue;
