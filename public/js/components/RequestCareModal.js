@@ -390,7 +390,7 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
           // Source labeling
           isTeam: source === 'history' || source === 'assigned',
           source: source,
-          visitCount: cg.visit_count || 0,
+          visitCount: Number(cg.visit_count) || 0,
           distance: cg.distance ? `${cg.distance} mi` : null,
           rating: Number(cg.rating_avg) || 0, reviewCount: Number(cg.rating_count) || 0,
           // v1.151.0 — what the ranked list reads
@@ -1089,7 +1089,7 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
                   return (
                     <div data-testid="ranked-list" style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 2 }}>
                       {loadingCaregivers && !matchedCaregivers.length && (
-                        <div style={{ padding: 16, textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>Finding caregivers{'…'}</div>
+                        <div style={{ padding: 16, textAlign: 'center', color: 'var(--text-secondary)', fontSize: 13 }}>Finding caregivers{'…'}</div>
                       )}
                       {groups.map(g => {
                         const items = rankedCaregivers.filter(cg => cg.group === g.id);
@@ -1100,20 +1100,20 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
                               style={{ minHeight: 44, borderRadius: 12, border: '1px dashed var(--border-color)', background: 'transparent', cursor: 'pointer',
                                 display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '0 14px', color: 'var(--text-secondary)', fontSize: 14, fontWeight: 600 }}>
                               <span>{g.label} ({items.length})</span>
-                              <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-muted)' }}>{items.map(cg => cg.name.split(' ')[0]).join(' · ')}</span>
+                              <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)' }}>{items.map(cg => cg.name.split(' ')[0]).join(' · ')}</span>
                             </button>
                           );
                         }
                         return (
                           <React.Fragment key={g.id}>
                             <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: 0.4, textTransform: 'uppercase', padding: '6px 4px 0',
-                              color: g.id === 'available' ? 'var(--color-success)' : 'var(--text-tertiary)' }}>{g.label}</div>
+                              color: g.id === 'available' ? 'var(--role-text)' : 'var(--text-secondary)' }}>{g.label}</div>
                             {items.map(row)}
                           </React.Fragment>
                         );
                       })}
                       {!loadingCaregivers && !rankedCaregivers.length && (
-                        <div style={{ padding: 12, fontSize: 13, color: 'var(--text-muted)' }}>No caregivers to offer this to yet. Post it as an open request.</div>
+                        <div style={{ padding: 12, fontSize: 13, color: 'var(--text-secondary)' }}>No caregivers to offer this to yet. Post it as an open request.</div>
                       )}
                       {selectedCaregiver && (
                         <label style={{ display: 'flex', gap: 10, alignItems: 'center', fontSize: 14, color: 'var(--text-secondary)', padding: '6px 4px', cursor: 'pointer' }}>
@@ -1168,12 +1168,12 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
               {!editingRate ? (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                   <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: 0.4, color: 'var(--text-tertiary)' }}>YOUR OFFER</div>
+                    <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: 0.4, color: 'var(--text-secondary)' }}>YOUR OFFER</div>
                     <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', marginTop: 2 }}>
                       {proposedRate ? `$${proposedRate}/hr` : 'Caregiver’s own rate'}
                       {proposedRate && savedOfferRate && Number(proposedRate) === savedOfferRate && <span style={{ fontWeight: 500, color: 'var(--text-secondary)' }}> {'·'} your usual</span>}
                     </div>
-                    {shortNotice && <div style={{ fontSize: 12, color: 'var(--color-warning)', marginTop: 2, fontWeight: 600 }}>Short notice: +20% rush added</div>}
+                    {shortNotice && <div style={{ fontSize: 12, color: 'var(--text-primary)', marginTop: 2, fontWeight: 600 }}>{'\u26A1'} Short notice: +20% rush added</div>}
                   </div>
                   <button type="button" onClick={() => { setRateDraft(proposedRate || (localAvgRate ? String(localAvgRate) : '')); setEditingRate(true); }}
                     style={{ minHeight: 44, padding: '0 14px', borderRadius: 10, border: '1px solid var(--border-color)', background: 'var(--bg-surface)', color: 'var(--text-primary)', fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>
@@ -1182,7 +1182,7 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
                 </div>
               ) : (
                 <div>
-                  <label htmlFor="offer-rate" style={{ fontSize: 12, fontWeight: 700, letterSpacing: 0.4, color: 'var(--text-tertiary)' }}>YOUR OFFER PER HOUR</label>
+                  <label htmlFor="offer-rate" style={{ fontSize: 12, fontWeight: 700, letterSpacing: 0.4, color: 'var(--text-secondary)' }}>YOUR OFFER PER HOUR</label>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}>
                     <span style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-secondary)' }}>$</span>
                     <input id="offer-rate" type="number" inputMode="numeric" step="1" min="15" max="500" value={rateDraft}
@@ -1209,7 +1209,7 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
 
             {/* ── Notes for the caregiver ── */}
             <div style={{ marginBottom: 12 }}>
-              <label htmlFor="caregiver-notes" style={{ display: 'block', fontSize: 12, fontWeight: 700, color: 'var(--text-tertiary)', letterSpacing: 0.4, marginBottom: 4 }}>NOTES FOR CAREGIVER (OPTIONAL)</label>
+              <label htmlFor="caregiver-notes" style={{ display: 'block', fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', letterSpacing: 0.4, marginBottom: 4 }}>NOTES FOR CAREGIVER (OPTIONAL)</label>
               <textarea id="caregiver-notes" className="modal-textarea" value={instructions} onChange={(e) => setInstructions(e.target.value)} placeholder="Any special notes..." rows={2} style={{ fontSize: 13 }}></textarea>
             </div>
 
@@ -1268,7 +1268,7 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
 
             {/* ── You pay: one line, details on tap ── */}
             {displayCost && (
-              <div style={{ marginBottom: 8, padding: '10px 12px', background: 'var(--bg-primary)', borderRadius: 10, fontSize: 13 }}>
+              <div style={{ marginBottom: 8, padding: '10px 12px', background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: 10, fontSize: 13 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 15, color: 'var(--text-primary)' }}>
                   <span>You pay {'·'} {duration} hr{Number(duration) === 1 ? '' : 's'}</span>
                   <span style={{ fontWeight: 700 }}>
@@ -1290,8 +1290,8 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
                       );
                     })}
                     {displayCost.surcharge > 0 && (
-                      <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--color-warning)', fontWeight: 500, marginBottom: 2 }}>
-                        <span>Rush fee</span><span>+${displayCost.surcharge.toFixed(2)}</span>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-primary)', fontWeight: 600, marginBottom: 2 }}>
+                        <span>{'\u26A1'} Rush fee</span><span>+${displayCost.surcharge.toFixed(2)}</span>
                       </div>
                     )}
                     {displayCost.platformFee > 0 && (
