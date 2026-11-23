@@ -81,6 +81,7 @@ const scripts = [
   "js/components/TeamNotes.js",
   "js/components/CollapsibleCard.js", // v1.105.171 — used by CareProfile and CareTeamManage
   "js/components/ReactionBar.js",
+  "js/components/ReadReceipts.js", // v1.148.0 — "Got it" on notes and visit reports; CareProfile, TeamNotes, VisitDetailModal
   "js/components/DayBar.js", // v1.135.0 — the 24-hour day bar; Schedule uses it
   "js/components/Schedule.js",
   "js/components/ActivityFeed.js",

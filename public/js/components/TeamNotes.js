@@ -165,6 +165,7 @@ const TeamNotes = window.TeamNotes = ({ onNavigate }) => {
         ? [{ path: `/api/notes/${n.id}/photo`, name: 'Care note photo', mime: '' }]
         : [],
       targetType: 'note', targetId: n.id, reactions: n.reactions || [],
+      readReceipts: n.readReceipts || null, // v1.148.0
     })),
     ...visits.map((v) => ({
       kind: 'visit', id: `v-${v.id}`, at: v.visitedAt || v.createdAt,
@@ -426,6 +427,9 @@ const TeamNotes = window.TeamNotes = ({ onNavigate }) => {
               {typeof ReactionRow !== 'undefined' && (
                 <ReactionRow reactions={item.reactions} currentUserId={window.__currentUserId}
                   onReact={(emoji) => handleReact(item.targetType, item.targetId, emoji)} />
+              )}
+              {typeof ReadReceiptBar !== 'undefined' && item.readReceipts && (
+                <ReadReceiptBar targetType="note" targetId={item.targetId} receipts={item.readReceipts} timezone={selected?.timezone} compact />
               )}
             </div>
           ))}

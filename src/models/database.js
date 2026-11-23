@@ -3729,6 +3729,23 @@ async function initializeDatabase() {
         `ALTER TABLE care_sessions ADD COLUMN IF NOT EXISTS caregiver_accepted_at TIMESTAMPTZ`,
       ],
     },
+    {
+      // v1.148.0 — Pete, 11/22: "I have no way of knowing whether or not my sis and bro are
+      // reading anything." One row per person who tapped "Got it" on a note or a visit report
+      // (utils/readReceipts.js). target_id is not an FK: it points at different tables.
+      id: "094_read_receipts",
+      statements: [
+        `CREATE TABLE IF NOT EXISTS read_receipts (
+           id TEXT PRIMARY KEY,
+           target_type TEXT NOT NULL,
+           target_id TEXT NOT NULL,
+           user_id TEXT NOT NULL REFERENCES users(id),
+           read_at TIMESTAMPTZ DEFAULT NOW()
+         )`,
+        `CREATE UNIQUE INDEX IF NOT EXISTS idx_read_receipts_one
+           ON read_receipts(target_type, target_id, user_id)`,
+      ],
+    },
   ];
   for (const m of MIGRATIONS_V2) {
     if (applied.has(m.id)) continue;

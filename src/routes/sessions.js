@@ -5372,7 +5372,15 @@ router.get("/:id", async (req, res) => {
     }
   } catch (e) { captureException(e, { where: "sessions: canEditInstructions" }); }
 
-  res.json({ session, visitLog, photos, costBreakdown, visitReport, visitSummaryText, receipt, canEditInstructions });
+  // v1.148.0 — "Got it" on the visit report: who has read it, who has not yet.
+  let readReceipts = null;
+  try {
+    if (session.status === "completed") {
+      readReceipts = await require("../utils/readReceipts").blockFor(db, "session", req.params.id, req.user.id);
+    }
+  } catch (e) { captureException(e, { where: "sessions: read receipts" }); }
+
+  res.json({ session, visitLog, photos, costBreakdown, visitReport, visitSummaryText, receipt, canEditInstructions, readReceipts });
 });
 
 // ═══════════════════════════════════════════════════════════════════════

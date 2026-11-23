@@ -1572,6 +1572,9 @@ const CareProfile = window.CareProfile = ({ onNavigate }) => {
                     <ReactionRow reactions={n.reactions} currentUserId={window.__currentUserId}
                       onReact={(emoji) => handleReact('note', n.id, emoji)} />
                   )}
+                  {typeof ReadReceiptBar !== 'undefined' && n.readReceipts && (
+                    <ReadReceiptBar targetType="note" targetId={n.id} receipts={n.readReceipts} timezone={profile?.timezone} compact />
+                  )}
                 </div>
                 {canEdit && (
                   <button onClick={async (e) => {

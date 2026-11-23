@@ -828,6 +828,7 @@ app.use("/api/known-caregivers", require("./routes/knownCaregivers")); // v1.105
 app.use("/api/caregiver-onboarding", require("./routes/caregiveronboarding"));
 app.use("/api/family-visits", require("./routes/familyVisits")); // v1.105.38
 app.use("/api/reactions", require("./routes/reactions")); // v1.105.170 — notes, visits, and whatever is next
+app.use("/api/read-receipts", require("./routes/readReceipts")); // v1.148.0 — "Got it" on notes and visit reports
 app.use("/api/onboarding-events", require("./routes/onboardingEvents"));
 app.use("/api/feedback", require("./routes/feedback"));
 app.use("/api/payments", require("./routes/payments"));
@@ -860,7 +861,7 @@ app.use("/api/safety", require("./routes/safety"));
 
 // ─── App version check (lightweight, no auth) ───
 const { cancelPassedPrivateOffers, releaseExpiredExclusiveOffers } = require("./utils/exclusiveOffers");
-const APP_VERSION = "1.148.0";
+const APP_VERSION = "1.149.0";
 app.get("/api/version", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({ version: APP_VERSION, minAppVersion: MIN_APP_VERSION });

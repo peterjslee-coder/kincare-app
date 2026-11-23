@@ -557,6 +557,12 @@ const VisitDetailModal = window.VisitDetailModal = ({ sessionId, role, onClose, 
                   {typeof VisitReportCard !== 'undefined' && (data.visitReport || data.visitSummaryText) && (
                     <VisitReportCard report={data.visitReport} summaryText={data.visitSummaryText} />
                   )}
+                  {/* v1.148.0 — "Got it": Pete wants to know his sister and brother read these */}
+                  {typeof ReadReceiptBar !== 'undefined' && data.readReceipts && (
+                    <div style={{ marginBottom: 12 }}>
+                      <ReadReceiptBar targetType="session" targetId={sessionId} receipts={data.readReceipts} timezone={data.session && data.session.care_timezone} />
+                    </div>
+                  )}
 
                   {/* v1.126.1 — mileage, and the leader's OK on miles past the cap */}
                   {typeof VisitMileageReport !== 'undefined' && <VisitMileageReport sessionId={sessionId} />}

@@ -97,13 +97,20 @@ router.get("/:careRecipientId", async (req, res) => {
   // They are loaded AFTER the visibility filter above, so a reaction can never appear on a
   // note this reader is not allowed to see — the filter is the only place that decision is
   // made, and adding a second one here is how the two drift apart.
-  res.json({
-    notes: await attachReactions(db, "note", notes.map((n) => ({
-      ...n,
-      categories: safeJson(n.categories, []),
-      ai_highlights: safeJson(n.ai_highlights, null),
-    }))),
-  });
+  const withReactions = await attachReactions(db, "note", notes.map((n) => ({
+    ...n,
+    categories: safeJson(n.categories, []),
+    ai_highlights: safeJson(n.ai_highlights, null),
+  })));
+  // v1.148.0 — who has tapped "Got it", and who has not yet. Also after the visibility filter.
+  // A failure here costs the receipts, never the notes.
+  let withReceipts = withReactions;
+  try {
+    withReceipts = await require("../utils/readReceipts").attachNoteReceipts(db, withReactions, {
+      recipientId, viewerId: req.user.id,
+    });
+  } catch (e) { captureException(e, { where: "notes: read receipts" }); }
+  res.json({ notes: withReceipts });
 });
 
 // POST /api/notes — create a note
