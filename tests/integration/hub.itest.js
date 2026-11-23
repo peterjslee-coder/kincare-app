@@ -99,13 +99,25 @@ test("her dashboard carries who is here, seven days, and faces with names", asyn
   expect(titles).toContain("Thanksgiving at Peter's");
   expect(titles).not.toContain("Too far out");
   expect(hub.days.filter((x) => x.kind === "visit").map((x) => x.date)).toEqual([soon(0), soon(3)]);
-  // Faces: Tina first (she's here today), then the family; never Mom herself.
+  // Faces (v1.153.1): only caregivers coming this week — Tina, labelled with her days. No family.
+  expect(hub.people).toHaveLength(1);
   expect(hub.people[0]).toMatchObject({ firstName: "Tina", today: true });
-  expect(hub.people.map((p) => p.firstName)).toEqual(expect.arrayContaining(["Pete", "Sara"]));
-  expect(hub.people.find((p) => p.firstName === "Sara").label).toBe("your daughter");
+  expect(hub.people.map((p) => p.firstName)).not.toContain("Pete");
   expect(hub.people.map((p) => p.userId)).not.toContain(mom.user.id);
   // The phone list stays today and tomorrow.
   expect(d.body.simpleScreen.comingUp.every((c) => c.date <= soon(1))).toBe(true);
+});
+
+test("a caregiver whose only visits are past or more than a week out is not on Who's who", async () => {
+  const ryan = await h.createUser({ roles: ["caregiver"], firstName: "Ryan", lastName: "ITest" });
+  const prof = uuid();
+  await db.prepare("INSERT INTO caregiver_profiles (id, user_id, hourly_rate, created_at) VALUES (?, ?, 25, NOW())").run(prof, ryan.user.id);
+  for (const [d, st] of [[soon(-5), "completed"], [soon(9), "confirmed"]]) {
+    await db.prepare(`INSERT INTO care_sessions (id, care_recipient_id, family_user_id, caregiver_id, scheduled_date, scheduled_time, duration_hours, service_type, status, created_at)
+      VALUES (?, ?, ?, ?, ?, '09:00', 2, 'companionship', ?, NOW())`).run(uuid(), recipientId, leader.user.id, prof, d, st);
+  }
+  const d = await h.request.get("/api/dashboard").set(h.auth(mom.token));
+  expect(d.body.simpleScreen.hub.people.map((p) => p.firstName)).not.toContain("Ryan");
 });
 
 test("week off: the Hub shows today and tomorrow; faces off: no faces", async () => {

@@ -1567,12 +1567,25 @@ const Messages = window.Messages = () => {
     setUploadingPhoto(false);
   };
 
+  // v1.153.1 — who a Call button rings. In a direct chat, the other person. In a group it was
+  // just the first other member listed, so calling from "Betty's texts" could ring Sara.
+  // Pete: "if I pick up the phone and video call her from the app, i'd like her's to ring."
+  // A group with exactly one care recipient in it rings her.
+  const callTargetOf = (conv) => {
+    const others = (conv?.members || []).filter(m => m.id !== currentUser?.id);
+    if (isGroupConv(conv)) {
+      const recipients = others.filter(m => m.role === 'care_for');
+      if (recipients.length === 1) return recipients[0];
+    }
+    return others[0] || null;
+  };
+
   const handleStartCall = async (callType) => {
     if (!activeConvId || !activeConv) return;
 
     // Generate a unique room name
     const roomName = 'inplace-' + activeConvId.substring(0, 8) + '-' + Date.now();
-    const otherMember = activeConv.members?.find(m => m.id !== currentUser?.id);
+    const otherMember = callTargetOf(activeConv);
     const remoteName = otherMember ? (otherMember.name || `${otherMember.first_name || ''} ${otherMember.last_name || ''}`.trim()) || 'Unknown' : 'Unknown';
 
     // Signal the other user via Socket.io
@@ -1602,7 +1615,7 @@ const Messages = window.Messages = () => {
   const handleEndCall = async (durationSecs) => {
     // Signal hangup to remote
     if (callState.active && window._socket) {
-      const otherMember = activeConv?.members?.find(m => m.id !== currentUser?.id);
+      const otherMember = callTargetOf(activeConv);
       if (otherMember) {
         window._socket.emit('call_hangup', {
           targetUserId: otherMember.id,

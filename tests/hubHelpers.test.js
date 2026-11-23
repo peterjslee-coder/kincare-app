@@ -23,6 +23,8 @@ test("weekdayLabel reads Monday-first", () => {
   expect(weekdayLabel(["2026-11-25", "2026-12-02"])).toBe("Wednesdays");
   expect(weekdayLabel(["2026-11-26", "2026-11-23"])).toBe("Mon and Thu");
   expect(weekdayLabel(["2026-11-27", "2026-11-25", "2026-11-23"])).toBe("Mon, Wed, Fri");
+  expect(weekdayLabel(["2026-11-23", "2026-11-24", "2026-11-25", "2026-11-26", "2026-11-27"])).toBe("Most days");
+  expect(weekdayLabel(["2026-11-23", "2026-11-24", "2026-11-25", "2026-11-26", "2026-11-27", "2026-11-28", "2026-11-29"])).toBe("Every day");
 });
 
 test("relationLabel", () => {

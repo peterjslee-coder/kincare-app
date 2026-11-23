@@ -227,6 +227,9 @@ function weekdayLabel(dates) {
   // Monday first: a week on a kitchen calendar starts on Monday.
   days.sort((a, b) => ((a + 6) % 7) - ((b + 6) % 7));
   if (days.length === 0) return null;
+  // v1.153.1 — "Mon, Tue, We…" was cut off on the tablet. Past four days, say it plainly.
+  if (days.length === 7) return "Every day";
+  if (days.length >= 5) return "Most days";
   if (days.length === 1) return WEEKDAY_LONG[days[0]];
   const short = days.map((d) => WEEKDAY_SHORT[d]);
   if (short.length === 2) return `${short[0]} and ${short[1]}`;
@@ -260,46 +263,31 @@ async function hubScreenFor(db, recipient, linkedUserId, todayStr, hubCfg) {
   out.days = await comingUpFor(db, recipient.id, todayStr, hubCfg.week ? 7 : 2, 24);
 
   if (hubCfg.faces) {
-    const people = [];
-    const seen = new Set([linkedUserId]);
-    // Caregivers first: they are the faces she is most likely to need a name for. Visits from
-    // the last 30 days through the next 14; the days they come are read from the upcoming ones.
+    // v1.153.1 — Pete, on the real tablet: "i don't know why Ryan, Peter, and Daniel are there."
+    // Who's who is the caregivers coming THIS week (today and the next six days), and nobody
+    // else: she knows her sons, and a caregiver with no visit coming is a stranger's face.
     const cgRows = await db.prepare(`
-      SELECT u.id, u.first_name, cs.scheduled_date, cs.status, ${photoSql()}
+      SELECT u.id, u.first_name, cs.scheduled_date, ${photoSql()}
       FROM care_sessions cs
       JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
       JOIN users u ON cp.user_id = u.id
-      WHERE cs.care_recipient_id = ? AND cs.status IN ('confirmed', 'in_progress', 'completed')
+      WHERE cs.care_recipient_id = ? AND cs.status IN ('confirmed', 'in_progress')
         AND cs.scheduled_date >= ? AND cs.scheduled_date <= ?
-      ORDER BY cs.scheduled_date ASC
-    `).all(recipient.id, addDays(todayStr, -30), addDays(todayStr, 13));
+      ORDER BY cs.scheduled_date ASC, cs.scheduled_time ASC
+    `).all(recipient.id, todayStr, addDays(todayStr, 6));
     const cg = new Map();
     for (const r of cgRows) {
-      if (!cg.has(r.id)) cg.set(r.id, { userId: r.id, firstName: r.first_name, photo: photoUrl(r), upcoming: [], today: false });
+      if (r.id === linkedUserId) continue;
+      if (!cg.has(r.id)) cg.set(r.id, { userId: r.id, firstName: r.first_name, photo: photoUrl(r), dates: [], today: false });
       const c = cg.get(r.id);
-      if (r.scheduled_date >= todayStr && r.status !== "completed") c.upcoming.push(r.scheduled_date);
+      c.dates.push(r.scheduled_date);
       if (r.scheduled_date === todayStr) c.today = true;
     }
-    const cgList = [...cg.values()].sort((a, b) => (b.today - a.today) || (b.upcoming.length - a.upcoming.length));
-    for (const c of cgList) {
-      seen.add(c.userId);
-      people.push({ userId: c.userId, firstName: c.firstName, photo: c.photo, label: weekdayLabel(c.upcoming) || "your caregiver", today: c.today });
-    }
-    // Then the family: the record's owner and the care team, with the label the team gave them.
-    const labels = new Map((await db.prepare(`
-      SELECT ctm.user_id, ctm.relationship_label, ctm.role
-      FROM care_team_members ctm JOIN care_teams ct ON ctm.care_team_id = ct.id
-      WHERE ct.care_recipient_id = ?
-    `).all(recipient.id)).map((r) => [r.user_id, r]));
-    const fam = (await callCandidates(db, recipient.id, linkedUserId))
-      .sort((a, b) => ((labels.get(b.userId) || {}).role === "leader") - ((labels.get(a.userId) || {}).role === "leader"));
-    for (const f of fam) {
-      if (seen.has(f.userId)) continue;
-      seen.add(f.userId);
-      const l = labels.get(f.userId);
-      people.push({ userId: f.userId, firstName: f.firstName, photo: f.photo, label: relationLabel(l && l.relationship_label) || "family", today: false });
-    }
-    out.people = people.slice(0, 6);
+    // Today's first, then whoever comes most — the order the faces are most likely needed in.
+    out.people = [...cg.values()]
+      .sort((a, b) => (b.today - a.today) || (b.dates.length - a.dates.length))
+      .slice(0, 4)
+      .map((c) => ({ userId: c.userId, firstName: c.firstName, photo: c.photo, label: weekdayLabel(c.dates) || "your caregiver", today: c.today }));
   }
   return out;
 }
