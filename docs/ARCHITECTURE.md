@@ -7,7 +7,7 @@ build red.
 
 Hand-written sections (§3 "Where is…") are preserved across regeneration; edit those freely.
 
-Structure at last generation: 646 HTTP routes across 68 mounts ·
+Structure at last generation: 647 HTTP routes across 68 mounts ·
 123 `CREATE TABLE` statements · 16 background jobs · 43 socket events
 (18 with no client listener) · 76 push event types · 66 `window.__*` globals.
 
@@ -101,7 +101,7 @@ JSX is *not* compiled in the browser; Babel-standalone is not loaded. Editing an
 | `/api/scheduling` | `src/routes/nlScheduling.js` | 1 |  |
 | `/api/self-onboarding` | `src/routes/selfOnboarding.js` | 3 |  |
 | `/api/series-changes` | `src/routes/seriesChanges.js` | 5 |  |
-| `/api/sessions` | `src/routes/sessions.js` **+** `src/routes/offers.js` | 50 | ⚠️ **multi-file mount — routes for this prefix live in more than one file** |
+| `/api/sessions` | `src/routes/sessions.js` **+** `src/routes/offers.js` | 51 | ⚠️ **multi-file mount — routes for this prefix live in more than one file** |
 | `/api/sms` | `src/routes/smsWebhooks.js` | 13 |  |
 | `/api/video` | `src/routes/videoCall.js` | 1 |  |
 | `/api/waitlist` | `src/routes/waitlist.js` | 3 |  |

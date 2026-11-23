@@ -17,7 +17,7 @@ const { evidenceFor: checkrEvidenceFor } = require("../utils/checkrEvidence");
 const { readiness: bgCheckReadiness } = require("../utils/bgCheckRequest"); // v1.132.3
 const { noteAccess } = require("../utils/noteVisibility"); // v1.106.38, v1.107.2
 const { breakBudgetMinutes } = require("../utils/visitBreaks"); // v1.106.41
-const { conditionReadDue } = require("../utils/settledCheck"); // v1.106.48
+const { conditionReadDue, awarenessFollowUpDue } = require("../utils/settledCheck"); // v1.106.48, v1.153.3
 const { instructionsNeedAck } = require("../utils/instructionAck"); // v1.109.6
 const { TRUSTED_LINK_SQL } = require("../utils/linkedAccount"); // stale-link sweep
 
@@ -574,6 +574,8 @@ async function caregiverDashboard(db, userId, res) {
       -- SELECT and in the poller separately.
       vl.arrival_mood,
       vl.check_out_time,
+      -- v1.153.3 — 'asleep' at check-in moves the awareness question to the fifteen-minute check
+      (SELECT fvc.confirmation FROM first_visit_confirmations fvc WHERE fvc.session_id = cs.id LIMIT 1) AS first_visit_confirmation,
       -- v1.106.41 — the caregiver's own card needs to know whether she is out right now, and
       -- how much of her paid break budget is left, without a second request per session.
       -- Aggregated in the SELECT rather than joined: a join against visit_breaks multiplies
@@ -925,6 +927,7 @@ async function caregiverDashboard(db, userId, res) {
         // v1.106.48 — has she been there long enough to be asked how she found things, and
         // not answered yet. The same helper the poller's sibling question uses.
         conditionReadDue: conditionReadDue(s),
+        awarenessFollowUpDue: awarenessFollowUpDue(s),
         // v1.106.41 — see src/utils/visitBreaks.js for the rule these numbers come from.
         onBreak: Number(s.open_breaks || 0) > 0,
         breakStartedAt: s.break_started_at || null,

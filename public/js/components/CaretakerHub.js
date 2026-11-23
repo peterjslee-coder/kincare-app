@@ -242,6 +242,31 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
   const [conditionMood, setConditionMood] = useState([]);
   const [conditionFor, setConditionFor] = useState(null);
   const [savingCondition, setSavingCondition] = useState(false);
+  // v1.153.3 — asleep at check-in: "does she know you're here?" once she wakes. "Still asleep"
+  // hides the card for 30 minutes on this phone; the server keeps the question open.
+  const [awarenessSnooze, setAwarenessSnooze] = useState({});
+  const [savingAwareness, setSavingAwareness] = useState(false);
+  const answerAwareness = async (sessionId, answer) => {
+    if (savingAwareness) return;
+    if (answer === 'asleep') {
+      setAwarenessSnooze((prev) => ({ ...prev, [sessionId]: Date.now() + 30 * 60000 }));
+      return;
+    }
+    setSavingAwareness(true);
+    try {
+      const r = await apiFetch('/api/sessions/' + sessionId + '/awareness-followup', {
+        method: 'POST', body: JSON.stringify({ confirmation: answer }),
+      });
+      if (r?.ok) {
+        showToast(answer === 'yes' ? 'Thanks — noted' : 'Thanks — the family has been told', 'success');
+        try { const dr = await apiFetch('/api/dashboard'); if (dr?.ok) setData(await dr.json()); } catch {}
+      } else {
+        const d = await r?.json?.().catch(() => null);
+        showToast(d?.error || 'Could not save that', 'error');
+      }
+    } catch { showToast('Could not reach the server — check your connection', 'error'); }
+    setSavingAwareness(false);
+  };
 
   const CONDITION_FACES = [
     { key: 'happy', emoji: '\uD83D\uDE0A', label: 'Happy' },
@@ -2194,6 +2219,38 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                           </div>
                         );
                       })()}
+                    </div>
+                  )}
+
+                  {/* ─── v1.153.3 — she was asleep at check-in; ask now ─── */}
+                  {isActive && s.awarenessFollowUpDue && !(awarenessSnooze[s.id] > Date.now()) && (
+                    <div data-testid="awareness-followup" style={{
+                      marginTop: 10, padding: '12px 14px', borderRadius: 12,
+                      border: '1.5px solid var(--role-color)', background: 'var(--bg-teal-light)',
+                    }}>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>
+                        {recipName
+                          ? `${recipName.split(' ')[0]} was asleep when you arrived. Does ${recipName.split(' ')[0]} know you’re here now?`
+                          : 'Asleep when you arrived. Do they know you’re here now?'}
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 10 }}>
+                        {[
+                          { key: 'yes', label: 'Yes, they know I’m here' },
+                          { key: 'asleep', label: 'Still asleep — ask me again in 30 min' },
+                          { key: 'no', label: 'They seem unaware of my visit' },
+                        ].map((o) => (
+                          <button key={o.key} disabled={savingAwareness}
+                            onClick={(e) => { e.stopPropagation(); answerAwareness(s.id, o.key); }}
+                            style={{
+                              minHeight: 44, borderRadius: 9, cursor: 'pointer', font: 'inherit', fontSize: 13.5, fontWeight: 600, textAlign: 'left', padding: '0 12px',
+                              border: o.key === 'yes' ? 'none' : '1.5px solid var(--border-color)',
+                              background: o.key === 'yes' ? 'var(--role-color)' : 'var(--bg-card)',
+                              color: o.key === 'yes' ? 'var(--text-on-primary)' : 'var(--text-primary)',
+                            }}>
+                            {o.label}
+                          </button>
+                        ))}
+                      </div>
                     </div>
                   )}
 
@@ -4350,6 +4407,10 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                   'Is ' + firstVisitName.split(' ')[0] + ' aware that you\'re here to provide care today?'),
                 [
                   { key: 'yes', label: 'Yes, they acknowledged me', emoji: '\u2705' },
+                  // v1.153.3 \u2014 Pete, 11/23: "we need an option besides whether or not Betty is
+                  // aware. Because she was asleep." Asleep is not a concern: nothing is paused
+                  // and nobody is alerted; the question comes back at the fifteen-minute check.
+                  { key: 'asleep', label: firstVisitName.split(' ')[0] + ' is asleep \u2014 I\u2019ll ask when they wake', emoji: '\uD83D\uDE34' },
                   { key: 'no', label: 'They seem unaware of my visit', emoji: '\u26A0\uFE0F' },
                   { key: 'unable', label: 'Unable to assess their awareness', emoji: '\u2753' },
                 ].map(opt =>
