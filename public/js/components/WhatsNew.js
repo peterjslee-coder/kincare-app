@@ -493,7 +493,7 @@ const WN_PREVIEWS = {
     </div>
   ),
   // v1.146.0 — the pinned update on a caregiver's Home
-  // v1.148.0 — the green Got it button, and Seen by / Not yet under a note
+  // v1.149 — the green Got it button, and Seen by under a note
   readReceipts: () => (
     <div>
       <div style={wnCard}>
@@ -502,9 +502,6 @@ const WN_PREVIEWS = {
         <div style={{ marginTop: 6, padding: '7px 0', borderRadius: 8, background: 'var(--color-success, #2e7d32)', color: '#fff', fontSize: 12.5, fontWeight: 800, textAlign: 'center' }}>{'\u2713'} Got it! {'\u2014'} Mark read</div>
         <div style={{ fontSize: 10.5, color: 'var(--text-secondary)', marginTop: 6 }}>
           <span style={{ fontWeight: 700, color: 'var(--color-success)' }}>Seen by </span>Sam
-        </div>
-        <div style={{ fontSize: 10.5, color: 'var(--text-secondary)' }}>
-          <span style={{ fontWeight: 700, color: 'var(--text-muted)' }}>Not yet: </span>Alex
         </div>
       </div>
     </div>

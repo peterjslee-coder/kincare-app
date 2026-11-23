@@ -4,14 +4,15 @@
 // on app... there should be a big green 'Got it! - Mark Read'."
 //
 // The server sends the whole block with the note or visit (utils/readReceipts.js):
-//   { readBy:[{userId,name,readAt}], notYet:[{userId,name}], readByMe, myReadAt, canMark }
+//   { readBy:[{userId,name,readAt}], readByMe, myReadAt, canMark }
 // This component owns its own copy after that, so a tap never has to refetch the page, and
 // every answer from the server replaces the copy whole (someone else may have read it since).
 //
 // What it draws:
 //   · not read yet, and you are someone who should → the big green button
 //   · read by you → a quiet "✓ You read this" with Undo
-//   · always, when there is anything to say → "Seen by …" and, for recent things, "Not yet: …"
+//   · once anyone has read it → "Seen by …"
+// v1.149.1 — Pete: "I don't care who hasn't seen it. I care who has seen it." No "Not yet".
 const ReadReceiptBar = window.ReadReceiptBar = ({ targetType, targetId, receipts, timezone, compact = false }) => {
   const { showToast } = useToast();
   const [block, setBlock] = React.useState(receipts || null);
@@ -46,7 +47,6 @@ const ReadReceiptBar = window.ReadReceiptBar = ({ targetType, targetId, receipts
   };
 
   const seen = (block.readBy || []);
-  const notYet = block.notYet || [];
   const showButton = block.canMark && !block.readByMe;
 
   return (
@@ -72,7 +72,7 @@ const ReadReceiptBar = window.ReadReceiptBar = ({ targetType, targetId, receipts
           </button>
         </div>
       )}
-      {(seen.length > 0 || notYet.length > 0) && (
+      {seen.length > 0 && (
         <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 6, lineHeight: 1.5 }}>
           {seen.length > 0 && (
             <div data-testid="seen-by">
@@ -82,12 +82,6 @@ const ReadReceiptBar = window.ReadReceiptBar = ({ targetType, targetId, receipts
                   <span style={{ color: 'var(--text-muted)' }}>{r.readAt ? ` (${when(r.readAt)})` : ''}</span>
                 </span>
               ))}
-            </div>
-          )}
-          {notYet.length > 0 && (
-            <div data-testid="not-yet">
-              <span style={{ fontWeight: 700, color: 'var(--text-muted)' }}>Not yet: </span>
-              {notYet.map((r) => first(r.name)).join(', ')}
             </div>
           )}
         </div>
