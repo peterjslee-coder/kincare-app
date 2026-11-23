@@ -185,6 +185,7 @@ async function attentionItemsFor(db, userId) {
   // excluded for the same reason — there is no answering a change to a cancelled visit.
   const offerRows = await safeRows("timeOffers", () => db.prepare(`
     SELECT tp.id, tp.session_id, tp.proposed_date, tp.proposed_time, tp.message,
+           tp.caregiver_profile_id,
            cu.first_name AS caregiver_first, cu.last_name AS caregiver_last,
            cs.service_type, cs.scheduled_date, cs.scheduled_time, cs.duration_hours,
            cr.timezone AS tz, cr.first_name AS recipient_first
@@ -194,9 +195,31 @@ async function attentionItemsFor(db, userId) {
     LEFT JOIN care_recipients cr ON cr.id = cs.care_recipient_id
     WHERE tp.status = 'pending'
       AND cs.family_user_id = ?
+      AND cs.status IN ('open', 'requested', 'pending')
       AND (tp.expires_at IS NULL OR tp.expires_at > NOW())
     ORDER BY tp.created_at
   `).all(userId));
+
+  // v1.148.0 — this card is now the ONLY place a proposal is answered (the dashboard's
+  // separate "Time Proposals" list is gone — Pete: "there should only be one option to move
+  // forward"). So it has to know, before it offers Accept, whether Accept can work: the accept
+  // route refuses a time that lands on the caregiver's own booked visit. Kay's Nov 29 proposal
+  // did exactly that and Pete got an Accept that failed every time. Same check, run here.
+  const offerClash = {};
+  if (offerRows.length) {
+    const { scheduleConflictGate } = require("./claimGates");
+    for (const p of offerRows) {
+      try {
+        const gate = await scheduleConflictGate(db, {
+          id: p.session_id,
+          scheduled_date: p.proposed_date,
+          scheduled_time: p.proposed_time,
+          duration_hours: p.duration_hours,
+        }, { id: p.caregiver_profile_id });
+        if (gate) offerClash[p.id] = true;
+      } catch { /* unknown → offer Accept; the route still refuses a real clash */ }
+    }
+  }
 
   const changeRows = await safeRows("timeChanges", () => db.prepare(`
     SELECT tcp.id, tcp.session_id, tcp.proposed_by, tcp.original_time, tcp.proposed_time,
@@ -734,8 +757,23 @@ async function attentionItemsFor(db, userId) {
       tz: p.tz || null,
       proposedDate: p.proposed_date || null,
       proposedTime: p.proposed_time || null,
-      verb: "Accept",
-      action: { method: "PUT", path: `/api/sessions/${p.session_id}/proposals/${p.id}/accept` },
+      // v1.148.0 — what it replaces, and how long it runs, now that this is the only card.
+      originalDate: p.scheduled_date || null,
+      originalTime: p.scheduled_time || null,
+      durationHours: p.duration_hours != null ? Number(p.duration_hours) : null,
+      ...(offerClash[p.id]
+        // She is already booked then. Accept cannot work, so it is not offered; Decline
+        // clears the card and leaves the visit open for someone else.
+        ? {
+            verb: "Decline",
+            action: { method: "PUT", path: `/api/sessions/${p.session_id}/proposals/${p.id}/decline` },
+            note: `${p.caregiver_first || "This caregiver"} already has a visit booked then, so this time can't be accepted. Decline it and the visit stays open.`,
+          }
+        : {
+            verb: "Accept",
+            action: { method: "PUT", path: `/api/sessions/${p.session_id}/proposals/${p.id}/accept` },
+            dismiss: { method: "PUT", path: `/api/sessions/${p.session_id}/proposals/${p.id}/decline`, label: "Decline" },
+          }),
       page: "dashboard",
       focus: `session:${p.session_id}`,
     })),

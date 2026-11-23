@@ -482,7 +482,16 @@ describe("one tap is one request, and the row leaves when the server says so", (
   test("409 means it is already how you wanted it — that is success", () => {
     // "Already checked off" is the endpoint agreeing with the user. Handing it back as an
     // error is what turned one tap into three.
-    expect(cardSrc).toMatch(/if \(!ok && res\?\.status === 409\) ok = true;/);
+    expect(cardSrc).toMatch(/if \(!ok && res\?\.status === 409 && !\(body && body\.done === false\)\) ok = true;/);
+  });
+
+  test("…unless the server says the 409 is a refusal (done: false)", () => {
+    // v1.148.0 — Pete's Nov 22 loop: accepting a proposal on top of the caregiver's own visit
+    // 409'd, the card called it done, reloaded, and the same Accept came straight back.
+    expect(cardSrc).toMatch(/body\.done === false/);
+    const sessions = read("src", "routes", "sessions.js");
+    expect(sessions).toMatch(/done: false, code: "CAREGIVER_BOOKED"/);
+    expect(sessions).toMatch(/done: false, code: "SESSION_TAKEN"/);
   });
 
   test("Undo only where the server really has one, and it calls it", () => {
@@ -562,9 +571,11 @@ describe("every exit from a Needs-you task actually leaves", () => {
   });
 
   test("and the card renders that exit", () => {
-    expect(cardSrc).toMatch(/\{item\.dismiss && \(/);
+    // v1.148.0 — two renderings: Decline (a real answer, a real button) and every other exit.
+    expect(cardSrc).toMatch(/\{item\.dismiss && item\.dismiss\.label === 'Decline' && \(/);
+    expect(cardSrc).toMatch(/\{item\.dismiss && item\.dismiss\.label !== 'Decline' && \(/);
     expect(cardSrc).toMatch(/const dismiss = React\.useCallback\(\(item\) => \{/);
-    expect(cardSrc).toMatch(/send\(\{ \.\.\.item, action: item\.dismiss, verb: item\.dismiss\.label === 'Leave unassigned' \|\| item\.dismiss\.label === 'Keep as is' \? item\.dismiss\.label : 'Skip' \}\)/);
+    expect(cardSrc).toMatch(/send\(\{ \.\.\.item, action: item\.dismiss, verb: \['Leave unassigned', 'Keep as is', 'Decline'\]\.includes\(item\.dismiss\.label\) \? item\.dismiss\.label : 'Skip' \}\)/);
   });
 
   test("skipping goes through the same send path — busy guard, 409, reload and all", () => {

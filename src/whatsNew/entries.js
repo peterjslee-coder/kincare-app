@@ -31,6 +31,20 @@ const WINDOW_DAYS = 45;
 
 const ENTRIES = [
   {
+    id: "time-offer-one-card",
+    version: "1.148.0",
+    date: "2026-11-22",
+    audience: ["family"],
+    title: "A caregiver's new time: one card, Accept or Decline",
+    body: "When a caregiver offers a different time, it shows once, on the Needs you card at the top of Home, with the time it replaces and how long it runs. If they're already booked then, you only see Decline, and the visit stays open for someone else.",
+    howTo: [
+      "Find the offer under Needs you on Home",
+      "Tap Accept to book them at the new time, or Decline to keep looking",
+    ],
+    examples: ["Church until 1, I can come at 1:30"],
+    preview: "timeOfferCard",
+  },
+  {
     id: "undo-accept",
     version: "1.147.0",
     date: "2026-11-22",

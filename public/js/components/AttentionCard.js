@@ -154,7 +154,14 @@ const attentionDetail = (item) => {
   if (item.kind === 'timeOffer') {
     const day = attentionDay(item.proposedDate, item.tz);
     const at = attentionClock(item.proposedTime);
-    return `${day}${at ? ` at ${at}` : ''}`;
+    // v1.148.0 — "instead of 8:00 AM" and the length: this card replaced the Time Proposals
+    // list, which was the only place either was shown.
+    const sameDay = !item.originalDate || String(item.originalDate).slice(0, 10) === String(item.proposedDate || '').slice(0, 10);
+    const was = item.originalTime
+      ? `instead of ${sameDay ? '' : attentionDay(item.originalDate, item.tz) + ' '}${attentionClock(item.originalTime)}`
+      : null;
+    const hrs = item.durationHours ? `${item.durationHours} hr` : null;
+    return [`${day}${at ? ` at ${at}` : ''}`, was, hrs].filter(Boolean).join(' · ');
   }
   if (item.kind === 'careTask') {
     return item.dueAt ? `Due ${attentionDay(item.dueAt, item.tz)}` : 'Due now';
@@ -252,10 +259,14 @@ const AttentionCard = window.AttentionCard = ({ onNavigate, only }) => {
       // task already checked off, a proposal already answered. The person wanted it done; it
       // is done. Handing them "Already checked off" as a failure is how one tap turned into
       // three in Pete's report.
-      if (!ok && res?.status === 409) ok = true;
-      if (!ok) {
-        try { message = (await res.json())?.error; } catch { /* keep the generic line */ }
-      }
+      //
+      // v1.148.0 — unless the server says otherwise. `done: false` marks a 409 that is a real
+      // refusal (a caregiver already booked at the proposed time). Read as done, it reloaded the
+      // row straight back with no message — an Accept that looked like it worked and never did.
+      let body = null;
+      if (!ok && res) { try { body = await res.json(); } catch { body = null; } }
+      if (!ok && res?.status === 409 && !(body && body.done === false)) ok = true;
+      if (!ok) message = (body && body.error) || null;
     } catch (e) {
       message = null;
     }
@@ -294,7 +305,7 @@ const AttentionCard = window.AttentionCard = ({ onNavigate, only }) => {
   // tap to confirm would be ceremony over an action that can be taken back.
   const dismiss = React.useCallback((item) => {
     if (!item.dismiss || busy[item.id]) return;
-    send({ ...item, action: item.dismiss, verb: item.dismiss.label === 'Leave unassigned' || item.dismiss.label === 'Keep as is' ? item.dismiss.label : 'Skip' });
+    send({ ...item, action: item.dismiss, verb: ['Leave unassigned', 'Keep as is', 'Decline'].includes(item.dismiss.label) ? item.dismiss.label : 'Skip' });
   }, [send, busy]);
 
   const act = React.useCallback((item) => {
@@ -466,7 +477,16 @@ const AttentionCard = window.AttentionCard = ({ onNavigate, only }) => {
               }}>{item.action ? 'Open' : (item.verb || 'Open')}{' '}{'\u203A'}</button>
               {/* v1.105.161 — the third answer. See `dismiss` in utils/attention.js: a row that
                   interrupts you has to be clearable without finishing the task. */}
-              {item.dismiss && (
+              {item.dismiss && item.dismiss.label === 'Decline' && (
+                // v1.148.0 — a time offer is answered here and nowhere else, so Decline is a
+                // real answer and looks like one, not an underlined "not now".
+                <button onClick={() => dismiss(item)} disabled={!!busy[item.id]} style={{
+                  minHeight: 44, padding: '10px 18px', background: 'var(--bg-surface)',
+                  color: 'var(--color-error)', border: '1.5px solid var(--border-color)',
+                  borderRadius: 12, fontSize: 13.5, fontWeight: 700, cursor: 'pointer',
+                }}>Decline</button>
+              )}
+              {item.dismiss && item.dismiss.label !== 'Decline' && (
                 <button onClick={() => dismiss(item)} disabled={!!busy[item.id]} style={{
                   minHeight: 44, padding: '10px 14px', background: 'none',
                   color: 'var(--text-tertiary)', border: 'none',
