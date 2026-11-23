@@ -3318,20 +3318,24 @@
 
 /* ═══ Accessibility: Text Size ═══ */
 
+/* v1.153.1 — `.no-text-scale` (InPlace Hub, its call card) is drawn to the screen in vh. The
+   inherit rule below flattened every size on it to the body size: Betty's clock came out the
+   size of the date. Anything inside .no-text-scale keeps its own sizes. */
+
 /* Large text (1.25x — 20px base) */
 body.text-size-large { font-size: 20px !important; }
-body.text-size-large div:not([data-preserve-size]),
-body.text-size-large span:not([data-preserve-size]):not(.exclusive-urgent),
-body.text-size-large p,
-body.text-size-large button,
-body.text-size-large input,
-body.text-size-large select,
-body.text-size-large textarea,
-body.text-size-large label,
-body.text-size-large a,
-body.text-size-large li,
-body.text-size-large td,
-body.text-size-large th {
+body.text-size-large div:not([data-preserve-size]):not(.no-text-scale):not(.no-text-scale *),
+body.text-size-large span:not([data-preserve-size]):not(.exclusive-urgent):not(.no-text-scale):not(.no-text-scale *),
+body.text-size-large p:not(.no-text-scale):not(.no-text-scale *),
+body.text-size-large button:not(.no-text-scale):not(.no-text-scale *),
+body.text-size-large input:not(.no-text-scale):not(.no-text-scale *),
+body.text-size-large select:not(.no-text-scale):not(.no-text-scale *),
+body.text-size-large textarea:not(.no-text-scale):not(.no-text-scale *),
+body.text-size-large label:not(.no-text-scale):not(.no-text-scale *),
+body.text-size-large a:not(.no-text-scale):not(.no-text-scale *),
+body.text-size-large li:not(.no-text-scale):not(.no-text-scale *),
+body.text-size-large td:not(.no-text-scale):not(.no-text-scale *),
+body.text-size-large th:not(.no-text-scale):not(.no-text-scale *) {
   font-size: inherit !important;
 }
 body.text-size-large h1, body.text-size-large .hero-title { font-size: 32px !important; }
@@ -3339,18 +3343,18 @@ body.text-size-large h2, body.text-size-large h3 { font-size: 24px !important; }
 
 /* Extra large text (1.5x — 24px base) */
 body.text-size-xlarge { font-size: 24px !important; }
-body.text-size-xlarge div:not([data-preserve-size]),
-body.text-size-xlarge span:not([data-preserve-size]):not(.exclusive-urgent),
-body.text-size-xlarge p,
-body.text-size-xlarge button,
-body.text-size-xlarge input,
-body.text-size-xlarge select,
-body.text-size-xlarge textarea,
-body.text-size-xlarge label,
-body.text-size-xlarge a,
-body.text-size-xlarge li,
-body.text-size-xlarge td,
-body.text-size-xlarge th {
+body.text-size-xlarge div:not([data-preserve-size]):not(.no-text-scale):not(.no-text-scale *),
+body.text-size-xlarge span:not([data-preserve-size]):not(.exclusive-urgent):not(.no-text-scale):not(.no-text-scale *),
+body.text-size-xlarge p:not(.no-text-scale):not(.no-text-scale *),
+body.text-size-xlarge button:not(.no-text-scale):not(.no-text-scale *),
+body.text-size-xlarge input:not(.no-text-scale):not(.no-text-scale *),
+body.text-size-xlarge select:not(.no-text-scale):not(.no-text-scale *),
+body.text-size-xlarge textarea:not(.no-text-scale):not(.no-text-scale *),
+body.text-size-xlarge label:not(.no-text-scale):not(.no-text-scale *),
+body.text-size-xlarge a:not(.no-text-scale):not(.no-text-scale *),
+body.text-size-xlarge li:not(.no-text-scale):not(.no-text-scale *),
+body.text-size-xlarge td:not(.no-text-scale):not(.no-text-scale *),
+body.text-size-xlarge th:not(.no-text-scale):not(.no-text-scale *) {
   font-size: inherit !important;
 }
 body.text-size-xlarge h1, body.text-size-xlarge .hero-title { font-size: 38px !important; }

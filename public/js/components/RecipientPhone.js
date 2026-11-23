@@ -279,7 +279,7 @@ const useSimpleCallHost = (enabled, { answers = true } = {}) => {
   if (enabled && (incoming || callState.active)) {
     const first = incoming ? String(incoming.callerName || 'Someone').split(' ')[0] : '';
     const card = incoming ? (
-      <div role="dialog" aria-label={`${first} is calling`} data-testid="simple-incoming-call"
+      <div role="dialog" aria-label={`${first} is calling`} data-testid="simple-incoming-call" className="no-text-scale"
         style={{ position: 'fixed', inset: 0, zIndex: 10050, background: '#1f1a16', color: '#f3ebe0', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 'min(4vh, 28px)', padding: 24, textAlign: 'center' }}>
         <SimpleFace photo={incoming.callerPhoto} name={first} size={Math.round(Math.min(window.innerHeight * 0.26, 220))} ring="#e8b04a" />
         <div style={{ fontSize: 'min(7vh, 48px)', fontWeight: 800 }}>{first} is calling</div>
@@ -333,154 +333,159 @@ const hubLine = (c) => {
   return `${c.title}${c.location ? ` at ${c.location}` : ''}`;
 };
 
-const HubBoard = ({ hub, first, now, show, calls, note, s, failed, readFlash, reading, acking, unread, awake, onWake, onRead, onAck, onText, onTell, onMessages, onCall }) => {
+// v1.153.1 — Betty's account has Large text on, and the text-size rule (`div { font-size:
+// inherit !important }`) flattened every size on the board: the clock came out the size of the
+// date. The Hub is drawn to the screen in vh, so its roots carry `no-text-scale`, which
+// styles.css excludes from that rule. tests/hubNoTextScale.test.js pins both halves.
+
+// v1.153.1 — Pete: "I prefer the green color scheme because it's easier to read." The care
+// recipient's role colour is purple; the Hub is always green.
+const HUB_THEME = { '--role-color': '#1b6b5a', '--role-color-light': '#e1f0eb', '--text-on-primary': '#ffffff' };
+
+const HubBoard = ({ hub, first, now, show, calls, note, s, failed, readFlash, reading, acking, unread, awake, onWake, onRead, onAck, onText, onMessages, onCall }) => {
   const today = hub.today;
   const days = hub.days || [];
-  const todayItems = days.filter((d) => d.date === today);
-  const later = days.filter((d) => d.date > today);
   const dateLine = now.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
   const weekday = now.toLocaleDateString('en-US', { weekday: 'long' });
   const clock = now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
   const [clockNum, clockAp] = clock.split(' ');
   const part = now.getHours() < 12 ? 'Morning' : now.getHours() < 17 ? 'Afternoon' : 'Evening';
+  const later = days.filter((d) => d.date > today);
 
-  // ── Night: dark, a big clock, and the first thing tomorrow. A tap brightens it a while. ──
+  // ── Night ──
   if (hubIsNight(now, hub.dimFrom, hub.dimTo) && !awake) {
     const next = later[0] || null;
     return (
-      <div onClick={onWake} data-testid="hub-night" style={{ height: '100vh', background: '#16130f', color: '#d9cfc2', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '3vh', textAlign: 'center', cursor: 'pointer', userSelect: 'none' }}>
-        <div style={{ fontSize: '4.4vh', color: '#8f857a' }}>{weekday}, {dateLine}</div>
-        <div style={{ fontSize: '20vh', fontWeight: 800, lineHeight: 1, color: '#efe6da' }}>{clockNum} <span style={{ fontSize: '8vh' }}>{clockAp}</span></div>
-        <div style={{ fontSize: '5.4vh', fontWeight: 700, color: '#efe6da' }}>Good night{first ? `, ${first}` : ''}.</div>
-        {next && <div style={{ fontSize: '4.2vh', color: '#b3a898' }}>{simpleFmtDay(next.date)}: {hubLine(next)}{next.time && next.kind !== 'visit' ? ` — ${simpleFmtTime(next.time)}` : ''}</div>}
+      <div onClick={onWake} data-testid="hub-night" className="no-text-scale" style={{ height: '100vh', background: '#16130f', color: '#d9cfc2', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '3vh', textAlign: 'center', cursor: 'pointer', userSelect: 'none' }}>
+        <div style={{ fontSize: '5.6vh', color: '#8f857a' }}>{weekday}, {dateLine}</div>
+        <div style={{ fontSize: '24vh', fontWeight: 800, lineHeight: 1, color: '#efe6da' }}>{clockNum} <span style={{ fontSize: '9vh' }}>{clockAp}</span></div>
+        <div style={{ fontSize: '6.4vh', fontWeight: 700, color: '#efe6da' }}>Good night{first ? `, ${first}` : ''}.</div>
+        {next && <div style={{ fontSize: '5vh', color: '#b3a898' }}>{simpleFmtDay(next.date)}: {hubLine(next)}{next.time ? ` — ${simpleFmtTime(next.time)}` : ''}</div>}
       </div>
     );
   }
 
-  const card = { background: 'var(--bg-card)', borderRadius: '2.4vh', padding: '2vh 2.6vh', border: '2px solid var(--border-color)', boxSizing: 'border-box', minHeight: 0 };
-  const label = { fontSize: '2.4vh', fontWeight: 800, letterSpacing: 1, color: 'var(--text-secondary)', textTransform: 'uppercase' };
-  const row = { display: 'flex', gap: '2vh', fontSize: '3.4vh', padding: '0.9vh 0', color: 'var(--text-primary)', lineHeight: 1.2 };
+  // ── Today as a timeline (v1.153.1, Pete's pick) ──
+  // "Tina is here until 5:00 · then Faith at 5:00", then the rest of today in order. Routine
+  // visits do not repeat down the week; "Coming up" is her appointments and plans only.
+  const todayLeft = days.filter((d) => d.date === today && !(d.kind === 'visit' && d.inProgress));
+  const nextVisitToday = todayLeft.find((d) => d.kind === 'visit') || null;
+  const thenLine = hub.here && nextVisitToday ? `then ${nextVisitToday.who || 'a caregiver'} at ${simpleFmtTime(nextVisitToday.time)}` : null;
+  const todayRows = todayLeft.filter((d) => !(thenLine && d === nextVisitToday)).slice(0, hub.here ? 2 : 3);
+  const comingUp = later.filter((d) => d.kind !== 'visit').slice(0, 3);
+
+  const card = { background: 'var(--bg-card)', borderRadius: '2.6vh', padding: '2.2vh 2.8vh', border: '2px solid var(--border-color)', boxSizing: 'border-box', minHeight: 0, flexShrink: 0 };
+  const label = { fontSize: '3vh', fontWeight: 800, letterSpacing: 1, color: 'var(--text-secondary)', textTransform: 'uppercase' };
+  const row = { display: 'flex', gap: '2.4vh', fontSize: '4.6vh', padding: '1vh 0', color: 'var(--text-primary)', lineHeight: 1.2, alignItems: 'baseline' };
   const btn = (bg, fg) => ({
-    flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '1.6vh', minHeight: '10vh',
-    borderRadius: '2.4vh', border: 'none', background: bg, color: fg, fontSize: '3.8vh', fontWeight: 800,
+    flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '1.8vh', minHeight: '12vh',
+    borderRadius: '2.6vh', border: 'none', background: bg, color: fg, fontSize: '4.8vh', fontWeight: 800,
     fontFamily: 'inherit', textDecoration: 'none', cursor: 'pointer', padding: '0 2vh', boxSizing: 'border-box',
   });
   const waiting = show.text && s.text && Array.isArray(s.text.waiting) && s.text.waiting.length ? s.text.waiting[s.text.waiting.length - 1] : null;
-  // Rows are sized in vh, so the same number fit on any screen: about six under the clock, four
-  // when "is here" takes its card. Today first (up to three), the week gets what is left, so
-  // nothing is ever cut off mid-line.
-  const todayShown = todayItems.filter((c) => !(c.kind === 'visit' && c.inProgress));
-  const budget = (hub.here ? 4 : 6) - (failed ? 1 : 0);
-  const todayRows = todayShown.slice(0, 3);
-  const weekRows = later.slice(0, Math.max(0, budget - Math.max(1, todayRows.length)));
-  const weekGroups = [];
-  for (const c of weekRows) {
-    const last = weekGroups[weekGroups.length - 1];
-    if (last && last.date === c.date) last.items.push(c); else weekGroups.push({ date: c.date, items: [c] });
-  }
   const shortDay = (d) => {
     const x = new Date(d + 'T12:00:00');
     const t = new Date(); t.setHours(12, 0, 0, 0);
     return Math.round((x - t) / 86400000) === 1 ? 'Tomorrow' : x.toLocaleDateString('en-US', { weekday: 'short' });
   };
-  const hasButtons = calls.length > 0 || (show.text && s.text) || show.tellFamily || show.messages;
+  const timeCol = { width: '21vh', flexShrink: 0, fontWeight: 800 };
+  // Tell the family is gone from the Hub (Pete, 11/23: remove it).
+  const hasButtons = calls.length > 0 || (show.text && s.text) || show.messages;
 
   return (
-    <div className="simple-view hub-board" data-testid="hub-board" style={{ height: '100vh', background: 'var(--bg-surface)', padding: '3vh 3.2vw', boxSizing: 'border-box', display: 'grid', gridTemplateColumns: 'minmax(0, 1.1fr) minmax(0, 1fr)', gridTemplateRows: hasButtons ? 'minmax(0, 1fr) auto' : 'minmax(0, 1fr)', gap: '2.4vh 2vw', overflow: 'hidden' }}>
-      {/* Left: the day */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '2vh', minHeight: 0, overflow: 'hidden' }}>
+    <div className="simple-view hub-board no-text-scale" data-testid="hub-board" style={{ ...HUB_THEME, height: '100vh', background: 'var(--bg-surface)', padding: '3vh 3vw', boxSizing: 'border-box', display: 'grid', gridTemplateColumns: 'minmax(0, 1.15fr) minmax(0, 1fr)', gridTemplateRows: hasButtons ? 'minmax(0, 1fr) auto' : 'minmax(0, 1fr)', gap: '2.6vh 2.2vw', overflow: 'hidden' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '2.2vh', minHeight: 0, overflow: 'hidden' }}>
         <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: '2vw' }}>
-          <div>
-            <div style={{ fontSize: '4.6vh', fontWeight: 700, color: 'var(--text-secondary)', lineHeight: 1.1 }}>{weekday}</div>
-            <div style={{ fontSize: '4.2vh', color: 'var(--text-secondary)', lineHeight: 1.2 }} data-testid="hub-date">{dateLine}</div>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: '6vh', fontWeight: 800, color: 'var(--text-primary)', lineHeight: 1.05 }}>{weekday}</div>
+            <div style={{ fontSize: '4.6vh', color: 'var(--text-secondary)', lineHeight: 1.2, whiteSpace: 'nowrap' }} data-testid="hub-date">{dateLine}</div>
           </div>
           <div style={{ textAlign: 'right' }}>
-            <div style={{ fontSize: '12vh', fontWeight: 800, lineHeight: 1, color: 'var(--text-primary)', whiteSpace: 'nowrap' }}>{clockNum} <span style={{ fontSize: '5vh' }}>{clockAp}</span></div>
-            <div style={{ fontSize: '2.8vh', color: 'var(--text-secondary)' }}>{part}</div>
+            <div style={{ fontSize: '15vh', fontWeight: 800, lineHeight: 0.95, color: 'var(--text-primary)', whiteSpace: 'nowrap' }} data-testid="hub-clock">{clockNum}<span style={{ fontSize: '5.6vh', marginLeft: '1vh' }}>{clockAp}</span></div>
+            <div style={{ fontSize: '3.4vh', color: 'var(--text-secondary)' }}>{part}</div>
           </div>
         </div>
 
-        {failed && <div style={{ ...card, fontSize: '3vh' }}>Can't reach InPlace right now. It will try again by itself.</div>}
+        {failed && <div style={{ ...card, fontSize: '3.4vh' }}>Can't reach InPlace right now. It will try again by itself.</div>}
 
         {hub.here && (
-          <div style={{ ...card, display: 'flex', alignItems: 'center', gap: '2vh', flexShrink: 0 }}>
-            <SimpleFace photo={hub.here.photo} name={hub.here.firstName} size={Math.round(window.innerHeight * 0.1)} />
-            <div>
-              <div style={{ fontSize: '4.2vh', fontWeight: 800, color: 'var(--text-primary)' }}>{hub.here.firstName} is here</div>
-              {hub.here.until && <div style={{ fontSize: '3vh', color: 'var(--text-secondary)' }}>until {simpleFmtTime(hub.here.until)}</div>}
+          <div style={{ ...card, display: 'flex', alignItems: 'center', gap: '2.2vh' }}>
+            <SimpleFace photo={hub.here.photo} name={hub.here.firstName} size={Math.round(window.innerHeight * 0.12)} />
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: '5.2vh', fontWeight: 800, color: 'var(--text-primary)', lineHeight: 1.1 }}>{hub.here.firstName} is here</div>
+              {hub.here.until && <div style={{ fontSize: '3.8vh', color: 'var(--text-secondary)', lineHeight: 1.25 }}>until {simpleFmtTime(hub.here.until)}{thenLine ? <><br />{thenLine}</> : null}</div>}
             </div>
           </div>
         )}
 
-        {show.comingUp && (
+        {show.comingUp && (todayRows.length > 0 || !hub.here) && (
           <div style={card}>
             <div style={{ ...label, color: 'var(--role-color)' }}>Today</div>
             {todayRows.length === 0
-              ? <div style={{ ...row, color: 'var(--text-secondary)' }}>Nothing else today.</div>
+              ? <div style={{ ...row, color: 'var(--text-secondary)' }}>Nothing else today</div>
               : todayRows.map((c, i) => (
                 <div key={c.kind + c.id} style={{ ...row, borderTop: i ? '2px solid var(--border-color)' : 'none' }}>
-                  <span style={{ width: '16vh', flexShrink: 0, fontWeight: 700 }}>{c.time ? simpleFmtTime(c.time) : ''}</span>
-                  <span style={{ minWidth: 0 }}>{hubLine(c)}</span>
+                  <span style={timeCol}>{c.time ? simpleFmtTime(c.time) : ''}</span>
+                  <span style={{ minWidth: 0 }}>{c.kind === 'visit' ? `${c.who || 'A caregiver'} comes` : hubLine(c)}</span>
                 </div>
               ))}
           </div>
         )}
 
-        {show.comingUp && weekGroups.length > 0 && (
+        {show.comingUp && comingUp.length > 0 && (
           <div style={{ ...card, overflow: 'hidden' }}>
-            <div style={label}>{hub.week ? 'This week' : 'Tomorrow'}</div>
-            {weekGroups.map((g, gi) => g.items.map((c, i) => (
-              <div key={c.kind + c.id} style={{ ...row, borderTop: gi || i ? '2px solid var(--border-color)' : 'none' }}>
-                <span style={{ width: '16vh', flexShrink: 0, fontWeight: 700 }}>{i === 0 ? shortDay(g.date) : ''}</span>
-                <span style={{ minWidth: 0 }}>{hubLine(c)}{c.time && c.kind !== 'visit' ? ` · ${simpleFmtTime(c.time)}` : ''}</span>
+            <div style={label}>Coming up</div>
+            {comingUp.map((c, i) => (
+              <div key={c.kind + c.id} style={{ ...row, borderTop: i ? '2px solid var(--border-color)' : 'none' }}>
+                <span style={timeCol}>{shortDay(c.date)}</span>
+                <span style={{ minWidth: 0 }}>{hubLine(c)}{c.time ? `, ${simpleFmtTime(c.time)}` : ''}</span>
               </div>
-            )))}
+            ))}
           </div>
         )}
       </div>
 
-      {/* Right: from the family, and who's who */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '2vh', minHeight: 0, overflow: 'hidden' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '2.2vh', minHeight: 0, overflow: 'hidden' }}>
         {readFlash && (
-          <div style={{ ...card, borderColor: 'var(--color-success, #1b7a3d)', borderWidth: 3, fontSize: '3.2vh', fontWeight: 700 }}>{'✓'} {readFlash}</div>
+          <div style={{ ...card, borderColor: 'var(--role-color)', borderWidth: 3, fontSize: '4vh', fontWeight: 700 }}>{'✓'} {readFlash}</div>
         )}
         {note && (
-          <div style={{ ...card, borderColor: 'var(--role-color)', borderWidth: 3, flexShrink: 0 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '1.6vh', marginBottom: '1vh' }}>
-              <SimpleFace photo={note.fromPhoto} name={note.from} size={Math.round(window.innerHeight * 0.07)} />
-              <div style={{ fontSize: '2.8vh', color: 'var(--text-secondary)' }}>From {note.from} {'·'} {simpleAgo(note.createdAt)}</div>
+          <div style={{ ...card, borderColor: 'var(--role-color)', borderWidth: 3 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '1.8vh', marginBottom: '1vh' }}>
+              <SimpleFace photo={note.fromPhoto} name={note.from} size={Math.round(window.innerHeight * 0.08)} />
+              <div style={{ fontSize: '3.4vh', color: 'var(--text-secondary)' }}>From {note.from}</div>
             </div>
-            <div style={{ fontSize: '3.8vh', fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1.3, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{note.content}</div>
-            <button onClick={() => onRead(note.id)} disabled={reading} style={{ ...btn('var(--role-color)', 'var(--text-on-primary)'), width: '100%', marginTop: '1.6vh', minHeight: '8vh', fontSize: '3.4vh' }}>
+            <div style={{ fontSize: '4.6vh', fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1.25, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{note.content}</div>
+            <button onClick={() => onRead(note.id)} disabled={reading} style={{ ...btn('var(--role-color)', 'var(--text-on-primary)'), width: '100%', marginTop: '1.8vh', minHeight: '10vh', fontSize: '4.4vh' }}>
               {'👍'} I read it!
             </button>
           </div>
         )}
         {!note && waiting && (
-          <div style={{ ...card, borderColor: 'var(--role-color)', borderWidth: 3, flexShrink: 0 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '1.6vh', marginBottom: '1vh' }}>
-              <SimpleFace photo={waiting.fromPhoto} name={waiting.from} size={Math.round(window.innerHeight * 0.07)} />
-              <div style={{ fontSize: '2.8vh', color: 'var(--text-secondary)' }}>{waiting.isReply ? `${waiting.from} wrote back` : `Message from ${waiting.from}`}</div>
+          <div style={{ ...card, borderColor: 'var(--role-color)', borderWidth: 3 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '1.8vh', marginBottom: '1vh' }}>
+              <SimpleFace photo={waiting.fromPhoto} name={waiting.from} size={Math.round(window.innerHeight * 0.08)} />
+              <div style={{ fontSize: '3.4vh', color: 'var(--text-secondary)' }}>{waiting.isReply ? `${waiting.from} wrote back` : `Message from ${waiting.from}`}</div>
             </div>
-            <div style={{ fontSize: '3.8vh', fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1.3, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{waiting.content}</div>
-            <div style={{ display: 'flex', gap: '1.6vh', marginTop: '1.6vh' }}>
-              <button onClick={onAck} disabled={acking} style={{ ...btn('var(--role-color)', 'var(--text-on-primary)'), minHeight: '8vh', fontSize: '3.4vh' }}>Got it</button>
-              <button onClick={onText} style={{ ...btn('var(--bg-card)', 'var(--text-primary)'), border: '2px solid var(--border-color)', minHeight: '8vh', fontSize: '3.4vh' }}>Write back</button>
+            <div style={{ fontSize: '4.6vh', fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1.25, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{waiting.content}</div>
+            <div style={{ display: 'flex', gap: '1.8vh', marginTop: '1.8vh' }}>
+              <button onClick={onAck} disabled={acking} style={{ ...btn('var(--role-color)', 'var(--text-on-primary)'), minHeight: '10vh', fontSize: '4.4vh' }}>Got it</button>
+              <button onClick={onText} style={{ ...btn('var(--bg-card)', 'var(--text-primary)'), border: '2px solid var(--border-color)', minHeight: '10vh', fontSize: '4.4vh' }}>Write back</button>
             </div>
           </div>
         )}
 
         {hub.faces && (hub.people || []).length > 0 && (
-          <div style={{ ...card, flexShrink: 0 }}>
-            <div style={label}>Who's who</div>
-            <div style={{ display: 'grid', gridTemplateColumns: `repeat(${hub.people.length <= 4 ? hub.people.length : 3}, minmax(0, 1fr))`, gap: '1.6vh', marginTop: '1.4vh', textAlign: 'center' }}>
+          <div style={card}>
+            <div style={label}>Who's coming this week</div>
+            <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(hub.people.length, 4)}, minmax(0, 1fr))`, gap: '1.8vh', marginTop: '1.6vh', textAlign: 'center' }}>
               {hub.people.map((p) => (
                 <div key={p.userId} style={{ minWidth: 0 }}>
                   <div style={{ display: 'flex', justifyContent: 'center' }}>
-                    <SimpleFace photo={p.photo} name={p.firstName} size={Math.round(window.innerHeight * 0.1)} ring={p.today ? 'var(--role-color)' : undefined} />
+                    <SimpleFace photo={p.photo} name={p.firstName} size={Math.round(window.innerHeight * 0.13)} ring={p.today ? 'var(--role-color)' : undefined} />
                   </div>
-                  <div style={{ fontSize: '3.2vh', fontWeight: 800, color: 'var(--text-primary)', marginTop: '0.6vh', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.firstName}</div>
-                  <div style={{ fontSize: '2.3vh', color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.label}</div>
+                  <div style={{ fontSize: '4.2vh', fontWeight: 800, color: 'var(--text-primary)', marginTop: '0.8vh', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.firstName}</div>
+                  <div style={{ fontSize: '3.2vh', color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.label}</div>
                 </div>
               ))}
             </div>
@@ -488,12 +493,11 @@ const HubBoard = ({ hub, first, now, show, calls, note, s, failed, readFlash, re
         )}
       </div>
 
-      {/* Bottom: the same buttons as her Simple screen */}
       {hasButtons && (
-        <div style={{ gridColumn: '1 / 3', display: 'flex', gap: '2vw' }}>
+        <div style={{ gridColumn: '1 / 3', display: 'flex', gap: '2.2vw' }}>
           {calls.map((c) => (
-            <button key={c.userId} onClick={() => onCall && onCall(c, s.callType || 'voice')} style={btn('var(--color-success, #1b7a3d)', '#fff')} aria-label={`Call ${c.firstName}`}>
-              <SimpleFace photo={c.photo} name={c.firstName} size={Math.round(window.innerHeight * 0.07)} ring="#fff" /> Call {c.firstName}
+            <button key={c.userId} onClick={() => onCall && onCall(c, s.callType || 'voice')} style={btn('#1b7a3d', '#fff')} aria-label={`Call ${c.firstName}`}>
+              <SimpleFace photo={c.photo} name={c.firstName} size={Math.round(window.innerHeight * 0.08)} ring="#fff" /> Call {c.firstName}
             </button>
           ))}
           {show.text && s.text && (
@@ -501,15 +505,10 @@ const HubBoard = ({ hub, first, now, show, calls, note, s, failed, readFlash, re
               <span aria-hidden="true">{'💬'}</span> Text {s.text.to.length > 2 ? 'my family' : simpleNames(s.text.to)}
             </button>
           )}
-          {show.tellFamily && (
-            <button onClick={onTell} style={{ ...btn('var(--bg-card)', 'var(--text-primary)'), border: '3px solid var(--role-color)' }}>
-              <span aria-hidden="true">{'✍️'}</span> Tell the family
-            </button>
-          )}
           {show.messages && (
             <button onClick={onMessages} style={btn('var(--role-color)', 'var(--text-on-primary)')}>
               <span aria-hidden="true">{'💬'}</span> Messages
-              {unread > 0 && <span style={{ background: '#fff', color: 'var(--role-color)', borderRadius: 20, padding: '0 1.4vh', fontSize: '3vh' }}>{unread}</span>}
+              {unread > 0 && <span style={{ background: '#fff', color: 'var(--role-color)', borderRadius: 20, padding: '0 1.6vh', fontSize: '3.6vh' }}>{unread}</span>}
             </button>
           )}
         </div>
@@ -832,7 +831,7 @@ const SimpleViewInner = ({ initial, onPanelChange, startCall }) => {
         readFlash={readFlash} reading={reading} acking={acking} unread={unread}
         awake={Date.now() < wakeUntil} onWake={() => setWakeUntil(Date.now() + 120000)}
         onRead={markRead} onAck={ackText} onText={openText}
-        onTell={() => setPanel('tell')} onMessages={() => setPanel('messages')} onCall={startCall} />
+        onMessages={() => setPanel('messages')} onCall={startCall} />
     );
   }
 
@@ -1135,11 +1134,11 @@ const SimpleModeSettings = window.SimpleModeSettings = ({ recipientId, firstName
                 <div style={{ margin: '10px 0 0 26px', display: 'flex', flexDirection: 'column', gap: 8 }}>
                   <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text-primary)', cursor: 'pointer' }}>
                     <input type="checkbox" disabled={saving} checked={!!hub.faces} onChange={(e) => save({ hub: { faces: e.target.checked } })} style={{ width: 16, height: 16, accentColor: 'var(--role-color)' }} />
-                    <span><strong>Who's who</strong> <span style={{ color: 'var(--text-secondary)' }}>— faces and names: caregivers with the days they come, and the family</span></span>
+                    <span><strong>Who's who</strong> <span style={{ color: 'var(--text-secondary)' }}>— faces and names of the caregivers coming this week, with the days they come</span></span>
                   </label>
                   <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text-primary)', cursor: 'pointer' }}>
                     <input type="checkbox" disabled={saving} checked={!!hub.week} onChange={(e) => save({ hub: { week: e.target.checked } })} style={{ width: 16, height: 16, accentColor: 'var(--role-color)' }} />
-                    <span><strong>The week ahead</strong> <span style={{ color: 'var(--text-secondary)' }}>— the next seven days of visits and appointments (off: today and tomorrow)</span></span>
+                    <span><strong>The week ahead</strong> <span style={{ color: 'var(--text-secondary)' }}>— appointments and plans for the next seven days (off: tomorrow only). Today shows who's here and who's next.</span></span>
                   </label>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', fontSize: 13, color: 'var(--text-primary)' }}>
                     <strong>Night</strong> <span style={{ color: 'var(--text-secondary)' }}>— dark with a big clock from</span>
