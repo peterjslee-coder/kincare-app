@@ -13,6 +13,11 @@
       --role-color: #1b6b5a;
       --role-color-light: #e0f2e9;
       --role-color-dark: #0f4238;
+      /* v1.151.0 — role colour for TEXT. The same as --role-color in light mode; in dark mode the
+         brightened role colour, because #1b6b5a text on a #1e1e2a card is 2.7:1. */
+      --role-text: var(--role-color);
+      /* ...and for text on a tinted fill (a selected pill on --color-success-bg). */
+      --role-text-on-tint: var(--role-color);
       --accent-color: #e8724a;
       --accent-color-dark: #d85a2b;
 
@@ -101,6 +106,8 @@
 
     [data-theme="dark"] {
       --role-color-light: #1e3a32;
+      --role-text: var(--role-color-bright, #2f9e85);
+      --role-text-on-tint: var(--text-primary);
       --bg-primary: #121218;
       --bg-surface: #1a1a24;
       --bg-elevated: #262636;
@@ -361,7 +368,7 @@
 
     .btn-outline {
       border: 2px solid var(--role-color);
-      color: var(--role-color);
+      color: var(--role-text);
       background: transparent;
     }
 
@@ -1791,7 +1798,7 @@
     .modal-header {
       font-size: 22px;
       font-weight: 700;
-      color: var(--role-color);
+      color: var(--role-text);
       margin-bottom: 24px;
       padding-right: 32px;
     }
