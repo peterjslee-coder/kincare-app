@@ -70,6 +70,7 @@ describe("and the family's own screen now uses it", () => {
 
   test("it re-runs when either list arrives", () => {
     // The push routinely wins the race against the fetch.
-    expect(profile).toMatch(/\}, \[notes, familyVisits\]\);/);
+    // v1.149.1 — and when a tap arrives while the page is already open (focusTick).
+    expect(profile).toMatch(/\}, \[notes, familyVisits, focusTick\]\);/);
   });
 });
