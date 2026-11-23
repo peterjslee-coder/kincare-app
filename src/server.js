@@ -768,7 +768,12 @@ app.post("/api/client-error", (req, res) => {
       standalone: b.standalone, userAgent: b.userAgent,
       componentStack: String(b.componentStack || "").slice(0, 4000),
     });
-    console.error(`  [client-error] v${b.version} page=${b.page} standalone=${b.standalone}: ${String(b.message).slice(0, 200)}`);
+    // v1.154.1 — a failed call's diagnosis is in its extras (Twilio code, stage, device);
+    // put the short ones on the log line so they can be read without Sentry.
+    const callBits = b.page === "call"
+      ? ` stage=${String(b.callStage || "").slice(0, 20)} code=${String(b.twilioCode ?? b.mediaErrorName ?? "").slice(0, 12)} dir=${String(b.callDirection || "").slice(0, 10)} ua=${/iPhone|iPad/.test(String(b.userAgent || "")) ? "ios" : /Android/.test(String(b.userAgent || "")) ? "android" : "desktop"}`
+      : "";
+    console.error(`  [client-error] v${b.version} page=${b.page} standalone=${b.standalone}${callBits}: ${String(b.message).slice(0, 200)}`);
   } catch (_) { /* never throw from the error sink */ }
   res.status(204).end();
 });
@@ -846,7 +851,7 @@ app.use("/api/safety", require("./routes/safety"));
 
 // ─── App version check (lightweight, no auth) ───
 const { cancelPassedPrivateOffers, releaseExpiredExclusiveOffers } = require("./utils/exclusiveOffers");
-const APP_VERSION = "1.154.0";
+const APP_VERSION = "1.154.1";
 app.get("/api/version", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({ version: APP_VERSION, minAppVersion: MIN_APP_VERSION });

@@ -49,7 +49,7 @@
   <!-- PWA Manifest -->
   <link rel="manifest" href="/manifest.json">
 
-  <link rel="stylesheet" href="/css/styles.css?v=build-b81435ab">
+  <link rel="stylesheet" href="/css/styles.css?v=build-a6fb14fb">
 
   <!-- Leaflet CSS for maps (self-hosted — no CDN dependency) -->
   <link rel="stylesheet" href="/vendor/leaflet.css">
@@ -104,7 +104,7 @@
                                 flow (CareRecipients.handleStripeConnect) and nothing has
                                 called loadConnectAndInitialize since. One fewer third-party
                                 origin that can white-screen the app.
-      /vendor/twilio-video      624 KB, shipped to every visitor including the ones who will
+      /vendor/twilio-video-2.36.1  340 KB, shipped to every visitor including the ones who will
                                 never place a call. VideoCallOverlay has had its own loader
                                 with CDN fallbacks since v1.105.140 — this tag only meant the
                                 loader never had anything to do. utils.js now warms it when a
@@ -134,9 +134,9 @@
 
   <!-- Pre-compiled app bundle (built by scripts/build-client.js) -->
   <script>
-    window.APP_VERSION = "1.154.0";
+    window.APP_VERSION = "1.154.1";
     // v1.85: admin components live in a separate lazy bundle (infra #5)
-    window.__ADMIN_BUNDLE_URL = '/js-compiled/bundle-admin.js?v=build-b81435ab';
+    window.__ADMIN_BUNDLE_URL = '/js-compiled/bundle-admin.js?v=build-a6fb14fb';
   </script>
   <script>
     // ─── Theme initialization ───
@@ -188,7 +188,7 @@
       });
     })();
   </script>
-  <script src="/js-compiled/bundle.js?v=build-b81435ab"></script>
+  <script src="/js-compiled/bundle.js?v=build-a6fb14fb"></script>
 
   <script>
     // Service worker: register/update and auto-reload on new version

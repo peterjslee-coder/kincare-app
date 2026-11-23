@@ -186,7 +186,7 @@ describe("W5 — nothing blocks first paint for a feature you are not using", ()
   });
 
   test("624 KB of Twilio no longer ships to people who never place a call", () => {
-    expect(idx).not.toMatch(/<script src="\/vendor\/twilio-video\.min\.js"><\/script>/);
+    expect(idx).not.toMatch(/<script src="\/vendor\/twilio-video[^"]*"><\/script>/);
   });
 
   test("but the SDK is warmed the moment a call rings, so answering is no slower", () => {
@@ -198,7 +198,7 @@ describe("W5 — nothing blocks first paint for a feature you are not using", ()
 
   test("and VideoCallOverlay's own loader is still the thing that guarantees it", () => {
     const v = code("public/js/components/VideoCallOverlay.js");
-    expect(v).toMatch(/\/vendor\/twilio-video\.min\.js/);
+    expect(v).toMatch(/\/vendor\/twilio-video-\d+\.\d+\.\d+\.min\.js/);
     expect(v).toMatch(/Video SDK could not be loaded/);
   });
 });
