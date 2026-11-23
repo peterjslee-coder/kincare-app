@@ -330,7 +330,10 @@ const hubLine = (c) => {
     if (c.inProgress) return `${c.who || 'Your caregiver'} is here`;
     return `${c.who || 'A caregiver'} comes${at ? ` at ${at}` : ''}`;
   }
-  return `${c.title}${c.location ? ` at ${c.location}` : ''}`;
+  // v1.153.2 — "Thanksgiving dinner at Peter and Debbie's" with location "Peter and Debbie's"
+  // read twice on the tablet. The location is added only when the title doesn't already say it.
+  const loc = c.location && !String(c.title || '').toLowerCase().includes(String(c.location).toLowerCase()) ? c.location : '';
+  return `${c.title}${loc ? ` at ${loc}` : ''}`;
 };
 
 // v1.153.1 — Betty's account has Large text on, and the text-size rule (`div { font-size:
@@ -372,7 +375,7 @@ const HubBoard = ({ hub, first, now, show, calls, note, s, failed, readFlash, re
   const nextVisitToday = todayLeft.find((d) => d.kind === 'visit') || null;
   const thenLine = hub.here && nextVisitToday ? `then ${nextVisitToday.who || 'a caregiver'} at ${simpleFmtTime(nextVisitToday.time)}` : null;
   const todayRows = todayLeft.filter((d) => !(thenLine && d === nextVisitToday)).slice(0, hub.here ? 2 : 3);
-  const comingUp = later.filter((d) => d.kind !== 'visit').slice(0, 3);
+  const comingUp = later.filter((d) => d.kind !== 'visit').slice(0, hub.here ? 2 : 3);
 
   const card = { background: 'var(--bg-card)', borderRadius: '2.6vh', padding: '2.2vh 2.8vh', border: '2px solid var(--border-color)', boxSizing: 'border-box', minHeight: 0, flexShrink: 0 };
   const label = { fontSize: '3vh', fontWeight: 800, letterSpacing: 1, color: 'var(--text-secondary)', textTransform: 'uppercase' };
@@ -426,7 +429,7 @@ const HubBoard = ({ hub, first, now, show, calls, note, s, failed, readFlash, re
               : todayRows.map((c, i) => (
                 <div key={c.kind + c.id} style={{ ...row, borderTop: i ? '2px solid var(--border-color)' : 'none' }}>
                   <span style={timeCol}>{c.time ? simpleFmtTime(c.time) : ''}</span>
-                  <span style={{ minWidth: 0 }}>{c.kind === 'visit' ? `${c.who || 'A caregiver'} comes` : hubLine(c)}</span>
+                  <span style={{ minWidth: 0, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{c.kind === 'visit' ? `${c.who || 'A caregiver'} comes` : hubLine(c)}</span>
                 </div>
               ))}
           </div>
@@ -436,9 +439,11 @@ const HubBoard = ({ hub, first, now, show, calls, note, s, failed, readFlash, re
           <div style={{ ...card, overflow: 'hidden' }}>
             <div style={label}>Coming up</div>
             {comingUp.map((c, i) => (
-              <div key={c.kind + c.id} style={{ ...row, borderTop: i ? '2px solid var(--border-color)' : 'none' }}>
-                <span style={timeCol}>{shortDay(c.date)}</span>
-                <span style={{ minWidth: 0 }}>{hubLine(c)}{c.time ? `, ${simpleFmtTime(c.time)}` : ''}</span>
+              // v1.153.2 — Pete: "the text on the calendar needs to wrap smaller." Smaller type,
+              // the time on its own line under the day, and never more than two lines of title.
+              <div key={c.kind + c.id} style={{ ...row, fontSize: '3.8vh', alignItems: 'flex-start', borderTop: i ? '2px solid var(--border-color)' : 'none' }}>
+                <span style={{ ...timeCol, width: '15vh', lineHeight: 1.15 }}>{shortDay(c.date)}{c.time ? <><br /><span style={{ fontWeight: 600, fontSize: '3vh', color: 'var(--text-secondary)' }}>{simpleFmtTime(c.time)}</span></> : null}</span>
+                <span style={{ minWidth: 0, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', lineHeight: 1.2 }}>{hubLine(c)}</span>
               </div>
             ))}
           </div>
@@ -1134,7 +1139,7 @@ const SimpleModeSettings = window.SimpleModeSettings = ({ recipientId, firstName
                 <div style={{ margin: '10px 0 0 26px', display: 'flex', flexDirection: 'column', gap: 8 }}>
                   <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text-primary)', cursor: 'pointer' }}>
                     <input type="checkbox" disabled={saving} checked={!!hub.faces} onChange={(e) => save({ hub: { faces: e.target.checked } })} style={{ width: 16, height: 16, accentColor: 'var(--role-color)' }} />
-                    <span><strong>Who's who</strong> <span style={{ color: 'var(--text-secondary)' }}>— faces and names of the caregivers coming this week, with the days they come</span></span>
+                    <span><strong>Who's who</strong> <span style={{ color: 'var(--text-secondary)' }}>— faces and names of the caregivers coming this week, and when each comes next</span></span>
                   </label>
                   <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text-primary)', cursor: 'pointer' }}>
                     <input type="checkbox" disabled={saving} checked={!!hub.week} onChange={(e) => save({ hub: { week: e.target.checked } })} style={{ width: 16, height: 16, accentColor: 'var(--role-color)' }} />

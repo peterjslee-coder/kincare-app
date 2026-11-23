@@ -236,6 +236,14 @@ function weekdayLabel(dates) {
   return short.join(", ");
 }
 
+/** When someone comes next, from a care-location date: "Today", "Tomorrow", or the weekday. */
+function nextVisitLabel(dateStr, todayStr) {
+  if (!dateStr) return "your caregiver";
+  if (dateStr === todayStr) return "Today";
+  if (dateStr === addDays(todayStr, 1)) return "Tomorrow";
+  return ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][new Date(`${dateStr}T12:00:00Z`).getUTCDay()];
+}
+
 /** "son" → "your son"; anything longer than a word is shown as the leader wrote it. */
 function relationLabel(label) {
   const t = String(label || "").trim();
@@ -287,7 +295,9 @@ async function hubScreenFor(db, recipient, linkedUserId, todayStr, hubCfg) {
     out.people = [...cg.values()]
       .sort((a, b) => (b.today - a.today) || (b.dates.length - a.dates.length))
       .slice(0, 4)
-      .map((c) => ({ userId: c.userId, firstName: c.firstName, photo: c.photo, label: weekdayLabel(c.dates) || "your caregiver", today: c.today }));
+      // v1.153.2 — the label is when they come NEXT ("Today", "Tomorrow", "Thursday"): short
+      // enough for the tablet (a list of weekdays was cut off), and the more useful thing to know.
+      .map((c) => ({ userId: c.userId, firstName: c.firstName, photo: c.photo, label: nextVisitLabel(c.dates[0], todayStr), today: c.today }));
   }
   return out;
 }
@@ -393,4 +403,4 @@ async function comingUpFor(db, recipientId, todayStr, days = 2, limit = 8) {
     .slice(0, limit);
 }
 
-module.exports = { HUB_DEFAULTS, cleanHub, addHours, weekdayLabel, relationLabel, MAX_CALLS, MAX_TEXT, MAX_BUTTONS, bigButtonCount, SECTIONS, parseSimpleMode, cleanShow, callCandidates, simpleScreenFor, telDigits };
+module.exports = { HUB_DEFAULTS, cleanHub, addHours, weekdayLabel, nextVisitLabel, relationLabel, MAX_CALLS, MAX_TEXT, MAX_BUTTONS, bigButtonCount, SECTIONS, parseSimpleMode, cleanShow, callCandidates, simpleScreenFor, telDigits };
