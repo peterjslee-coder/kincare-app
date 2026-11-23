@@ -330,12 +330,33 @@ const VideoCallOverlay = window.VideoCallOverlay = ({ callState, onEndCall, curr
       } catch (err) {
         if (!cancelled) {
           console.error('[VideoCall] Connection error:', err);
+          // v1.153.2 — Pete, 11/23: calls from his iPhone app to Betty's tablet failed on the
+          // tablet with "Signaling connection error", while Chrome on his Mac connected fine.
+          // The words on screen are Twilio's generic text; the numeric code is the diagnosis.
+          // Report every connect failure with it, the device, and which side of the call.
+          try {
+            if (typeof reportClientError === 'function') {
+              reportClientError(err, {
+                page: 'call',
+                callStage: 'connect',
+                twilioCode: err && err.code != null ? err.code : null,
+                errorName: (err && err.name) || null,
+                callType: callState.callType,
+                callDirection: callState.callDirection,
+                roomPrefix: String(callState.roomName || '').split('-').slice(0, 2).join('-'),
+                capacitor: !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()),
+                platform: (window.Capacitor && window.Capacitor.getPlatform && window.Capacitor.getPlatform()) || 'web',
+                sdk: (window.Twilio && window.Twilio.Video && window.Twilio.Video.version) || null,
+                ua: navigator.userAgent,
+              });
+            }
+          } catch { /* reporting must never be what breaks the call */ }
           // The call is not happening; nothing should still be holding the microphone.
           (acquiredTracksRef.current || []).forEach((t) => {
             try { if (t && t.readyState !== 'ended') t.stop(); } catch { /* already gone */ }
           });
           acquiredTracksRef.current = [];
-          setError(err.message);
+          setError(err && err.code ? `${err.message} (code ${err.code})` : err.message);
           setStatus('ended');
         }
       }
