@@ -560,6 +560,9 @@ router.post("/attention/snooze", authenticate, async (req, res) => {
 });
 
 // Optional eventType param — if provided, checks user's notification_prefs before sending
+// opts.skipEndpoints (calls-native, 1.3): push_subscriptions endpoints NOT to send this one to —
+// used by call_invite for a device that is already being rung natively (CallKit / Android
+// full-screen), so the same phone does not also show the old "Call from…" banner.
 async function sendPushToUser(userId, payload, eventType, opts = {}) {
   // v1.156.1 — opts.skipKinds: device kinds (utils/pushDevices.js: 'ios', 'android', 'web')
   // not to push to, because that kind of device already has the app open and ringing.
@@ -679,10 +682,12 @@ async function sendPushToUser(userId, payload, eventType, opts = {}) {
     let sent = 0;
     let removed = 0;
     let failed = 0;
+    const skip = opts && opts.skipEndpoints;
     const skipKinds = new Set((opts && opts.skipKinds) || []);
     for (const sub of subs) {
       try {
         const subObj = JSON.parse(sub.subscription_json);
+        if (skip && skip.has(subObj.endpoint)) continue;
         if (skipKinds.size && skipKinds.has(subObj.type === "native" ? String(subObj.platform || "").toLowerCase() : "web")) continue;
 
         // Native delivery not configured yet (no APNs key / Firebase credential) —
@@ -1130,3 +1135,4 @@ module.exports.initializeVapidKeys = initializeVapidKeys;
 module.exports.setVapidKeys = setVapidKeys;
 module.exports.sendSessionReminders = sendSessionReminders;
 module.exports.sendArrivalSms = sendArrivalSms;
+module.exports._getFirebaseMessaging = _getFirebaseMessaging; // calls-native: callDevices.js rings Android with it

@@ -26,6 +26,8 @@ const MAP_DIR = path.join(__dirname, "..", "build", "maps"); // outside public/ 
 const scripts = [
   "js/offlineQueue.js",
   "js/utils.js",
+  // calls-native (1.3) — window.NativeCalls; inert unless the native call plugin exists.
+  "js/nativeCalls.js",
   // v1.123.0 — window.TimeChange: what a time change changes, in words. Isomorphic — the
   // server requires the same file for the push and the Needs-you title.
   "js/timeChange.js",

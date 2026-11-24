@@ -7,8 +7,8 @@ build red.
 
 Hand-written sections (§3 "Where is…") are preserved across regeneration; edit those freely.
 
-Structure at last generation: 663 HTTP routes across 70 mounts ·
-127 `CREATE TABLE` statements · 17 background jobs · 44 socket events
+Structure at last generation: 668 HTTP routes across 71 mounts ·
+128 `CREATE TABLE` statements · 17 background jobs · 44 socket events
 (18 with no client listener) · 77 push event types · 66 `window.__*` globals.
 
 ---
@@ -50,6 +50,7 @@ JSX is *not* compiled in the browser; Babel-standalone is not loaded. Editing an
 | `/api/auth` | `src/routes/auth.js` | 20 |  |
 | `/api/auth/2fa` | `src/routes/twoFactor.js` | 8 |  |
 | `/api/availability` | `src/routes/availability.js` | 5 |  |
+| `/api/calls` | `src/routes/calls.js` | 5 |  |
 | `/api/care-events` | `src/routes/careEvents.js` | 11 |  |
 | `/api/care-intelligence` | `src/routes/careIntelligence.js` | 8 |  |
 | `/api/care-photos` | `src/routes/carePhotos.js` | 9 |  |
@@ -209,23 +210,23 @@ Every job runs through `guardedPoller` → `withPollerLock` (`src/models/databas
 
 | Lock | Job | Interval | Declared |
 |---:|---|---|---|
-| 101 | Daily demo data refresh | 24 h | `src/server.js:1139` |
-| 102 | Session notification poller (every 60s) | 1 min | `src/server.js:1232` |
-| 103 | Session Accountability Poller | 1 min | `src/server.js:1515` |
-| 104 | Reimbursement push digest sweeper (v1.98.15) | 30 s | `src/server.js:1532` |
-| 105 | Auto-pay cron: charge overdue sessions | 5 min | `src/server.js:1624` |
-| 106 | Recurring reimbursements: generate due occurrences (v1.74.0) | 1 h | `src/server.js:1731` |
-| 107 | Care Tasks poller (v1.99.0) | 1 min | `src/server.js:1756` |
-| 108 | Care Events poller (v1.100.0) | 1 min | `src/server.js:1772` |
-| 109 | Kindred Reminder Delivery Poller | 1 min | `src/server.js:1546` |
-| 110 | Retention (v1.106.9, poller 110) | 24 h | `src/server.js:1809` |
-| 111 | (see src/server.js:1707) | 1 h | `src/server.js:1707` |
-| 112 | v1.106.13 — poller 112: proposals that nobody answered | 10 min | `src/server.js:1838` |
-| 113 | (see src/server.js:1881) | 1 min | `src/server.js:1881` |
-| 114 | Quiet hours summary (v1.107.3, poller 114) | 5 min | `src/server.js:1952` |
-| 115 | Recurring reimbursements: generate due occurrences (v1.74.0) | 1 h | `src/server.js:1744` |
-| 116 | Visit mileage: charge what is owed once the visit itself is paid (v1.126.1, poller 116) | 5 min | `src/server.js:1969` |
-| 117 | (see src/server.js:1933) | 1 min | `src/server.js:1933` |
+| 101 | Daily demo data refresh | 24 h | `src/server.js:1241` |
+| 102 | Session notification poller (every 60s) | 1 min | `src/server.js:1334` |
+| 103 | Session Accountability Poller | 1 min | `src/server.js:1617` |
+| 104 | Reimbursement push digest sweeper (v1.98.15) | 30 s | `src/server.js:1634` |
+| 105 | Auto-pay cron: charge overdue sessions | 5 min | `src/server.js:1726` |
+| 106 | Recurring reimbursements: generate due occurrences (v1.74.0) | 1 h | `src/server.js:1833` |
+| 107 | Care Tasks poller (v1.99.0) | 1 min | `src/server.js:1858` |
+| 108 | Care Events poller (v1.100.0) | 1 min | `src/server.js:1874` |
+| 109 | Kindred Reminder Delivery Poller | 1 min | `src/server.js:1648` |
+| 110 | Retention (v1.106.9, poller 110) | 24 h | `src/server.js:1911` |
+| 111 | (see src/server.js:1809) | 1 h | `src/server.js:1809` |
+| 112 | v1.106.13 — poller 112: proposals that nobody answered | 10 min | `src/server.js:1940` |
+| 113 | (see src/server.js:1983) | 1 min | `src/server.js:1983` |
+| 114 | Quiet hours summary (v1.107.3, poller 114) | 5 min | `src/server.js:2054` |
+| 115 | Recurring reimbursements: generate due occurrences (v1.74.0) | 1 h | `src/server.js:1846` |
+| 116 | Visit mileage: charge what is owed once the visit itself is paid (v1.126.1, poller 116) | 5 min | `src/server.js:2071` |
+| 117 | (see src/server.js:2035) | 1 min | `src/server.js:2035` |
 
 ---
 
@@ -239,7 +240,7 @@ why this app runs on exactly one Railway replica.
 | `account_approved` | `routes/admin/verification.js` | yes |
 | `activity_update` | `routes/activity.js`, `routes/admin/verification.js` | yes |
 | `call_accepted` | `server.js` | 🔶 **none** |
-| `call_answered_elsewhere` | `server.js` | yes |
+| `call_answered_elsewhere` | `routes/calls.js`, `server.js` | yes |
 | `call_declined` | `server.js` | yes |
 | `call_ended` | `server.js` | yes |
 | `call_incoming` | `server.js` | yes |
@@ -372,7 +373,7 @@ State travels through `window`, not props. This table is the registry.
 | `window.__openRequestCareModal` | app.js, CareToolsSheet.js | 21 |
 | `window.__openTaskCreate` | — | 1 |
 | `window.__originalSearch` | app.js | 4 |
-| `window.__pendingCall` | app.js, Messages.js, RecipientPhone.js | 14 |
+| `window.__pendingCall` | app.js, Messages.js, RecipientPhone.js | 24 |
 | `window.__pendingConversation` | app.js, CheckinOverdueSheet.js, QuickAdd.js | 8 |
 | `window.__pendingFocus` | app.js, AttentionCard.js, CancelFeeSheet.js | 59 |
 | `window.__pendingLogVisit` | TeamNotes.js | 2 |

@@ -31,6 +31,22 @@ const WINDOW_DAYS = 45;
 
 const ENTRIES = [
   {
+    id: "hub-drop-in-and-kiosk",
+    version: "1.157.0",
+    date: "2026-11-24",
+    audience: ["family"],
+    title: "Drop in on the Hub, and keep the tablet on InPlace",
+    body: "Once the consent is signed, the people the leader picked can drop in: the Hub chimes, shows who's checking in, and opens video by itself. A tablet set up as a Hub can now stay on InPlace, and you can unlock it from your own phone when you need to.",
+    howTo: [
+      "Care Team, then Accessibility Options, then InPlace Hub",
+      "Under Drop-in, tap \"Drop in on Jane\"",
+      "To use the tablet for something else, turn off \"Keep the tablet on InPlace\"",
+      "Both need the next InPlace app update on the tablet",
+    ],
+    examples: ["Drop in on Mom", "Sam is checking in"],
+    preview: "hubDropIn",
+  },
+  {
     id: "agent-approve-and-calls",
     version: "1.156.1",
     date: "2026-11-24",

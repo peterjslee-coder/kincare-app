@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <application
         android:allowBackup="true"
@@ -47,6 +48,69 @@
 
         </activity>
 
+        <!-- 1.3 kiosk: InPlace as the Home screen of a Hub tablet. DISABLED here; Kiosk.java
+             enables it only on a tablet where the app is device owner and the family turned
+             kiosk on, so no ordinary phone ever offers InPlace as a launcher. -->
+        <activity-alias
+            android:name=".KioskHome"
+            android:targetActivity=".MainActivity"
+            android:enabled="false"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.HOME" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity-alias>
+
+        <!-- 1.3 calls: the full-screen incoming call, shown over the lock screen. -->
+        <activity
+            android:name=".IncomingCallActivity"
+            android:exported="false"
+            android:launchMode="singleTop"
+            android:excludeFromRecents="true"
+            android:taskAffinity=".call"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true"
+            android:theme="@style/AppTheme.NoActionBar" />
+
+        <receiver android:name=".CallActionReceiver" android:exported="false" />
+
+        <!-- 1.3 calls: the app's ONE Firebase messaging service. It rings for `call_ring` and hands
+             everything else to Capacitor's push plugin, whose own service entry is removed here
+             (FCM delivers to a single service). -->
+        <service
+            android:name=".CallMessagingService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+        <service
+            android:name="com.capacitorjs.plugins.pushnotifications.MessagingService"
+            tools:node="remove" />
+
+        <!-- 1.3 kiosk: lets `adb shell dpm set-device-owner com.yourinplace.app/.KioskAdminReceiver`
+             make the app device owner on a Hub tablet. Asks for no policies of its own. -->
+        <receiver
+            android:name=".KioskAdminReceiver"
+            android:exported="true"
+            android:permission="android.permission.BIND_DEVICE_ADMIN">
+            <meta-data
+                android:name="android.app.device_admin"
+                android:resource="@xml/device_admin" />
+            <intent-filter>
+                <action android:name="android.app.action.DEVICE_ADMIN_ENABLED" />
+            </intent-filter>
+        </receiver>
+
+        <!-- 1.3 kiosk: reopen InPlace after a restart (only on a Hub tablet with kiosk on). -->
+        <receiver android:name=".KioskBootReceiver" android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+
         <!-- Default notification icon + color for FCM -->
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_icon"
@@ -87,4 +151,13 @@
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <!-- Required for push notifications on Android 13+ (API 33+) -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- 1.3 — video calls and the Hub's drop-in/awake noticing need the camera. The WebView asks
+         at the moment it is used (getUserMedia); required="false" keeps camera-less devices on Play. -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-feature android:name="android.hardware.camera.front" android:required="false" />
+    <!-- 1.3 — an incoming call fills a locked screen (CallRinger). Play asks for a declaration
+         that this is a calling app; it is. -->
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 </manifest>

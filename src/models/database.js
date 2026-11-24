@@ -3860,6 +3860,27 @@ async function initializeDatabase() {
       ],
     },
     {
+      // calls-native (1.3) — devices that can ring like a phone: the PushKit VoIP token on iOS,
+      // the FCM token of a 1.3 Android app. Its own table so nothing that reads
+      // push_subscriptions can see it (utils/callDevices.js). Was 075, then 078 on the
+      // calls-native branch; 100 when the branch was brought up to main on 11/24 (main had
+      // used 078 for mileage start points meanwhile).
+      id: "100_call_devices",
+      statements: [
+        `CREATE TABLE IF NOT EXISTS call_devices (
+           id TEXT PRIMARY KEY,
+           user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+           platform TEXT NOT NULL,
+           token TEXT NOT NULL,
+           push_token TEXT,
+           created_at TIMESTAMPTZ DEFAULT NOW(),
+           updated_at TIMESTAMPTZ DEFAULT NOW()
+         )`,
+        `CREATE UNIQUE INDEX IF NOT EXISTS idx_call_devices_platform_token ON call_devices (platform, token)`,
+        `CREATE INDEX IF NOT EXISTS idx_call_devices_user ON call_devices (user_id)`,
+      ],
+    },
+    {
       // v1.156.1 — Pete: "my sister is POA...I would prefer we have a feature that someone can
       // sign up / setup and she gets a 'needs you' card to click approve." The leader asks the
       // agent; the agent's Needs-you card opens the consent to read and sign. One row per ask;

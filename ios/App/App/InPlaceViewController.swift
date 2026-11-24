@@ -2,6 +2,11 @@ import UIKit
 import Capacitor
 
 class InPlaceViewController: CAPBridgeViewController {
+    // calls-native (1.3): a plugin inside the app target isn't discovered automatically.
+    override func capacitorDidLoad() {
+        bridge?.registerPluginInstance(InPlaceCallsPlugin())
+    }
+
     override func viewDidLoad() {
         super.viewDidLoad()
         // Extend web view to full screen — CSS env(safe-area-inset-*) handles spacing

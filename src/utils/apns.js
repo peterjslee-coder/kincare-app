@@ -182,4 +182,33 @@ function sendApnsBadge(deviceToken, count) {
   return _post(deviceToken, body, { "apns-push-type": "alert", "apns-priority": "10" });
 }
 
-module.exports = { isConfigured, sendApnsNotification, sendApnsBadge, _providerToken, _resetTokenCache };
+// ─── VoIP push: the one that rings the phone (calls-native, 1.3) ───
+//
+// A normal alert push puts a banner on the screen that says a call is happening. A VoIP push
+// wakes the app — even one that is not running — so that it can hand the call to CallKit,
+// which draws the full-screen ringing call iOS uses for phone calls. See
+// docs/plans/CallKit_VoIP_Plan.md.
+//
+// Same .p8 key and the same provider token; what differs is on the wire:
+//   - topic is the bundle id + ".voip" — a token registered through PushKit is bound to it,
+//     and sending it to the plain topic fails with DeviceTokenNotForTopic (pruned as dead);
+//   - apns-push-type voip, priority 10;
+//   - NO `aps` alert. CallKit draws the call; an alert here would just be a second banner.
+//   - expiration = the ring window. A ring delivered a minute late is a phone ringing for a
+//     call that is over, which is worse than not ringing at all.
+//
+// ⚠️ The iOS side MUST report every VoIP push to CallKit, immediately, or iOS stops delivering
+// them to the app altogether. So nothing is ever sent down this path except a call to ring —
+// never a "cancel", never a status update. Cancelling is the native side polling
+// /api/calls/:roomName/status.
+function sendApnsVoip(deviceToken, data, { ttlSeconds = 45 } = {}) {
+  const body = JSON.stringify({ ...(data || {}) });
+  return _post(deviceToken, body, {
+    "apns-topic": `${BUNDLE_ID}.voip`,
+    "apns-push-type": "voip",
+    "apns-priority": "10",
+    "apns-expiration": String(Math.floor(Date.now() / 1000) + ttlSeconds),
+  });
+}
+
+module.exports = { isConfigured, sendApnsNotification, sendApnsBadge, sendApnsVoip, _providerToken, _resetTokenCache };
