@@ -92,7 +92,7 @@ describe("with the Hub on", () => {
 
   test("Home offers it to family on the team", async () => {
     const d = await h.request.get("/api/dashboard").set(h.auth(sister.token));
-    expect(d.body.hubRecipients).toEqual([{ id: recipientId, firstName: expect.any(String) }]);
+    expect(d.body.hubRecipients).toEqual([{ id: recipientId, firstName: expect.any(String), photoAspect: null }]);
   });
 
   test("the caregiver on the visit is offered the choice; it is off unless ticked", async () => {

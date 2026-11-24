@@ -466,7 +466,10 @@ async function familyDashboard(db, userId, res) {
         for (const r of recipients) {
           try {
             if ((await hubPhotos.hubOn(db, r.id)) && (await hubPhotos.isFamilyFor(db, r.id, { id: userId, role: "family" }))) {
-              out.push({ id: r.id, firstName: r.first_name || null });
+              // v1.155.3 — the shape the tablet measured for its photo space, for Add photo's frame.
+              const { parseSimpleMode } = require("../utils/simpleMode");
+              const hub = parseSimpleMode(r.simple_mode).hub;
+              out.push({ id: r.id, firstName: r.first_name || null, photoAspect: hub.photoAspect || null });
             }
           } catch { /* a missing Hub is not an error on Home */ }
         }

@@ -228,6 +228,14 @@ io.on("connection", (socket) => {
   }
   existing.add(socket.id);
 
+  // v1.155.3 — Pete: a call from the Hub "rings on my computer...it does not ring my phone in
+  // app at all." Which of a person's devices hold a live socket is the first question for any
+  // "it didn't ring" report, so each connect and disconnect says which device and transport.
+  const sockUa = (() => { const u = String(socket.handshake.headers["user-agent"] || ""); return /iPhone|iPad|iOS/i.test(u) ? "ios" : /Android/i.test(u) ? "android" : "desktop"; })();
+  socket.data.ua = sockUa;
+  try { console.log(`[socket] connect user=${String(userId).slice(0, 8)} ua=${sockUa} transport=${socket.conn.transport.name} n=${existing.size}`); } catch { /* logging only */ }
+  socket.on("disconnect", (why) => { try { console.log(`[socket] disconnect user=${String(userId).slice(0, 8)} ua=${sockUa} why=${why}`); } catch { /* logging only */ } });
+
   // Throttle EVERY inbound event on this socket, whatever it is, before the handler runs.
   // Done with a middleware rather than per-handler so a new socket.on() is covered by default
   // instead of by remembering.
@@ -289,7 +297,10 @@ io.on("connection", (socket) => {
       let allowed = false;
       try { allowed = await mayCall(userId, data.targetUserId); }
       catch (e) { captureException(e, { where: "socket: call_invite mayCall" }); }
-      if (!allowed) return ack("nowhere", 0);
+      if (!allowed) {
+        console.log(`[call] invite from=${String(userId).slice(0, 8)} to=${String(data.targetUserId).slice(0, 8)} via=nowhere reason=not-allowed`);
+        return ack("nowhere", 0);
+      }
       ringTarget();
     })();
     return;
@@ -308,6 +319,10 @@ io.on("connection", (socket) => {
           callerName: socket.user.displayName || "InPlace",
         });
       }
+      try {
+        const uas = [...targetSockets].map((sid) => { const t = io.sockets.sockets.get(sid); return (t && t.data && t.data.ua) || "?"; }).join(",");
+        console.log(`[call] invite from=${String(userId).slice(0, 8)} to=${String(data.targetUserId).slice(0, 8)} via=app devices=${uas}`);
+      } catch { /* logging only */ }
       ack("app", targetSockets.size);
     } else {
       const kind = data.callType === "video" ? "Video call" : "Call";
@@ -336,6 +351,7 @@ io.on("connection", (socket) => {
             },
           });
           const sent = (result && result.sent) || 0;
+          console.log(`[call] invite from=${String(userId).slice(0, 8)} to=${String(data.targetUserId).slice(0, 8)} via=${sent > 0 ? "push" : "nowhere"} sent=${sent}`);
           ack(sent > 0 ? "push" : "nowhere", sent);
         } catch (err) {
           console.error("call_invite push failed:", err.message);
@@ -851,7 +867,7 @@ app.use("/api/safety", require("./routes/safety"));
 
 // ─── App version check (lightweight, no auth) ───
 const { cancelPassedPrivateOffers, releaseExpiredExclusiveOffers } = require("./utils/exclusiveOffers");
-const APP_VERSION = "1.155.2";
+const APP_VERSION = "1.155.3";
 app.get("/api/version", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({ version: APP_VERSION, minAppVersion: MIN_APP_VERSION });

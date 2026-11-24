@@ -70,10 +70,11 @@ test("the arrival card chimes, stays until OK, and is remembered per visit", () 
   expect(hub).toMatch(/data-testid="hub-arriving" className="no-text-scale"/);
 });
 
-test("v1.155.2: the crop frame and the Hub photo space are the same shape", () => {
-  expect(dash).toMatch(/const HUB_PHOTO_ASPECT = 16 \/ 9;/);
-  expect(hub).toContain("const HUB_PHOTO_SLOT = 16 / 9;");
-  expect(hub).toMatch(/data-testid="hub-photo" style=\{\{[^}]*aspectRatio: '16 \/ 9'/);
+test("v1.155.3: the photo fills its column again, and the crop frame uses the shape the Hub measured", () => {
+  expect(hub).toMatch(/<div ref=\{boxRef\} data-testid="hub-photo" style=\{\{[^}]*flex: '1 1 auto'/);
+  expect(hub).not.toMatch(/data-testid="hub-photo" style=\{\{[^}]*aspectRatio/);
+  expect(hub).toContain("/simple-screen/hub-shape");
+  expect(dash).toContain("<PhotoCropFrame src={preview} aspect={who && who.photoAspect}");
 });
 
 test("v1.155.2: a call that rings over the live socket off Messages is parked for Messages to show", () => {

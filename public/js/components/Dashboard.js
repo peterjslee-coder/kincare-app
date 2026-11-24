@@ -135,21 +135,28 @@ const PhotoActions = window.PhotoActions = ({ photo, onChanged, hubRecipients })
 // opens in a frame the shape of the Hub's photo space (16:9): drag to move it, slide to zoom, or
 // pick "Whole photo". The server does the cutting and shrinking (utils/photoShrink.js), so a
 // photo the phone's browser cannot decode still uploads, just without the frame.
-const HUB_PHOTO_ASPECT = 16 / 9; // v1.155.2 — the Hub's photo space is 16:9 (Pete: "What I crop to isn't the same aspect as on the screen"); must match HUB_PHOTO_SLOT in RecipientPhone.js
-const PhotoCropFrame = ({ src, onCrop, onUnreadable }) => {
+const HUB_PHOTO_ASPECT = 16 / 9; // fallback only: v1.155.3 frames to the shape the tablet measured (hubRecipients[].photoAspect)
+const PhotoCropFrame = ({ src, aspect, onCrop, onUnreadable }) => {
+  const A = aspect || HUB_PHOTO_ASPECT;
   const boxRef = React.useRef(null);
   const [W, setW] = React.useState(320);
   const [nat, setNat] = React.useState(null);
   const [zoom, setZoom] = React.useState(1);
   const [off, setOff] = React.useState({ x: 0, y: 0 });
   const drag = React.useRef(null);
-  const H = Math.round(W / HUB_PHOTO_ASPECT);
-  React.useEffect(() => { if (boxRef.current) setW(boxRef.current.clientWidth || 320); }, []);
+  const H = Math.round(W / A);
+  // A tall frame (the Hub's photo space can be taller than wide) is narrowed to fit the panel.
+  React.useEffect(() => {
+    if (!boxRef.current) return;
+    const maxH = Math.round(window.innerHeight * 0.42);
+    setW(Math.max(160, Math.min(boxRef.current.clientWidth || 320, Math.round(maxH * A))));
+  }, [A]);
   const scale = nat ? Math.max(W / nat.w, H / nat.h) * zoom : 1;
   const dw = nat ? nat.w * scale : W, dh = nat ? nat.h * scale : H;
   const clamp = (o) => ({ x: Math.min(0, Math.max(W - dw, o.x)), y: Math.min(0, Math.max(H - dh, o.y)) });
   // Keep the picture covering the frame, centred, whenever the size changes.
-  React.useEffect(() => { if (nat) setOff((o) => clamp(o.x === 0 && o.y === 0 && zoom === 1 ? { x: (W - dw) / 2, y: (H - dh) / 2 } : o)); }, [nat, zoom, W]);
+  React.useEffect(() => { if (nat) setOff({ x: (W - dw) / 2, y: (H - dh) / 2 }); }, [nat, W, A]);
+  React.useEffect(() => { if (nat) setOff((o) => clamp(o)); }, [zoom]);
   React.useEffect(() => {
     if (!nat) return;
     const c = clamp(off);
@@ -159,7 +166,7 @@ const PhotoCropFrame = ({ src, onCrop, onUnreadable }) => {
   const move = (e) => { if (!drag.current) return; const d = drag.current; setOff(clamp({ x: d.o.x + e.clientX - d.x, y: d.o.y + e.clientY - d.y })); };
   const up = () => { drag.current = null; };
   return (
-    <div ref={boxRef} style={{ width: '100%' }}>
+    <div ref={boxRef} style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
       <div data-testid="photo-crop-frame" onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up}
         style={{ position: 'relative', width: W, height: H, overflow: 'hidden', borderRadius: 10, background: '#000', touchAction: 'none', cursor: 'grab' }}>
         <img src={src} alt="" draggable={false}
@@ -240,7 +247,7 @@ const AddCarePhoto = window.AddCarePhoto = ({ hubRecipients, onAdded }) => {
               </div>
             )}
             {fit === 'fill' && !unreadable
-              ? <PhotoCropFrame src={preview} onCrop={(c) => { crop.current = c; }} onUnreadable={() => setUnreadable(true)} />
+              ? <PhotoCropFrame src={preview} aspect={who && who.photoAspect} onCrop={(c) => { crop.current = c; }} onUnreadable={() => setUnreadable(true)} />
               : unreadable
                 ? <div style={{ fontSize: 13, color: 'var(--text-secondary)', padding: '10px 0' }}>This phone can't preview that photo, but it will still upload, sized for the screen.</div>
                 : <img src={preview} alt="" onError={() => setUnreadable(true)} style={{ width: '100%', maxHeight: '40vh', objectFit: 'contain', borderRadius: 10, background: '#000' }} />}

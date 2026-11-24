@@ -364,15 +364,32 @@ const hubPhotoWhen = (iso, now) => {
   return 'on ' + t.toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
 };
 const HUB_PHOTO_MS = 20000;
-const HUB_PHOTO_SLOT = 16 / 9; // the photo space's shape; Add photo's crop frame (Dashboard.js) matches
-const HubPhoto = ({ photos, now, card }) => {
+const HubPhoto = ({ photos, now, card, stored, onShape }) => {
   const [i, setI] = React.useState(0);
   const [broken, setBroken] = React.useState({});
   // v1.155.1 — a photo framed for the screen (from Add photo) fills its space; anything else
   // (a tall phone photo, a caregiver's visit photo) shows whole.
-  // v1.155.2 — Pete: "What I crop to isn't the same aspect as on the screen." The space used to
-  // be whatever height the column left over (about 16:9 on Betty's tablet) while the crop was
-  // 4:3. Now the space IS 16:9 (HUB_PHOTO_SLOT), the same shape as the Add photo frame.
+  // v1.155.2 — Pete: "What I crop to isn't the same aspect as on the screen."
+  // v1.155.3 — and "I liked the old half-screen view": the photo fills the column again, and
+  // instead of forcing a fixed shape the Hub measures its photo space and reports the shape
+  // (onShape → simple_mode.hub.photoAspect). Add photo frames to that measured shape.
+  const boxRef = React.useRef(null);
+  const [slot, setSlot] = React.useState(null);
+  React.useEffect(() => {
+    const el = boxRef.current;
+    if (!el) return undefined;
+    const measure = () => { const r = el.getBoundingClientRect(); if (r.width > 50 && r.height > 50) setSlot(r.width / r.height); };
+    measure();
+    let ro = null;
+    try { ro = new ResizeObserver(measure); ro.observe(el); } catch { /* measured once */ }
+    return () => { try { ro && ro.disconnect(); } catch { /* gone */ } };
+  });
+  React.useEffect(() => {
+    if (!slot || !onShape) return;
+    if (stored && Math.abs(stored - slot) < 0.03) return;
+    const t = setTimeout(() => onShape(slot), 3000); // let the layout settle first
+    return () => clearTimeout(t);
+  }, [slot && Math.round(slot * 100), stored]);
   const [fills, setFills] = React.useState({});
   const list = (photos || []).filter((p) => !broken[p.kind + p.id]);
   const key = list.map((p) => p.id).join(',');
@@ -386,10 +403,10 @@ const HubPhoto = ({ photos, now, card }) => {
   const p = list[i % list.length];
   const when = hubPhotoWhen(p.createdAt, now);
   return (
-    <div data-testid="hub-photo" style={{ ...card, padding: 0, width: '100%', aspectRatio: '16 / 9', flex: 'none', position: 'relative', overflow: 'hidden', background: '#000' }}>
+    <div ref={boxRef} data-testid="hub-photo" style={{ ...card, padding: 0, flex: '1 1 auto', minHeight: '26vh', position: 'relative', overflow: 'hidden', background: '#000', flexShrink: 1 }}>
       <img key={p.kind + p.id} src={p.url} alt={p.caption || (p.from ? `Photo from ${p.from}` : 'Photo')}
         onError={() => setBroken((b) => ({ ...b, [p.kind + p.id]: true }))}
-        onLoad={(e) => { const r = e.target.naturalWidth / (e.target.naturalHeight || 1); const k = p.kind + p.id; const f = Math.abs(r - HUB_PHOTO_SLOT) < 0.2; setFills((m) => (m[k] === f ? m : { ...m, [k]: f })); }}
+        onLoad={(e) => { const r = e.target.naturalWidth / (e.target.naturalHeight || 1); const k = p.kind + p.id; const f = Math.abs(r - (slot || stored || r)) < 0.12; setFills((m) => (m[k] === f ? m : { ...m, [k]: f })); }}
         style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: fills[p.kind + p.id] ? 'cover' : 'contain' }} />
       <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, padding: '5vh 2.4vh 1.6vh', background: 'linear-gradient(transparent, rgba(0,0,0,0.75))', color: '#fff' }}>
         {p.caption && <div style={{ fontSize: '4vh', fontWeight: 800, lineHeight: 1.2, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{p.caption}</div>}
@@ -458,7 +475,7 @@ const HubArriving = ({ arriving }) => {
 const PANEL_IDLE_MS = 90000;  // v1.155.1 — an open panel goes home after this long untouched
 const SENT_HOME_MS = 3000;    // ...and this soon after a text is sent
 
-const HubBoard = ({ hub, first, now, show, calls, note, s, failed, readFlash, reading, acking, unread, awake, onWake, onRead, onAck, onText, onMessages, onCall }) => {
+const HubBoard = ({ hub, first, now, show, calls, note, s, failed, readFlash, reading, acking, unread, awake, onWake, onRead, onAck, onText, onMessages, onCall, onHubShape }) => {
   const today = hub.today;
   const days = hub.days || [];
   const dateLine = now.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
@@ -604,7 +621,7 @@ const HubBoard = ({ hub, first, now, show, calls, note, s, failed, readFlash, re
         )}
 
         {!note && !waiting && !readFlash && hub.showPhotos !== false && (
-          <HubPhoto photos={hub.photos} now={now} card={card} />
+          <HubPhoto photos={hub.photos} now={now} card={card} stored={hub.photoAspect} onShape={onHubShape} />
         )}
 
         {hub.faces && (hub.people || []).length > 0 && (
@@ -992,7 +1009,8 @@ const SimpleViewInner = ({ initial, onPanelChange, startCall }) => {
         readFlash={readFlash} reading={reading} acking={acking} unread={unread}
         awake={Date.now() < wakeUntil} onWake={() => setWakeUntil(Date.now() + 120000)}
         onRead={markRead} onAck={ackText} onText={openText}
-        onMessages={() => setPanel('messages')} onCall={startCall} />
+        onMessages={() => setPanel('messages')} onCall={startCall}
+        onHubShape={(aspect) => { if (data && data.careRecipientId) apiFetch(`/api/care-recipients/${data.careRecipientId}/simple-screen/hub-shape`, { method: 'POST', body: JSON.stringify({ photoAspect: aspect }) }).catch(() => {}); }} />
       {s.hub && s.hub.arriving && <HubArriving key={s.hub.arriving.sessionId} arriving={s.hub.arriving} />}
       </>
     );
