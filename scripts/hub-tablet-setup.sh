@@ -21,11 +21,14 @@
 # Undo kiosk any time: Hub settings → "Keep the tablet on InPlace" off, or five quick taps in
 # the tablet's top-left corner (unlocks for 10 minutes).
 
-set -uo pipefail
+# No pipefail: `grep -q` stops reading early, adb then exits on SIGPIPE, and pipefail would
+# turn a found match into a failure (that is exactly what happened on the first real tablet).
+set -u
 
 PKG="com.yourinplace.app"
 ADMIN="$PKG/.KioskAdminReceiver"
 APK="${1:-}"
+MEET_OFF=0
 
 say()  { printf '\n\033[1m%s\033[0m\n' "$*"; }
 ok()   { printf '  \033[32m✓\033[0m %s\n' "$*"; }
@@ -59,10 +62,13 @@ else
   ALREADY=0
   ACCTS="$(sh_ dumpsys account | grep -E '^\s+Account \{' || true)"
   if [ -n "$ACCTS" ]; then
-    # Google Meet keeps its own account; clearing Meet's data removes it.
+    # Google Meet keeps its own account, and clearing its data doesn't remove it; switching
+    # Meet off does. It is switched back on at the end.
     if printf '%s' "$ACCTS" | grep -q 'com.google.android.apps.tachyon'; then
-      sh_ pm clear com.google.android.apps.tachyon >/dev/null
-      ok "cleared Google Meet's sign-in"
+      sh_ pm disable-user --user 0 com.google.android.apps.tachyon >/dev/null
+      MEET_OFF=1
+      sleep 2
+      ok "Google Meet switched off for a moment"
       ACCTS="$(sh_ dumpsys account | grep -E '^\s+Account \{' || true)"
     fi
   fi
@@ -92,6 +98,8 @@ if [ "$ALREADY" = "0" ]; then
   printf '%s\n' "$OUT" | grep -q "Success" || { printf '    %s\n' "$OUT"; stop "Android refused. The usual cause is an account still on the tablet."; }
 fi
 ok "device owner (kiosk mode is available)"
+
+if [ "$MEET_OFF" = "1" ]; then sh_ pm enable com.google.android.apps.tachyon >/dev/null; ok "Google Meet back on"; fi
 
 say "5. Tablet settings for a counter"
 sh_ settings put global stay_on_while_plugged_in 7 >/dev/null && ok "screen stays on while charging"
