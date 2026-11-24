@@ -59,7 +59,10 @@ async function shrinkPhoto(buffer, mime, crop = null) {
       .jpeg({ quality: 82, mozjpeg: true })
       .toBuffer();
     return { ok: true, buffer: out, mime: "image/jpeg" };
-  } catch {
+  } catch (err) {
+    // Reported, so a server that cannot shrink at all (sharp missing in production, as it was
+    // on the first deploy of this) shows up in Sentry instead of quietly storing originals.
+    try { require("./sentry").captureException(err, { where: "photoShrink" }); } catch { /* best effort */ }
     if (buffer.length <= PHOTO_STORED_MAX) return { ok: true, buffer, mime: type };
     return { ok: false, error: "That photo couldn't be read. Try taking a screenshot of it and adding that instead." };
   }
