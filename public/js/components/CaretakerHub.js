@@ -4351,6 +4351,17 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                   })()
                 ),
 
+                // v1.156.1 — overnight from the InPlace Hub goes first of all. Pete: "if there's
+                // something to add from the overnight, I would want that at the top."
+                (bd && bd.nightNote)
+                  ? React.createElement('div', { 'data-testid': 'briefing-night-note', style: {
+                      padding: '12px 14px', borderRadius: 10, marginBottom: 14, background: 'var(--bg-highlight)',
+                      border: '2px solid var(--role-color)', fontSize: 14, lineHeight: 1.5, color: 'var(--text-primary)',
+                    } },
+                      React.createElement('div', { style: { fontSize: 12, fontWeight: 700, color: 'var(--role-color)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.5 } }, '\u{1F319} Overnight'),
+                      bd.nightNote)
+                  : null,
+
                 // v1.154.0 — the hand-off from the caregiver before her comes first of all.
                 (typeof HandoffIncoming !== 'undefined')
                   ? React.createElement(HandoffIncoming, { sessionId: checkInSession.id, timezone: checkInSession.timezone })

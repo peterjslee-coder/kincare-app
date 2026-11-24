@@ -560,7 +560,9 @@ router.post("/attention/snooze", authenticate, async (req, res) => {
 });
 
 // Optional eventType param — if provided, checks user's notification_prefs before sending
-async function sendPushToUser(userId, payload, eventType) {
+async function sendPushToUser(userId, payload, eventType, opts = {}) {
+  // v1.156.1 — opts.skipKinds: device kinds (utils/pushDevices.js: 'ios', 'android', 'web')
+  // not to push to, because that kind of device already has the app open and ringing.
   // NEVER send push notifications to demo users — prevents demo data from
   // leaking notifications to real devices that tested with demo accounts
   try {
@@ -677,9 +679,11 @@ async function sendPushToUser(userId, payload, eventType) {
     let sent = 0;
     let removed = 0;
     let failed = 0;
+    const skipKinds = new Set((opts && opts.skipKinds) || []);
     for (const sub of subs) {
       try {
         const subObj = JSON.parse(sub.subscription_json);
+        if (skipKinds.size && skipKinds.has(subObj.type === "native" ? String(subObj.platform || "").toLowerCase() : "web")) continue;
 
         // Native delivery not configured yet (no APNs key / Firebase credential) —
         // skip silently WITHOUT counting a failure, so tokens survive until setup.

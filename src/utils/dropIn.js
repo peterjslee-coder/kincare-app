@@ -36,23 +36,25 @@ const wordingFor = (name) => [
 const CAPACITY_LABEL = {
   self: "themselves",
   financial_poa: "agent under the durable power of attorney",
-  healthcare_poa: "healthcare agent",
+  healthcare_agent: "healthcare agent",
 };
 
 async function recipient(db, id) {
   return db.prepare("SELECT id, first_name, family_user_id, linked_user_id, simple_mode FROM care_recipients WHERE id = ?").get(id);
 }
 
-/** In what capacity may this user sign for her? 'self' | 'financial_poa' | 'healthcare_poa' | null */
+/** In what capacity may this user sign for her? 'self' | 'financial_poa' | 'healthcare_agent' | null
+ *  (recipient_authorities.kind — routes/legalReadiness.js AGENT_KIND. v1.156.1: this said
+ *  'healthcare_poa', a kind that is never written, so a healthcare agent could not sign.) */
 async function signerCapacity(db, cr, userId) {
   const { trustedLinkedUserId } = require("./linkedAccount");
   if ((await trustedLinkedUserId(db, cr)) === userId) return "self";
   const rows = await db.prepare(
-    "SELECT kind FROM recipient_authorities WHERE care_recipient_id = ? AND user_id = ? AND kind IN ('financial_poa', 'healthcare_poa')"
+    "SELECT kind FROM recipient_authorities WHERE care_recipient_id = ? AND user_id = ? AND kind IN ('financial_poa', 'healthcare_agent')"
   ).all(cr.id, userId);
   const kinds = rows.map((r) => r.kind);
   if (kinds.includes("financial_poa")) return "financial_poa";
-  if (kinds.includes("healthcare_poa")) return "healthcare_poa";
+  if (kinds.includes("healthcare_agent")) return "healthcare_agent";
   return null;
 }
 
@@ -118,6 +120,36 @@ async function mayNotice(db, recipientId) {
   return !!(await activeConsent(db, cr.id));
 }
 
+/** Everyone who could sign for her: her own account (if she has one) and each recorded agent. */
+async function possibleSigners(db, cr) {
+  const out = [];
+  const { trustedLinkedUserId } = require("./linkedAccount");
+  const herself = await trustedLinkedUserId(db, cr);
+  if (herself) out.push({ userId: herself, firstName: cr.first_name, capacity: "self", capacityLabel: "themselves" });
+  const rows = await db.prepare(`
+    SELECT ra.kind, ra.user_id, u.first_name FROM recipient_authorities ra JOIN users u ON u.id = ra.user_id
+    WHERE ra.care_recipient_id = ? AND ra.kind IN ('financial_poa', 'healthcare_agent') AND ra.user_id IS NOT NULL
+    ORDER BY CASE ra.kind WHEN 'financial_poa' THEN 0 ELSE 1 END
+  `).all(cr.id);
+  for (const r of rows) {
+    if (out.some((o) => o.userId === r.user_id)) continue;
+    out.push({ userId: r.user_id, firstName: r.first_name, capacity: r.kind, capacityLabel: CAPACITY_LABEL[r.kind] });
+  }
+  return out;
+}
+
+async function pendingRequest(db, recipientId) {
+  return db.prepare(`
+    SELECT r.*, u.first_name AS of_first, b.first_name AS by_first FROM drop_in_requests r
+    JOIN users u ON u.id = r.requested_of JOIN users b ON b.id = r.requested_by
+    WHERE r.care_recipient_id = ? AND r.answered_at IS NULL ORDER BY r.created_at DESC LIMIT 1
+  `).get(recipientId);
+}
+
+async function closeRequests(db, recipientId, answer) {
+  await db.prepare("UPDATE drop_in_requests SET answered_at = NOW(), answer = ? WHERE care_recipient_id = ? AND answered_at IS NULL").run(answer, recipientId);
+}
+
 async function audit(db, recipientId, actorId, eventType, description, metadata) {
   try {
     await db.prepare(`
@@ -129,5 +161,5 @@ async function audit(db, recipientId, actorId, eventType, description, metadata)
 
 module.exports = {
   WORDING_VERSION, wordingFor, CAPACITY_LABEL,
-  recipient, signerCapacity, isLeader, activeConsent, dropInCandidates, chosenIds, mayDropIn, mayNotice, audit,
+  recipient, signerCapacity, isLeader, activeConsent, possibleSigners, pendingRequest, closeRequests, dropInCandidates, chosenIds, mayDropIn, mayNotice, audit,
 };

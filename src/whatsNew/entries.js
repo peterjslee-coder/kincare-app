@@ -31,6 +31,35 @@ const WINDOW_DAYS = 45;
 
 const ENTRIES = [
   {
+    id: "agent-approve-and-calls",
+    version: "1.156.1",
+    date: "2026-11-24",
+    audience: ["family"],
+    title: "Ask the agent to approve, and calls that stop ringing",
+    body: "The family leader can now send the Hub consent to the person's agent on record, who gets a Needs-you card to review and sign. When you answer a call on one device, your other phone, tablet or browser tab stops ringing, and the app no longer pushes a call over itself while it's open.",
+    howTo: [
+      "Care Team, then Accessibility Options, then InPlace Hub",
+      "Under Drop-in, tap \"Ask Sam to approve\"",
+      "Sam taps Review on the Needs-you card and signs",
+    ],
+    examples: ["Ask Sam to approve (agent under the power of attorney)"],
+    preview: "agentApprove",
+  },
+  {
+    id: "overnight-first",
+    version: "1.156.1",
+    date: "2026-11-24",
+    audience: ["caregiver"],
+    title: "How the night went, first thing at check-in",
+    body: "If the kitchen tablet noticed your client was up in the night, it's now the first thing on your check-in briefing. It shows only the times, so you know to expect a nap or a slower morning.",
+    howTo: [
+      "Check in to your visit",
+      "Read the \"Overnight\" note at the top of the briefing",
+    ],
+    examples: ["Jane was up from about 2 to 5 AM, so expect a nap"],
+    preview: "overnightFirst",
+  },
+  {
     id: "hub-dropin-consent",
     version: "1.156.0",
     date: "2026-11-24",

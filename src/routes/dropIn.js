@@ -17,7 +17,9 @@ async function access(db, req) {
   if (!cr) return { status: 404 };
   const { trustedLinkedUserId } = require("../utils/linkedAccount");
   const herself = (await trustedLinkedUserId(db, cr)) === req.user.id;
-  if (!herself) {
+  // A recorded agent can always reach the consent, even if not on the care team.
+  const agent = !herself && !!(await D.signerCapacity(db, cr, req.user.id));
+  if (!herself && !agent) {
     const caps = await recipientCapabilities(db, cr.id, req.user.id);
     if (!caps.length) return { status: 404 };
     const cg = await db.prepare("SELECT 1 FROM caregiver_profiles WHERE user_id = ? LIMIT 1").get(req.user.id);
@@ -51,6 +53,12 @@ async function view(db, cr, userId) {
     candidates,
     chosen: (hub.dropInUserIds || []).filter((id) => candidates.length === 0 || candidates.some((c) => c.userId === id)),
     noticeAwake: !!hub.noticeAwake,
+    // v1.156.1 — the leader asks the person who can sign; she gets a Needs-you card.
+    signers: leader ? await D.possibleSigners(db, cr) : [],
+    request: await (async () => {
+      const r = await D.pendingRequest(db, cr.id);
+      return r ? { id: r.id, ofUserId: r.requested_of, ofFirstName: r.of_first, byFirstName: r.by_first, at: r.created_at, forMe: r.requested_of === userId } : null;
+    })(),
   };
 }
 
@@ -87,6 +95,7 @@ router.post("/:recipientId/consent", async (req, res) => {
       INSERT INTO drop_in_consents (id, care_recipient_id, signed_by, signer_capacity, signer_name, wording_version, wording_text)
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `).run(id, a.cr.id, req.user.id, capacity, name, D.WORDING_VERSION, D.wordingFor(a.cr.first_name || "them"));
+    await D.closeRequests(db, a.cr.id, "signed");
     await D.audit(db, a.cr.id, req.user.id, "drop_in_consent_signed",
       `${name} signed the drop-in and awake-noticing consent as ${D.CAPACITY_LABEL[capacity]}`,
       { consentId: id, capacity, wordingVersion: D.WORDING_VERSION, replaced: existing ? existing.id : null });
@@ -113,6 +122,59 @@ router.post("/:recipientId/revoke", async (req, res) => {
   } catch (err) {
     captureException(err, { where: "dropIn: revoke" });
     res.status(500).json({ error: "Couldn't withdraw the consent" });
+  }
+});
+
+// ─── v1.156.1 — ask the person who can sign ───
+// Pete: "my sister is POA...someone can sign up / setup and she gets a 'needs you' card to
+// click approve." POST /:recipientId/request { userId } — leader only; userId must be someone
+// who can sign (her own account or a recorded agent). One open ask at a time.
+router.post("/:recipientId/request", async (req, res) => {
+  try {
+    if (req.user.impersonatedBy) return res.status(403).json({ error: "Not while viewing as someone else." });
+    const db = await getDb();
+    const a = await access(db, req);
+    if (a.status !== 200) return res.status(a.status).json({ error: "Not found" });
+    if (!(await D.isLeader(db, a.cr, req.user.id))) return res.status(403).json({ error: "Only the care team leader can ask for this." });
+    if (await D.activeConsent(db, a.cr.id)) return res.status(409).json({ error: "It's already signed." });
+    const signer = (await D.possibleSigners(db, a.cr)).find((p) => p.userId === req.body?.userId);
+    if (!signer) return res.status(400).json({ error: "That person can't sign this. Record them as the agent in Legal readiness first." });
+    await D.closeRequests(db, a.cr.id, "replaced");
+    await db.prepare("INSERT INTO drop_in_requests (id, care_recipient_id, requested_by, requested_of) VALUES (?, ?, ?, ?)")
+      .run(uuid(), a.cr.id, req.user.id, signer.userId);
+    await D.audit(db, a.cr.id, req.user.id, "drop_in_consent_requested", `Asked ${signer.firstName} to review the drop-in consent`, { of: signer.userId, capacity: signer.capacity });
+    // No PHI on the lock screen: who asked and that something is waiting, nothing more.
+    try {
+      const me = await db.prepare("SELECT first_name FROM users WHERE id = ?").get(req.user.id);
+      await require("../routes/push").sendPushToUser(signer.userId, {
+        title: `${(me && me.first_name) || "Your care team"} needs your OK`,
+        body: `A consent for ${a.cr.first_name || "your loved one"}'s InPlace Hub is waiting for you.`,
+        data: { type: "drop_in_consent_request", page: "dashboard", focus: `dropIn:${a.cr.id}` },
+      });
+    } catch (e) { captureException(e, { where: "dropIn: request push" }); }
+    res.status(201).json(await view(db, a.cr, req.user.id));
+  } catch (err) {
+    captureException(err, { where: "dropIn: request" });
+    res.status(500).json({ error: "Couldn't send that" });
+  }
+});
+
+// POST /:recipientId/decline — the person asked says no (or the leader withdraws the ask).
+router.post("/:recipientId/decline", async (req, res) => {
+  try {
+    const db = await getDb();
+    const a = await access(db, req);
+    if (a.status !== 200) return res.status(a.status).json({ error: "Not found" });
+    const r = await D.pendingRequest(db, a.cr.id);
+    if (!r) return res.json(await view(db, a.cr, req.user.id));
+    const mine = r.requested_of === req.user.id;
+    if (!mine && !(await D.isLeader(db, a.cr, req.user.id))) return res.status(403).json({ error: "Not yours to answer." });
+    await D.closeRequests(db, a.cr.id, mine ? "declined" : "withdrawn");
+    await D.audit(db, a.cr.id, req.user.id, mine ? "drop_in_consent_declined" : "drop_in_request_withdrawn", mine ? "Declined to sign the drop-in consent" : "Withdrew the ask", { requestId: r.id });
+    res.json(await view(db, a.cr, req.user.id));
+  } catch (err) {
+    captureException(err, { where: "dropIn: decline" });
+    res.status(500).json({ error: "Couldn't save that" });
   }
 });
 
