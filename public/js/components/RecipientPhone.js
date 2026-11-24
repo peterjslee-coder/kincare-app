@@ -932,21 +932,25 @@ const HubBoard = ({ hub, first, now, show, calls, note, s, failed, readFlash, re
   return (
     <div className="simple-view hub-board no-text-scale" data-testid="hub-board" onPointerDown={() => { if (awake && hubIsNight(now, hub.dimFrom, hub.dimTo)) onWake(); }} style={{ ...HUB_THEME, '--text-primary': '#14213d', '--text-secondary': '#3d4a63', height: '100vh', background: hubSky(now), padding: '3vh 3vw', boxSizing: 'border-box', display: 'grid', gridTemplateColumns: 'minmax(0, 1.15fr) minmax(0, 1fr)', gridTemplateRows: hasButtons ? 'minmax(0, 1fr) auto' : 'minmax(0, 1fr)', gap: '2.6vh 2.2vw', overflow: 'hidden' }}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: '2.2vh', minHeight: 0, overflow: 'hidden' }}>
-        <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: '2vw' }}>
-          <div style={{ minWidth: 0 }}>
-            <div style={{ fontSize: '6vh', fontWeight: 800, color: 'var(--text-primary)', lineHeight: 1.05 }}>{weekday}</div>
-            <div style={{ fontSize: '4.6vh', color: 'var(--text-secondary)', lineHeight: 1.2, whiteSpace: 'nowrap' }} data-testid="hub-date">{dateLine}</div>
-          </div>
-          <div style={{ textAlign: 'right' }}>
-            <div style={{ fontSize: '15vh', fontWeight: 800, lineHeight: 0.95, color: 'var(--text-primary)', whiteSpace: 'nowrap' }} data-testid="hub-clock">{clockNum}<span style={{ fontSize: '5.6vh', marginLeft: '1vh' }}>{clockAp}</span></div>
+        {/* v1.158.1 — Pete, 11/24 (option B): the clock on top with the weather beside it, and
+            the day and date on one full-width line under it. Side by side, "Tuesday" crowded
+            the clock and its bottom didn't line up with anything. */}
+        <div>
+          <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1vh 2vw' }}>
+            <div style={{ fontSize: '16vh', fontWeight: 800, lineHeight: 0.95, color: 'var(--text-primary)', whiteSpace: 'nowrap' }} data-testid="hub-clock">{clockNum}<span style={{ fontSize: '5.6vh', marginLeft: '1vh' }}>{clockAp}</span></div>
+            <div style={{ flexShrink: 0, paddingBottom: '1.4vh' }}>
             {wx && wx.now
               ? (
                 <button type="button" data-testid="hub-weather-button" onClick={() => setShowWx(true)}
-                  style={{ marginTop: '0.8vh', display: 'inline-flex', alignItems: 'center', gap: '1.2vh', padding: '0.8vh 2vh', borderRadius: '5vh', border: '2px solid rgba(255,255,255,0.95)', background: 'rgba(255,255,255,0.75)', color: 'var(--text-primary)', fontSize: '3.8vh', fontWeight: 800, fontFamily: 'inherit', cursor: 'pointer' }}>
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: '1.2vh', padding: '0.8vh 2vh', borderRadius: '5vh', border: '2px solid rgba(255,255,255,0.95)', background: 'rgba(255,255,255,0.75)', color: 'var(--text-primary)', fontSize: '3.8vh', fontWeight: 800, fontFamily: 'inherit', cursor: 'pointer' }}>
                   <span aria-hidden="true">{wxEmoji(wx.now.icon, wx.now.isDay)}</span> {wx.now.temp}{'\u00B0'} {'\u00B7'} {wx.now.label}
                 </button>
               )
               : <div style={{ fontSize: '3.4vh', color: 'var(--text-secondary)' }}>{part}</div>}
+            </div>
+          </div>
+          <div style={{ marginTop: '1.2vh', fontSize: '4.6vh', lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} data-testid="hub-date">
+            <span style={{ fontWeight: 800, color: 'var(--text-primary)' }}>{weekday}</span><span style={{ color: 'var(--text-secondary)' }}>, {dateLine}</span>
           </div>
         </div>
 
