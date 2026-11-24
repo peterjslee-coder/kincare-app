@@ -31,6 +31,21 @@ const WINDOW_DAYS = 45;
 
 const ENTRIES = [
   {
+    id: "hub-popups",
+    version: "1.155.4",
+    date: "2026-11-23",
+    audience: ["family"],
+    title: "Hub pop-ups that are hard to miss",
+    body: "The Hub now chimes and fills most of the screen for the things that matter right now: a new message or note from you, an appointment within the hour, and a new photo. One at a time, never during the night hours, and each goes away with one big tap.",
+    howTo: [
+      "Send a message or a note as usual: it pops up on the Hub with a chime",
+      "Add an appointment with a time: it pops up in the hour before",
+      "Add a photo for the screen: it pops up big the first time",
+    ],
+    examples: ["Message from Sam: \"Calling at 7!\"", "In 1 hour: Haircut at Angie's"],
+    preview: "hubArriving",
+  },
+  {
     id: "hub-arriving",
     version: "1.155.2",
     date: "2026-11-23",

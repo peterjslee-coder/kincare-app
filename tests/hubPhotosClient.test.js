@@ -63,11 +63,15 @@ test("an open panel goes home by itself: soon after a text is sent, and after a 
   expect(hub).toContain('data-testid="simple-back-home"');
 });
 
-test("the arrival card chimes, stays until OK, and is remembered per visit", () => {
-  expect(hub).toMatch(/\{s\.hub && s\.hub\.arriving && <HubArriving key=\{s\.hub\.arriving\.sessionId\}/);
-  expect(hub).toContain("const ARRIVING_CHIMES = 3;");
-  expect(hub).toMatch(/localStorage\.setItem\(arrivingKey\(arriving\.sessionId\), '1'\)/);
-  expect(hub).toMatch(/data-testid="hub-arriving" className="no-text-scale"/);
+test("v1.155.4: one pop-up at a time, in order, quiet at night, each remembered per item", () => {
+  expect(hub).toContain("{s.hub && <HubPopups hub={s.hub} s={s} note={note} now={now}");
+  const pops = hub.slice(hub.indexOf("const HubPopups"), hub.indexOf("const PANEL_IDLE_MS"));
+  expect(pops).toMatch(/if \(hubIsNight\(now, hub\.dimFrom, hub\.dimTo\)\) return null;/);
+  const order = ["'arrive:'", "'note:'", "'msg:'", "'appt:'", "'photo:'"].map((k) => pops.indexOf("const k = " + k));
+  order.forEach((i) => expect(i).toBeGreaterThan(-1));
+  expect([...order].sort((x, y) => x - y)).toEqual(order);
+  expect(pops).toMatch(/React\.useState\(\(\) => \{ for \(const p of \(hub\.photos \|\| \[\]\)\) popMark/);
+  expect(hub).toMatch(/data-testid="hub-popup" data-kind=\{popKey\.split\(':'\)\[0\]\} className="no-text-scale"/);
 });
 
 test("v1.155.3: the photo fills its column again, and the crop frame uses the shape the Hub measured", () => {

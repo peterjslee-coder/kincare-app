@@ -50,13 +50,16 @@ describe("no live socket means push, not silence", () => {
   });
 });
 
-describe("push only when they are away", () => {
-  test("a live socket gets the socket event and NO push", () => {
-    // Pete's other report (97783012): push while already in the app is noise. The socket is
-    // the signal that they are here.
+describe("a call pushes as well as ringing the app (v1.155.4)", () => {
+  test("a live socket gets the socket event AND a push; only the away path reports the push to the caller", () => {
+    // Was "push only when they are away" (97783012: push while in the app is noise). Pete,
+    // 11/23, for calls specifically: "would love my phone to get a push and a buzz...bc she's
+    // calling" — the live socket may be his laptop, or an app he has navigated away inside.
     const ifBranch = inviteHandler.slice(0, inviteHandler.indexOf("} else {"));
     expect(ifBranch).toMatch(/emit\("call_incoming"/);
-    expect(ifBranch).not.toMatch(/sendPushToUser/);
+    expect(ifBranch).toMatch(/pushCall\(false\)/);
+    expect(inviteHandler).toMatch(/\} else \{\s*pushCall\(true\);/);
+    expect(inviteHandler).toMatch(/if \(acks\) ack\(sent > 0 \? "push" : "nowhere", sent\);/);
   });
 });
 
