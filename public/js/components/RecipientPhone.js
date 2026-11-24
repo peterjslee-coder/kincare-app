@@ -1731,7 +1731,16 @@ const HubDropInSettings = window.HubDropInSettings = ({ recipientId, name: nameP
               style={{ width: 16, height: 16, accentColor: 'var(--role-color)' }} />
             <span><strong>Notice when {name} is up</strong> <span style={{ color: 'var(--text-secondary)' }}>— movement, about 10 seconds of talking, or a touch. Only the times are kept; nothing is recorded. Last night goes into {name}'s care notes each morning, and the caregiver sees it at check-in.</span></span>
           </label>
-          <p style={muted}>The tablet needs the next InPlace app update (with camera access) before drop-in and noticing can start.</p>
+          {/* v1.158.2 — proof it is working: the last time it noticed her up. */}
+          {v.noticeAwake && (
+            <p style={{ ...muted, color: 'var(--text-secondary)' }} data-testid="dropin-last-noticed">
+              {v.lastNoticed
+                ? <>Last noticed {name} up: {new Date(v.lastNoticed.startedAt).toLocaleString('en-US', { weekday: 'short', hour: 'numeric', minute: '2-digit' })}{'\u2013'}{new Date(v.lastNoticed.endedAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
+                  {' \u00b7 '}{[v.lastNoticed.motion && 'movement', v.lastNoticed.talking && 'talking', v.lastNoticed.touches && 'touching the screen'].filter(Boolean).join(', ')}</>
+                : <>Nothing noticed yet. Within a minute or two of someone moving in front of the tablet, it shows here.</>}
+            </p>
+          )}
+          <p style={muted}>The tablet needs InPlace 1.3 (with camera access) for drop-in and noticing. While it's watching, Android shows a small green dot in the tablet's top corner.</p>
         </div>
       )}
     </div>

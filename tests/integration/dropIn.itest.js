@@ -126,6 +126,13 @@ describe("noticing when she is up", () => {
     expect((await h.request.post(`/api/drop-in/${recipientId}/awake`).set(h.auth(leader.token)).send({ motion: true })).status).toBe(404);
   });
 
+  test("v1.158.2 — the leader sees when it last noticed her up", async () => {
+    const v = await get(leader);
+    expect(v.body.noticeAwake).toBe(true);
+    expect(v.body.lastNoticed).toMatchObject({ motion: true });
+    expect((await get(sister)).body.lastNoticed).toBeNull(); // the leader's view only
+  });
+
   test("last night reads as one plain sentence and goes into her care notes once each morning", async () => {
     const { lastNight, sentence, recordNightNote } = require("../../src/utils/awake");
     const tz = "America/New_York";
