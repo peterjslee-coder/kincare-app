@@ -120,7 +120,12 @@ describe("iOS configuration", () => {
     // does not claim background tracking. A declared key we never request costs nothing at
     // review; a background mode would.
     expect(plist).toMatch(/<key>NSLocationAlwaysAndWhenInUseUsageDescription<\/key>/);
-    expect(plist).not.toMatch(/<key>UIBackgroundModes<\/key>/);
+    // calls-native (1.3): background modes exist now, for calling ONLY — exactly audio and
+    // voip. `location` must never be among them.
+    const modes = plist.match(/<key>UIBackgroundModes<\/key>\s*<array>([\s\S]*?)<\/array>/);
+    expect(modes).toBeTruthy();
+    const list = [...modes[1].matchAll(/<string>([^<]*)<\/string>/g)].map((m) => m[1]).sort();
+    expect(list).toEqual(["audio", "voip"]);
 
     const always = plist.match(/NSLocationAlwaysAndWhenInUseUsageDescription<\/key>\s*<string>([^<]*)</);
     expect(always).toBeTruthy();

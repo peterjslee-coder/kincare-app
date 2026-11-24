@@ -1616,13 +1616,16 @@ const Messages = window.Messages = () => {
     // Signal hangup to remote
     if (callState.active && window._socket) {
       const otherMember = callTargetOf(activeConv);
-      if (otherMember) {
+      const targetUserId = (otherMember && otherMember.id) || callState.remoteUserId;
+      if (targetUserId) {
         window._socket.emit('call_hangup', {
-          targetUserId: otherMember.id,
+          targetUserId,
           roomName: callState.roomName,
         });
       }
     }
+    // calls-native: close the phone's own in-call screen and audio session too.
+    if (window.NativeCalls && callState.roomName) window.NativeCalls.ended(callState.roomName);
     // Post call summary message to chat
     const ct = callState.callType || 'voice';
     const icon = ct === 'video' ? '\uD83D\uDCF9' : '\uD83D\uDCDE';
@@ -1645,23 +1648,33 @@ const Messages = window.Messages = () => {
     setCallState({ active: false, roomName: null, callType: null, remoteParticipantName: null, remoteParticipantPhoto: null, callDirection: null });
   };
 
-  const handleAcceptIncoming = () => {
-    if (!incomingCall) return;
+  // calls-native (1.3): one way in for an answered call, whether the Accept was tapped on this
+  // banner or on the phone's own call screen (window.NativeCalls). remoteUserId is kept so that
+  // hanging up reaches the caller even when no conversation is open — which is the normal case
+  // for a call answered from a lock screen.
+  const acceptCall = (call) => {
+    if (!call) return;
     setCallState({
       active: true,
-      roomName: incomingCall.roomName,
-      callType: incomingCall.callType,
-      remoteParticipantName: incomingCall.callerName,
-      remoteParticipantPhoto: incomingCall.callerPhoto || null,
+      roomName: call.roomName,
+      callType: call.callType,
+      remoteParticipantName: call.callerName,
+      remoteParticipantPhoto: call.callerPhoto || null,
       callDirection: 'incoming',
+      remoteUserId: call.callerId || null,
     });
     if (window._socket) {
       window._socket.emit('call_accept', {
-        callerId: incomingCall.callerId,
-        roomName: incomingCall.roomName,
+        callerId: call.callerId,
+        roomName: call.roomName,
       });
     }
     setIncomingCall(null);
+  };
+
+  const handleAcceptIncoming = () => {
+    if (!incomingCall) return;
+    acceptCall(incomingCall);
   };
 
   const handleDeclineIncoming = () => {
@@ -1682,8 +1695,10 @@ const Messages = window.Messages = () => {
     try {
       // v1.155.2 — a call parked by the live socket carries `at`; one more than 30 s old has
       // stopped ringing on the caller's side, so it is dropped rather than offered.
+      // calls-native: one answered on the phone's own call screen joins at once.
       const pc = window.__pendingCall;
-      if (pc) {
+      if (pc && pc.answeredNatively) { window.__pendingCall = null; acceptCall(pc); }
+      else if (pc) {
         window.__pendingCall = null;
         if (!pc.at || Date.now() - pc.at < 30000) {
           setIncomingCall(pc);
@@ -1691,12 +1706,20 @@ const Messages = window.Messages = () => {
         }
       }
     } catch {}
+    const onNativeAnswer = (e) => {
+      if (window.__pendingCall && window.__pendingCall.roomName === e?.detail?.roomName) window.__pendingCall = null;
+      acceptCall(e && e.detail);
+    };
+    window.addEventListener('inplace:native-call-answered', onNativeAnswer);
 
     const cleanupRing = onSocketEvent('call_ring_status', (data) => {
       setRingStatus(data?.via || null);
     });
     const cleanup = onSocketEvent('call_incoming', (data) => {
       if (typeof warmVideoSdk === 'function') warmVideoSdk();
+      // calls-native: this phone is ringing full-screen already; a second banner and a second
+      // ringtone on top of the system call is the double-ring the plan warns about.
+      if (data && data.ringingNatively && window.NativeCalls && window.NativeCalls.available()) return;
       if (!callState.active) {
         setIncomingCall(data);
         // Auto-dismiss after 30 seconds if not answered
@@ -1730,7 +1753,14 @@ const Messages = window.Messages = () => {
     };
     const cleanup2 = onSocketEvent('call_ended', () => clearRinging('ended the call'));
     const cleanup3 = onSocketEvent('call_declined', () => clearRinging('is not available'));
-    return () => { cleanupRing(); cleanup(); cleanup2(); cleanup3(); };
+    // calls-native: picked up on another of their devices — this banner just goes away.
+    const cleanup4 = onSocketEvent('call_answered_elsewhere', (data) => {
+      setIncomingCall((prev) => (prev && prev.roomName === data?.roomName ? null : prev));
+    });
+    return () => {
+      cleanupRing(); cleanup(); cleanup2(); cleanup3(); cleanup4();
+      window.removeEventListener('inplace:native-call-answered', onNativeAnswer);
+    };
   }, [callState.active]);
 
   // ─── v1.105.143 — make it actually ring ───

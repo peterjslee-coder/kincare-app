@@ -150,6 +150,14 @@ io.use((socket, next) => {
 
 // Track connected users: userId -> Set of socket ids
 const connectedUsers = new Map();
+// calls-native (1.3): an answer or decline that arrives over HTTP from native code (no socket)
+// still has to reach the caller's open app. callRegistry gets this one way to do it.
+require("./utils/callRegistry").setEmitter((uid, event, payload) => {
+  const sids = connectedUsers.get(uid);
+  if (!sids) return 0;
+  for (const sid of sids) io.to(sid).emit(event, payload);
+  return sids.size;
+});
 
 // v1.105.103 — which conversation each socket currently has OPEN.
 //
@@ -300,11 +308,41 @@ io.on("connection", (socket) => {
         console.log(`[call] invite from=${String(userId).slice(0, 8)} to=${String(data.targetUserId).slice(0, 8)} via=nowhere reason=not-allowed`);
         return ack("nowhere", 0);
       }
-      ringTarget();
+      ringTarget().catch((e) => { captureException(e, { where: "socket: call_invite ringTarget" }); ack("nowhere", 0); });
     })();
     return;
 
-    function ringTarget() {
+    async function ringTarget() {
+    // ─── calls-native (1.3): ring the PHONE, not just the app ───
+    //
+    // A device running the 1.3 app has told us it can ring like a phone (utils/callDevices.js).
+    // Those devices are rung natively — CallKit full-screen on iOS, the full-screen call on
+    // Android — whether or not an app is open, because that is what works on a locked phone.
+    // The socket emit below still happens, so an app already on screen shows its banner (the
+    // 1.3 client hides it when the phone itself is ringing). The ordinary push skips exactly
+    // the devices that rang, so nobody gets a full-screen call AND a "Call from…" banner.
+    //
+    // A 1.2 device never registers, so for everyone on the store build this block does
+    // nothing and the rest of this function behaves exactly as it did.
+    let nativeRang = 0;
+    let skipEndpoints = null;
+    try {
+      const registry = require("./utils/callRegistry");
+      const call = registry.startCall({
+        roomName: data.roomName, callerId: userId, callerName: socket.user.displayName || "InPlace",
+        targetUserId: data.targetUserId, callType: data.callType,
+      });
+      if (call) {
+        const { ringCallDevices } = require("./utils/callDevices");
+        const r = await ringCallDevices(data.targetUserId, call, registry.signCallToken(call.roomName, data.targetUserId));
+        nativeRang = r.rang;
+        skipEndpoints = r.skipEndpoints;
+      }
+    } catch (e) {
+      // Native ringing failing must never cost the call the ring it would have had before.
+      captureException(e, { where: "socket: call_invite native ring" });
+    }
+
     const targetSockets = connectedUsers.get(data.targetUserId);
     const liveSockets = targetSockets && targetSockets.size > 0;
     if (liveSockets) {
@@ -316,17 +354,21 @@ io.on("connection", (socket) => {
           // v1.106.4 — resolved server-side. This was `data.callerName`, so a caller could
           // put any words they liked on someone else's lock screen.
           callerName: socket.user.displayName || "InPlace",
+          // calls-native: this person's phone is ALSO ringing full-screen; a 1.3 app on that
+          // phone hides its own banner. Older clients ignore the field.
+          ringingNatively: nativeRang > 0,
         });
       }
       try {
         const uas = [...targetSockets].map((sid) => { const t = io.sockets.sockets.get(sid); return (t && t.data && t.data.ua) || "?"; }).join(",");
-        console.log(`[call] invite from=${String(userId).slice(0, 8)} to=${String(data.targetUserId).slice(0, 8)} via=app devices=${uas}`);
+        console.log(`[call] invite from=${String(userId).slice(0, 8)} to=${String(data.targetUserId).slice(0, 8)} via=${nativeRang > 0 ? "phone+app" : "app"} devices=${uas} native=${nativeRang}`);
       } catch { /* logging only */ }
-      ack("app", targetSockets.size);
+      ack(nativeRang > 0 ? "phone" : "app", targetSockets.size + nativeRang);
       // v1.155.4 — Pete: "would love my phone to get a push and a buzz or something to let me
       // know to go in app bc she's calling." A live socket can be his laptop, or an app he has
       // just navigated away from inside, so a call now ALSO pushes. Calls are the one exception
       // to "no push while you are in the app" (97783012): a ringing phone is the whole point.
+      // Devices that rang natively are skipped (skipEndpoints) — no banner on top of a ringing phone.
       pushCall(false);
     } else {
       pushCall(true);
@@ -357,10 +399,10 @@ io.on("connection", (socket) => {
               callerId: userId,
               callerName: who,
             },
-          });
+          }, undefined, { skipEndpoints });
           const sent = (result && result.sent) || 0;
-          console.log(`[call] invite from=${String(userId).slice(0, 8)} to=${String(data.targetUserId).slice(0, 8)} via=${sent > 0 ? "push" : "nowhere"} sent=${sent}${acks ? "" : " (also in app)"}`);
-          if (acks) ack(sent > 0 ? "push" : "nowhere", sent);
+          console.log(`[call] invite from=${String(userId).slice(0, 8)} to=${String(data.targetUserId).slice(0, 8)} via=${nativeRang > 0 ? "phone" : sent > 0 ? "push" : "nowhere"} sent=${sent} native=${nativeRang}${acks ? "" : " (also in app)"}`);
+          if (acks) ack(nativeRang > 0 ? "phone" : sent > 0 ? "push" : "nowhere", sent + nativeRang);
         } catch (err) {
           console.error("call_invite push failed:", err.message);
           captureException(err, { where: "socket: call_invite push", targetUserId: data.targetUserId });
@@ -371,8 +413,29 @@ io.on("connection", (socket) => {
     } // end ringTarget
   });
 
+  // calls-native (1.3): the server now keeps a record of each ring (utils/callRegistry.js), so a
+  // phone ringing natively can ask whether the call is still on. These three keep it current.
+  // Only the person who was rung may answer or decline it, and only the two people on the call
+  // may end it; a ring the registry does not know about (an older client) behaves as before.
+  const settleRing = (roomName, state) => {
+    try {
+      const registry = require("./utils/callRegistry");
+      const call = registry.getCall(roomName);
+      if (!call) return;
+      if (state === "ended" ? (call.callerId !== userId && call.targetUserId !== userId) : call.targetUserId !== userId) return;
+      const r = registry.finishCall(roomName, state, userId);
+      // Answered on this device: every OTHER app of theirs stops ringing.
+      if (r && r.changed && state === "answered") {
+        for (const sid of connectedUsers.get(userId) || []) {
+          if (sid !== socket.id) io.to(sid).emit("call_answered_elsewhere", { roomName });
+        }
+      }
+    } catch (e) { captureException(e, { where: "socket: settleRing" }); }
+  };
+
   socket.on("call_accept", (data) => {
     // data: { callerId, roomName }
+    settleRing(data && data.roomName, "answered");
     const callerSockets = connectedUsers.get(data.callerId);
     if (callerSockets) {
       for (const sid of callerSockets) {
@@ -383,6 +446,7 @@ io.on("connection", (socket) => {
 
   socket.on("call_decline", (data) => {
     // data: { callerId, roomName }
+    settleRing(data && data.roomName, "declined");
     const callerSockets = connectedUsers.get(data.callerId);
     if (callerSockets) {
       for (const sid of callerSockets) {
@@ -393,6 +457,7 @@ io.on("connection", (socket) => {
 
   socket.on("call_hangup", (data) => {
     // data: { targetUserId, roomName }
+    settleRing(data && data.roomName, "ended");
     const targetSockets = connectedUsers.get(data.targetUserId);
     if (targetSockets) {
       for (const sid of targetSockets) {
@@ -809,6 +874,7 @@ app.use("/api/notes", require("./routes/notes"));
 app.use("/api/assignments", require("./routes/assignments"));
 app.use("/api/analytics", require("./routes/analytics"));
 app.use("/api/push", require("./routes/push"));
+app.use("/api/calls", require("./routes/calls")); // calls-native (1.3): native ringing; inert for 1.2
 app.use("/api/photos", require("./routes/photos"));
 app.use("/api/care-photos", require("./routes/carePhotos")); // v1.137.0
 app.use("/api/series-changes", require("./routes/seriesChanges")); // v1.139.0
