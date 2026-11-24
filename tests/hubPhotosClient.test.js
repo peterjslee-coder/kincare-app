@@ -90,3 +90,7 @@ test("v1.155.2: a call that rings over the live socket off Messages is parked fo
   const msgs = code("public/js/components/Messages.js");
   expect(msgs).toMatch(/if \(!pc\.at \|\| Date\.now\(\) - pc\.at < 30000\)/);
 });
+
+test("v1.155.6: the Next card takes the 'is here' spot only when nobody is here", () => {
+  expect(hub).toMatch(/\{!hub\.here && hub\.next && \(\s*<div data-testid="hub-next"/);
+});
