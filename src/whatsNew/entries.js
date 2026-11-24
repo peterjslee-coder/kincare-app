@@ -31,6 +31,21 @@ const WINDOW_DAYS = 45;
 
 const ENTRIES = [
   {
+    id: "hub-sky-weather",
+    version: "1.155.5",
+    date: "2026-11-23",
+    audience: ["family"],
+    title: "The Hub follows the sky, and shows the weather",
+    body: "The Hub's background now changes with the time of day, from soft gold in the morning to deeper blue in the evening. Under the clock is the weather where your loved one lives; one tap shows today's forecast for 10 seconds.",
+    howTo: [
+      "Nothing to set up: the weather comes from their home address",
+      "On the tablet, tap the weather under the clock for today's forecast",
+      "Tap a photo to move on to the next one",
+    ],
+    examples: ["41° · Clear, with a moon at night", "Today 48° / 31°, rain after 2"],
+    preview: "hubWeather",
+  },
+  {
     id: "hub-popups",
     version: "1.155.4",
     date: "2026-11-23",

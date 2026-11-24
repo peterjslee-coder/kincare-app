@@ -403,7 +403,8 @@ const HubPhoto = ({ photos, now, card, stored, onShape }) => {
   const p = list[i % list.length];
   const when = hubPhotoWhen(p.createdAt, now);
   return (
-    <div ref={boxRef} data-testid="hub-photo" style={{ ...card, padding: 0, flex: '1 1 auto', minHeight: '26vh', position: 'relative', overflow: 'hidden', background: '#000', flexShrink: 1 }}>
+    // v1.155.5 — Pete: "tapping the picture advances to the next picture."
+    <div ref={boxRef} data-testid="hub-photo" onClick={() => setI((n) => n + 1)} style={{ cursor: list.length > 1 ? 'pointer' : 'default', ...card, padding: 0, flex: '1 1 auto', minHeight: '26vh', position: 'relative', overflow: 'hidden', background: '#000', flexShrink: 1 }}>
       <img key={p.kind + p.id} src={p.url} alt={p.caption || (p.from ? `Photo from ${p.from}` : 'Photo')}
         onError={() => setBroken((b) => ({ ...b, [p.kind + p.id]: true }))}
         onLoad={(e) => { const r = e.target.naturalWidth / (e.target.naturalHeight || 1); const k = p.kind + p.id; const f = Math.abs(r - (slot || stored || r)) < 0.12; setFills((m) => (m[k] === f ? m : { ...m, [k]: f })); }}
@@ -547,7 +548,72 @@ const HUB_WAKE_MS = 60000;    // v1.155.4 — a tap at night brightens the board
 const PANEL_IDLE_MS = 90000;  // v1.155.1 — an open panel goes home after this long untouched
 const SENT_HOME_MS = 3000;    // ...and this soon after a text is sent
 
+// v1.155.5 — Pete picked "Daylight sky" from the mockup: the board's background follows the
+// day, "maybe the evening fades to a darker blue though." Soft gold in the morning, clear blue
+// in the afternoon, deepening blue through the evening. Cards stay near-white so every word
+// keeps its contrast; the night screen is unchanged.
+const SKY_STOPS = [
+  // [hour, top colour, bottom colour]
+  [5, '#fff4dc', '#fde3ae'],
+  [11, '#f1f7fd', '#d6e8f7'],
+  [16, '#e6effa', '#c4d8f0'],
+  [18, '#d3def3', '#a9bfe6'],
+  [21, '#b9c8ea', '#8ea6d8'],
+];
+const mixHex = (a, b, t) => {
+  const p = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+  const x = p(a), y = p(b);
+  return '#' + x.map((v, i) => Math.round(v + (y[i] - v) * t).toString(16).padStart(2, '0')).join('');
+};
+const hubSky = (now) => {
+  const h = now.getHours() + now.getMinutes() / 60;
+  let lo = SKY_STOPS[0], hi = SKY_STOPS[SKY_STOPS.length - 1];
+  for (let k = 0; k < SKY_STOPS.length - 1; k += 1) if (h >= SKY_STOPS[k][0] && h < SKY_STOPS[k + 1][0]) { lo = SKY_STOPS[k]; hi = SKY_STOPS[k + 1]; }
+  if (h < SKY_STOPS[0][0]) hi = lo;
+  if (h >= SKY_STOPS[SKY_STOPS.length - 1][0]) lo = hi;
+  const t = hi[0] === lo[0] ? 0 : (h - lo[0]) / (hi[0] - lo[0]);
+  return `linear-gradient(165deg, ${mixHex(lo[1], hi[1], t)} 0%, ${mixHex(lo[2], hi[2], t)} 100%)`;
+};
+// v1.155.5 — weather at the care location (src/utils/weather.js), drawn with emoji like the
+// rest of the Simple screen.
+const WX_EMOJI = { clear: '\u2600\uFE0F', partly: '\u26C5', cloud: '\u2601\uFE0F', fog: '\u{1F32B}\uFE0F', rain: '\u{1F327}\uFE0F', snow: '\u2744\uFE0F', storm: '\u26C8\uFE0F' };
+const wxEmoji = (icon, isDay) => (icon === 'clear' && isDay === false ? '\u{1F319}' : (WX_EMOJI[icon] || WX_EMOJI.cloud));
+const WEATHER_SHOW_MS = 10000;
+const HubWeather = ({ wx, onClose }) => {
+  React.useEffect(() => { const t = setTimeout(onClose, WEATHER_SHOW_MS); return () => clearTimeout(t); }, []);
+  const t = wx.today;
+  return (
+    <div data-testid="hub-weather" className="no-text-scale" onClick={onClose}
+      style={{ ...HUB_THEME, position: 'fixed', inset: 0, zIndex: 880, background: 'rgba(10, 30, 50, 0.72)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+      <div style={{ width: '78vw', height: '76vh', boxSizing: 'border-box', background: '#f4f8fc', borderRadius: '4vh', border: '4px solid #2a6db5', padding: '4vh 5vh', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', color: '#0c3a66' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '4vh' }}>
+          <div style={{ fontSize: '22vh', lineHeight: 1 }} aria-hidden="true">{wxEmoji(t.icon, true)}</div>
+          <div>
+            <div style={{ fontSize: '4.4vh', fontWeight: 700 }}>Today</div>
+            <div style={{ fontSize: '13vh', fontWeight: 800, lineHeight: 1 }}>{t.hi}{'\u00B0'} <span style={{ fontSize: '6vh', fontWeight: 700 }}>/ {t.lo}{'\u00B0'}</span></div>
+            <div style={{ fontSize: '5.4vh', fontWeight: 700 }}>{t.label}{t.rainChance >= 40 ? ` \u00B7 ${t.rainChance}% chance of rain` : ''}</div>
+          </div>
+        </div>
+        {(wx.parts || []).length > 0 && (
+          <div style={{ display: 'flex', gap: '2.4vh' }}>
+            {wx.parts.map((p) => (
+              <div key={p.name} style={{ flex: 1, background: '#e3eefa', borderRadius: '2.4vh', padding: '1.6vh 0', textAlign: 'center' }}>
+                <div style={{ fontSize: '3.8vh', fontWeight: 700 }}>{p.name}</div>
+                <div style={{ fontSize: '6vh', fontWeight: 800 }}><span aria-hidden="true">{wxEmoji(p.icon, p.name !== 'Evening')}</span> {p.temp}{'\u00B0'}</div>
+              </div>
+            ))}
+          </div>
+        )}
+        <div style={{ height: '1.2vh', background: '#c4dcf3', borderRadius: '1vh', overflow: 'hidden' }}>
+          <div className="hub-weather-bar" style={{ height: '100%', background: '#2a6db5', animation: `hubWeatherBar ${WEATHER_SHOW_MS}ms linear forwards` }} />
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const HubBoard = ({ hub, first, now, show, calls, note, s, failed, readFlash, reading, acking, unread, awake, onWake, onRead, onAck, onText, onMessages, onCall, onHubShape }) => {
+  const [showWx, setShowWx] = React.useState(false); // before the night return: hooks first
   const today = hub.today;
   const days = hub.days || [];
   const dateLine = now.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
@@ -588,7 +654,8 @@ const HubBoard = ({ hub, first, now, show, calls, note, s, failed, readFlash, re
   const tmrVisitLine = tmrVisits.map((v) => `${v.who || 'A caregiver'}${v.time ? ` at ${simpleFmtTime(v.time)}` : ''}`).join(', ');
   const tmrName = new Date(tomorrow + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long' });
 
-  const card = { background: 'var(--bg-card)', borderRadius: '2.6vh', padding: '2.2vh 2.8vh', border: '2px solid var(--border-color)', boxSizing: 'border-box', minHeight: 0, flexShrink: 0 };
+  const card = { background: 'rgba(255, 255, 255, 0.86)', borderRadius: '2.6vh', padding: '2.2vh 2.8vh', border: '2px solid rgba(255, 255, 255, 0.9)', boxSizing: 'border-box', minHeight: 0, flexShrink: 0 };
+  const wx = hub.weather || null;
   const label = { fontSize: '3vh', fontWeight: 800, letterSpacing: 1, color: 'var(--text-secondary)', textTransform: 'uppercase' };
   const row = { display: 'flex', gap: '2.4vh', fontSize: '4.6vh', padding: '1vh 0', color: 'var(--text-primary)', lineHeight: 1.2, alignItems: 'baseline' };
   const btn = (bg, fg) => ({
@@ -604,7 +671,7 @@ const HubBoard = ({ hub, first, now, show, calls, note, s, failed, readFlash, re
   const hasButtons = hubCalls.length > 0 || (show.text && s.text) || show.messages;
 
   return (
-    <div className="simple-view hub-board no-text-scale" data-testid="hub-board" onPointerDown={() => { if (awake && hubIsNight(now, hub.dimFrom, hub.dimTo)) onWake(); }} style={{ ...HUB_THEME, height: '100vh', background: 'var(--bg-surface)', padding: '3vh 3vw', boxSizing: 'border-box', display: 'grid', gridTemplateColumns: 'minmax(0, 1.15fr) minmax(0, 1fr)', gridTemplateRows: hasButtons ? 'minmax(0, 1fr) auto' : 'minmax(0, 1fr)', gap: '2.6vh 2.2vw', overflow: 'hidden' }}>
+    <div className="simple-view hub-board no-text-scale" data-testid="hub-board" onPointerDown={() => { if (awake && hubIsNight(now, hub.dimFrom, hub.dimTo)) onWake(); }} style={{ ...HUB_THEME, '--text-primary': '#14213d', '--text-secondary': '#3d4a63', height: '100vh', background: hubSky(now), padding: '3vh 3vw', boxSizing: 'border-box', display: 'grid', gridTemplateColumns: 'minmax(0, 1.15fr) minmax(0, 1fr)', gridTemplateRows: hasButtons ? 'minmax(0, 1fr) auto' : 'minmax(0, 1fr)', gap: '2.6vh 2.2vw', overflow: 'hidden' }}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: '2.2vh', minHeight: 0, overflow: 'hidden' }}>
         <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: '2vw' }}>
           <div style={{ minWidth: 0 }}>
@@ -613,7 +680,14 @@ const HubBoard = ({ hub, first, now, show, calls, note, s, failed, readFlash, re
           </div>
           <div style={{ textAlign: 'right' }}>
             <div style={{ fontSize: '15vh', fontWeight: 800, lineHeight: 0.95, color: 'var(--text-primary)', whiteSpace: 'nowrap' }} data-testid="hub-clock">{clockNum}<span style={{ fontSize: '5.6vh', marginLeft: '1vh' }}>{clockAp}</span></div>
-            <div style={{ fontSize: '3.4vh', color: 'var(--text-secondary)' }}>{part}</div>
+            {wx && wx.now
+              ? (
+                <button type="button" data-testid="hub-weather-button" onClick={() => setShowWx(true)}
+                  style={{ marginTop: '0.8vh', display: 'inline-flex', alignItems: 'center', gap: '1.2vh', padding: '0.8vh 2vh', borderRadius: '5vh', border: '2px solid rgba(255,255,255,0.95)', background: 'rgba(255,255,255,0.75)', color: 'var(--text-primary)', fontSize: '3.8vh', fontWeight: 800, fontFamily: 'inherit', cursor: 'pointer' }}>
+                  <span aria-hidden="true">{wxEmoji(wx.now.icon, wx.now.isDay)}</span> {wx.now.temp}{'\u00B0'} {'\u00B7'} {wx.now.label}
+                </button>
+              )
+              : <div style={{ fontSize: '3.4vh', color: 'var(--text-secondary)' }}>{part}</div>}
           </div>
         </div>
 
@@ -633,7 +707,7 @@ const HubBoard = ({ hub, first, now, show, calls, note, s, failed, readFlash, re
           <div style={card}>
             <div style={{ ...label, color: 'var(--role-color)' }}>Today</div>
             {todayRows.length === 0
-              ? <div style={{ ...row, color: 'var(--text-secondary)' }}>Nothing else today</div>
+              ? <div style={{ ...row, color: 'var(--text-secondary)' }}>Nothing else today <span aria-hidden="true">{'\u{1F60C}'}</span></div>
               : todayRows.map((c, i) => (
                 <div key={c.kind + c.id} style={{ ...row, borderTop: i ? '2px solid var(--border-color)' : 'none' }}>
                   <span style={timeCol}>{c.time ? simpleFmtTime(c.time) : ''}</span>
@@ -716,6 +790,7 @@ const HubBoard = ({ hub, first, now, show, calls, note, s, failed, readFlash, re
         )}
       </div>
 
+      {showWx && wx && <HubWeather wx={wx} onClose={() => setShowWx(false)} />}
       {hasButtons && (
         <div style={{ gridColumn: '1 / 3', display: 'flex', gap: '2.2vw' }}>
           {hubCalls.map((c) => (

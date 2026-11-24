@@ -75,7 +75,7 @@ test("v1.155.4: one pop-up at a time, in order, quiet at night, each remembered 
 });
 
 test("v1.155.3: the photo fills its column again, and the crop frame uses the shape the Hub measured", () => {
-  expect(hub).toMatch(/<div ref=\{boxRef\} data-testid="hub-photo" style=\{\{[^}]*flex: '1 1 auto'/);
+  expect(hub).toMatch(/<div ref=\{boxRef\} data-testid="hub-photo" [\s\S]{0,300}?flex: '1 1 auto'/);
   expect(hub).not.toMatch(/data-testid="hub-photo" style=\{\{[^}]*aspectRatio/);
   expect(hub).toContain("/simple-screen/hub-shape");
   expect(dash).toContain("<PhotoCropFrame src={preview} aspect={who && who.photoAspect}");

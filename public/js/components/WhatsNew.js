@@ -508,6 +508,21 @@ const WN_PREVIEWS = {
       </div>
     </div>
   ),
+  // v1.155.5 — the sky background and the weather button under the clock
+  hubWeather: () => (
+    <div style={{ background: '#1d1b19', borderRadius: 12, padding: 6 }}>
+      <div style={{ background: 'linear-gradient(165deg, #d3def3 0%, #a9bfe6 100%)', borderRadius: 7, padding: 10, color: '#14213d' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+          <div style={{ fontSize: 10, lineHeight: 1.25 }}><strong style={{ fontSize: 13 }}>Monday</strong><br />March 2, 2026</div>
+          <div style={{ textAlign: 'right' }}>
+            <div style={{ fontSize: 24, fontWeight: 800, lineHeight: 1 }}>8:25<span style={{ fontSize: 10 }}> PM</span></div>
+            <div style={{ display: 'inline-block', marginTop: 4, background: 'rgba(255,255,255,0.8)', borderRadius: 12, padding: '2px 8px', fontSize: 11, fontWeight: 800 }}>{'\u{1F319}'} 41{'\u00B0'} {'\u00B7'} Clear</div>
+          </div>
+        </div>
+        <div style={{ marginTop: 6, background: 'rgba(255,255,255,0.86)', borderRadius: 6, padding: '4px 7px', fontSize: 10.5 }}>Nothing else today {'\u{1F60C}'}</div>
+      </div>
+    </div>
+  ),
   // v1.155.2 — "Jane will be here soon" on the Hub
   hubArriving: () => (
     <div style={{ background: '#1d1b19', borderRadius: 12, padding: 6 }}>
