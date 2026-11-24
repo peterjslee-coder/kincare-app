@@ -146,7 +146,7 @@ describe("with the Hub on", () => {
     for (const p of hub.photos) {
       const ok = await h.request.get(p.url).set(h.auth(mom.token));
       expect(ok.status).toBe(200);
-      expect(ok.headers["content-type"]).toContain("image/png");
+      expect(ok.headers["content-type"]).toContain("image/jpeg");
       expect((await h.request.get(p.url).set(h.auth(stranger.token))).status).toBe(404);
     }
   });
@@ -170,6 +170,31 @@ describe("with the Hub on", () => {
     const d = await h.request.get("/api/dashboard").set(h.auth(leader.token));
     const mine = d.body.recentPhotos.find((p) => p.id === careId);
     expect(mine).toMatchObject({ kind: "care", showOnHub: true, careRecipientId: recipientId });
+  });
+
+  test("v1.155.1: a big phone photo is shrunk and cropped on the server", async () => {
+    const sharp = require("sharp");
+    // 6000x4000 noise JPEG ≈ well over the old 5 MB cap
+    const w = 6000, hgt = 4000;
+    const rawPx = Buffer.alloc(w * hgt * 3);
+    for (let i = 0; i < rawPx.length; i++) rawPx[i] = ((i * 2654435761) >>> 24) & (i % 7 ? 0xff : 0x80);
+    const big = await sharp(rawPx, { raw: { width: w, height: hgt, channels: 3 } }).jpeg({ quality: 80 }).toBuffer();
+    expect(big.length).toBeGreaterThan(5 * 1024 * 1024);
+    expect(big.length).toBeLessThan(25 * 1024 * 1024);
+    const up = await h.request.post("/api/care-photos/upload").set(h.auth(sister.token))
+      .field("careRecipientId", recipientId).field("showOnHub", "0")
+      .field("crop", JSON.stringify({ x: 0.1, y: 0, w: 0.5, h: 0.5625 })) // 3000x2250 → 4:3
+      .attach("photo", big, { filename: "big.jpg", contentType: "image/jpeg" });
+    expect(up.body.error).toBeUndefined();
+    expect(up.status).toBe(201);
+    const img = await h.request.get(`/api/care-photos/hub/care/${up.body.id}/image`).set(h.auth(sister.token))
+      .buffer(true).parse((res, cb) => { const b = []; res.on("data", (c) => b.push(c)); res.on("end", () => cb(null, Buffer.concat(b))); });
+    expect(img.status).toBe(200);
+    const meta = await sharp(img.body).metadata();
+    expect(meta.format).toBe("jpeg");
+    expect(Math.max(meta.width, meta.height)).toBeLessThanOrEqual(2000);
+    expect(meta.width / meta.height).toBeCloseTo(4 / 3, 1);
+    expect(img.body.length).toBeLessThan(5 * 1024 * 1024);
   });
 
   test("the Photos setting turns the whole strip off", async () => {

@@ -68,11 +68,18 @@ const HUB_DEFAULTS = Object.freeze({
   dimTo: "07:00",   // ...and brightens again at this
 });
 const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
+// v1.155.1 — Pete: "a 'call Peter' button at the bottom to split the 'text my family' button.
+// With thumbnail photo." The Hub's own call buttons, chosen apart from the phone's (a tablet on
+// the counter has no dialer, her phone does). Empty = use the phone's Call buttons.
+const MAX_HUB_CALLS = 2;
 function cleanHub(raw) {
-  const out = { ...HUB_DEFAULTS };
+  const out = { ...HUB_DEFAULTS, callUserIds: [] };
   if (raw && typeof raw === "object") {
     for (const k of ["on", "faces", "week", "photos"]) if (typeof raw[k] === "boolean") out[k] = raw[k];
     for (const k of ["dimFrom", "dimTo"]) if (typeof raw[k] === "string" && HHMM.test(raw[k])) out[k] = raw[k];
+    if (Array.isArray(raw.callUserIds)) {
+      out.callUserIds = [...new Set(raw.callUserIds.filter((x) => typeof x === "string" && x.length <= 64))].slice(0, MAX_HUB_CALLS);
+    }
   }
   return out;
 }
@@ -300,6 +307,13 @@ async function hubScreenFor(db, recipient, linkedUserId, todayStr, hubCfg) {
       // enough for the tablet (a list of weekdays was cut off), and the more useful thing to know.
       .map((c) => ({ userId: c.userId, firstName: c.firstName, photo: c.photo, label: nextVisitLabel(c.dates[0], todayStr), today: c.today }));
   }
+  // v1.155.1 — the Hub's own Call buttons, if the leader chose any (care team only, as on the phone).
+  out.calls = [];
+  if ((hubCfg.callUserIds || []).length) {
+    const byId = new Map((await callCandidates(db, recipient.id, linkedUserId)).map((c) => [c.userId, c]));
+    out.calls = hubCfg.callUserIds.map((id) => byId.get(id)).filter(Boolean)
+      .map((c) => ({ userId: c.userId, firstName: c.firstName, photo: c.photo }));
+  }
   // v1.155.0 — photos the team flagged for her screen (utils/hubPhotos.js), newest first.
   if (out.showPhotos) {
     const { hubPhotosFor } = require("./hubPhotos");
@@ -409,4 +423,4 @@ async function comingUpFor(db, recipientId, todayStr, days = 2, limit = 8) {
     .slice(0, limit);
 }
 
-module.exports = { HUB_DEFAULTS, cleanHub, addHours, weekdayLabel, nextVisitLabel, relationLabel, MAX_CALLS, MAX_TEXT, MAX_BUTTONS, bigButtonCount, SECTIONS, parseSimpleMode, cleanShow, callCandidates, simpleScreenFor, telDigits };
+module.exports = { HUB_DEFAULTS, MAX_HUB_CALLS, cleanHub, addHours, weekdayLabel, nextVisitLabel, relationLabel, MAX_CALLS, MAX_TEXT, MAX_BUTTONS, bigButtonCount, SECTIONS, parseSimpleMode, cleanShow, callCandidates, simpleScreenFor, telDigits };

@@ -508,6 +508,24 @@ const WN_PREVIEWS = {
       </div>
     </div>
   ),
+  // v1.155.1 — Tomorrow at a glance, and the Hub's own Call button beside Text
+  hubTomorrow: () => (
+    <div style={{ background: '#1d1b19', borderRadius: 12, padding: 6 }}>
+      <div style={{ background: 'var(--bg-surface)', borderRadius: 7, padding: 8 }}>
+        <div style={{ ...wnCard, padding: '5px 7px' }}>
+          <div style={{ fontSize: 8.5, fontWeight: 800, color: 'var(--text-secondary)' }}>TOMORROW {'·'} TUESDAY</div>
+          <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-primary)' }}>Jane at 9:00 AM, Sam at 5:00 PM</div>
+          <div style={{ fontSize: 10, color: 'var(--text-primary)', borderTop: '1px solid var(--border-color)', marginTop: 3, paddingTop: 3 }}><strong>1:00 PM</strong> Haircut at the salon</div>
+        </div>
+        <div style={{ display: 'flex', gap: 5, marginTop: 5 }}>
+          <div style={{ flex: 1, background: '#1b7a3d', color: '#fff', borderRadius: 7, fontSize: 10.5, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4, padding: '4px 0' }}>
+            <span style={{ width: 16, height: 16, borderRadius: 8, background: '#fff', color: '#1b7a3d', fontSize: 9, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>S</span> Call Sam
+          </div>
+          <div style={{ flex: 1, background: 'var(--role-color)', color: 'var(--text-on-primary)', borderRadius: 7, fontSize: 10.5, fontWeight: 800, textAlign: 'center', padding: '4px 0' }}>{'\u{1F4AC}'} Text my family</div>
+        </div>
+      </div>
+    </div>
+  ),
   // v1.155.0 — a photo the team chose, big on the Hub
   hubPhotos: () => (
     <div style={{ background: '#1d1b19', borderRadius: 12, padding: 6 }}>

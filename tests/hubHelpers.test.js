@@ -2,9 +2,9 @@
 const { cleanHub, addHours, weekdayLabel, nextVisitLabel, relationLabel, parseSimpleMode } = require("../src/utils/simpleMode");
 
 test("cleanHub keeps known booleans and valid HH:MM only", () => {
-  expect(cleanHub(null)).toEqual({ on: false, faces: true, week: true, photos: true, dimFrom: "21:00", dimTo: "07:00" });
+  expect(cleanHub(null)).toEqual({ on: false, faces: true, week: true, photos: true, dimFrom: "21:00", dimTo: "07:00", callUserIds: [] });
   expect(cleanHub({ on: true, faces: "yes", dimFrom: "9pm", dimTo: "06:15", x: 1 }))
-    .toEqual({ on: true, faces: true, week: true, photos: true, dimFrom: "21:00", dimTo: "06:15" });
+    .toEqual({ on: true, faces: true, week: true, photos: true, dimFrom: "21:00", dimTo: "06:15", callUserIds: [] });
 });
 
 test("a record saved before the Hub existed reads as Hub off", () => {
@@ -38,4 +38,9 @@ test("nextVisitLabel: Today, Tomorrow, then the weekday", () => {
   expect(nextVisitLabel("2026-11-24", "2026-11-23")).toBe("Tomorrow");
   expect(nextVisitLabel("2026-11-26", "2026-11-23")).toBe("Thursday");
   expect(nextVisitLabel(null, "2026-11-23")).toBe("your caregiver");
+});
+
+test("cleanHub keeps at most two Hub call buttons, strings only, no repeats", () => {
+  expect(cleanHub({ callUserIds: ["a", "a", 3, "b", "c"] }).callUserIds).toEqual(["a", "b"]);
+  expect(cleanHub({ callUserIds: "a" }).callUserIds).toEqual([]);
 });

@@ -362,6 +362,9 @@ const HUB_PHOTO_MS = 20000;
 const HubPhoto = ({ photos, now, card }) => {
   const [i, setI] = React.useState(0);
   const [broken, setBroken] = React.useState({});
+  // v1.155.1 — a photo framed for the screen (4:3, from Add photo) fills its space; anything
+  // else (a tall phone photo, a caregiver's visit photo) shows whole.
+  const [fills, setFills] = React.useState({});
   const list = (photos || []).filter((p) => !broken[p.kind + p.id]);
   const key = list.map((p) => p.id).join(',');
   React.useEffect(() => { setI(0); }, [key]);
@@ -377,7 +380,8 @@ const HubPhoto = ({ photos, now, card }) => {
     <div data-testid="hub-photo" style={{ ...card, padding: 0, flex: '1 1 auto', minHeight: '26vh', position: 'relative', overflow: 'hidden', background: '#000', flexShrink: 1 }}>
       <img key={p.kind + p.id} src={p.url} alt={p.caption || (p.from ? `Photo from ${p.from}` : 'Photo')}
         onError={() => setBroken((b) => ({ ...b, [p.kind + p.id]: true }))}
-        style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain' }} />
+        onLoad={(e) => { const r = e.target.naturalWidth / (e.target.naturalHeight || 1); const k = p.kind + p.id; const f = r > 1.2 && r < 1.6; setFills((m) => (m[k] === f ? m : { ...m, [k]: f })); }}
+        style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: fills[p.kind + p.id] ? 'cover' : 'contain' }} />
       <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, padding: '5vh 2.4vh 1.6vh', background: 'linear-gradient(transparent, rgba(0,0,0,0.75))', color: '#fff' }}>
         {p.caption && <div style={{ fontSize: '4vh', fontWeight: 800, lineHeight: 1.2, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{p.caption}</div>}
         <div style={{ fontSize: '3.2vh', opacity: 0.9 }}>{p.from ? `From ${p.from}` : 'A photo'}{when ? ` · ${when}` : ''}</div>
@@ -385,6 +389,9 @@ const HubPhoto = ({ photos, now, card }) => {
     </div>
   );
 };
+
+const PANEL_IDLE_MS = 90000;  // v1.155.1 — an open panel goes home after this long untouched
+const SENT_HOME_MS = 3000;    // ...and this soon after a text is sent
 
 const HubBoard = ({ hub, first, now, show, calls, note, s, failed, readFlash, reading, acking, unread, awake, onWake, onRead, onAck, onText, onMessages, onCall }) => {
   const today = hub.today;
@@ -416,7 +423,14 @@ const HubBoard = ({ hub, first, now, show, calls, note, s, failed, readFlash, re
   const nextVisitToday = todayLeft.find((d) => d.kind === 'visit') || null;
   const thenLine = hub.here && nextVisitToday ? `then ${nextVisitToday.who || 'a caregiver'} at ${simpleFmtTime(nextVisitToday.time)}` : null;
   const todayRows = todayLeft.filter((d) => !(thenLine && d === nextVisitToday)).slice(0, hub.here ? 2 : 3);
-  const comingUp = later.filter((d) => d.kind !== 'visit').slice(0, hub.here ? 2 : 3);
+  // v1.155.1 — Pete: "Instead of 'coming up' let's do 'tomorrow'...Tina at 9am, Faith at 5pm."
+  // Tomorrow's visits as one line of names and times, then up to two of tomorrow's plans.
+  const tomorrow = (() => { const x = new Date(today + 'T12:00:00'); x.setDate(x.getDate() + 1); return x.toISOString().slice(0, 10); })();
+  const tmr = days.filter((d) => d.date === tomorrow);
+  const tmrVisits = tmr.filter((d) => d.kind === 'visit');
+  const tmrPlans = tmr.filter((d) => d.kind !== 'visit').slice(0, hub.here ? 1 : 2);
+  const tmrVisitLine = tmrVisits.map((v) => `${v.who || 'A caregiver'}${v.time ? ` at ${simpleFmtTime(v.time)}` : ''}`).join(', ');
+  const tmrName = new Date(tomorrow + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long' });
 
   const card = { background: 'var(--bg-card)', borderRadius: '2.6vh', padding: '2.2vh 2.8vh', border: '2px solid var(--border-color)', boxSizing: 'border-box', minHeight: 0, flexShrink: 0 };
   const label = { fontSize: '3vh', fontWeight: 800, letterSpacing: 1, color: 'var(--text-secondary)', textTransform: 'uppercase' };
@@ -427,14 +441,11 @@ const HubBoard = ({ hub, first, now, show, calls, note, s, failed, readFlash, re
     fontFamily: 'inherit', textDecoration: 'none', cursor: 'pointer', padding: '0 2vh', boxSizing: 'border-box',
   });
   const waiting = show.text && s.text && Array.isArray(s.text.waiting) && s.text.waiting.length ? s.text.waiting[s.text.waiting.length - 1] : null;
-  const shortDay = (d) => {
-    const x = new Date(d + 'T12:00:00');
-    const t = new Date(); t.setHours(12, 0, 0, 0);
-    return Math.round((x - t) / 86400000) === 1 ? 'Tomorrow' : x.toLocaleDateString('en-US', { weekday: 'short' });
-  };
   const timeCol = { width: '21vh', flexShrink: 0, fontWeight: 800 };
   // Tell the family is gone from the Hub (Pete, 11/23: remove it).
-  const hasButtons = calls.length > 0 || (show.text && s.text) || show.messages;
+  // v1.155.1 — the Hub's own Call buttons when the leader chose some; otherwise the phone's.
+  const hubCalls = (hub.calls && hub.calls.length) ? hub.calls : calls;
+  const hasButtons = hubCalls.length > 0 || (show.text && s.text) || show.messages;
 
   return (
     <div className="simple-view hub-board no-text-scale" data-testid="hub-board" style={{ ...HUB_THEME, height: '100vh', background: 'var(--bg-surface)', padding: '3vh 3vw', boxSizing: 'border-box', display: 'grid', gridTemplateColumns: 'minmax(0, 1.15fr) minmax(0, 1fr)', gridTemplateRows: hasButtons ? 'minmax(0, 1fr) auto' : 'minmax(0, 1fr)', gap: '2.6vh 2.2vw', overflow: 'hidden' }}>
@@ -476,14 +487,20 @@ const HubBoard = ({ hub, first, now, show, calls, note, s, failed, readFlash, re
           </div>
         )}
 
-        {show.comingUp && comingUp.length > 0 && (
-          <div style={{ ...card, overflow: 'hidden' }}>
-            <div style={label}>Coming up</div>
-            {comingUp.map((c, i) => (
-              // v1.153.2 — Pete: "the text on the calendar needs to wrap smaller." Smaller type,
-              // the time on its own line under the day, and never more than two lines of title.
-              <div key={c.kind + c.id} style={{ ...row, fontSize: '3.8vh', alignItems: 'flex-start', borderTop: i ? '2px solid var(--border-color)' : 'none' }}>
-                <span style={{ ...timeCol, width: '15vh', lineHeight: 1.15 }}>{shortDay(c.date)}{c.time ? <><br /><span style={{ fontWeight: 600, fontSize: '3vh', color: 'var(--text-secondary)' }}>{simpleFmtTime(c.time)}</span></> : null}</span>
+        {show.comingUp && (
+          <div style={{ ...card, overflow: 'hidden' }} data-testid="hub-tomorrow">
+            <div style={label}>Tomorrow <span style={{ textTransform: 'none', letterSpacing: 0, fontWeight: 600 }}>{'·'} {tmrName}</span></div>
+            {!tmrVisitLine && tmrPlans.length === 0 && (
+              <div style={{ ...row, fontSize: '3.8vh', color: 'var(--text-secondary)' }}>Nothing planned yet</div>
+            )}
+            {tmrVisitLine && (
+              <div style={{ ...row, fontSize: '3.8vh', lineHeight: 1.2 }}>
+                <span style={{ minWidth: 0, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{tmrVisitLine}</span>
+              </div>
+            )}
+            {tmrPlans.map((c, i) => (
+              <div key={c.kind + c.id} style={{ ...row, fontSize: '3.8vh', alignItems: 'flex-start', borderTop: (i || tmrVisitLine) ? '2px solid var(--border-color)' : 'none' }}>
+                {c.time && <span style={{ ...timeCol, width: '15vh' }}>{simpleFmtTime(c.time)}</span>}
                 <span style={{ minWidth: 0, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', lineHeight: 1.2 }}>{hubLine(c)}</span>
               </div>
             ))}
@@ -496,7 +513,7 @@ const HubBoard = ({ hub, first, now, show, calls, note, s, failed, readFlash, re
           <div style={{ ...card, borderColor: 'var(--role-color)', borderWidth: 3, fontSize: '4vh', fontWeight: 700 }}>{'✓'} {readFlash}</div>
         )}
         {note && (
-          <div style={{ ...card, borderColor: 'var(--role-color)', borderWidth: 3 }}>
+          <div key={'note-' + note.id} className="hub-new-shimmer" data-testid="hub-note" style={{ ...card, borderColor: 'var(--role-color)', borderWidth: 3 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '1.8vh', marginBottom: '1vh' }}>
               <SimpleFace photo={note.fromPhoto} name={note.from} size={Math.round(window.innerHeight * 0.08)} />
               <div style={{ fontSize: '3.4vh', color: 'var(--text-secondary)' }}>From {note.from}</div>
@@ -508,7 +525,7 @@ const HubBoard = ({ hub, first, now, show, calls, note, s, failed, readFlash, re
           </div>
         )}
         {!note && waiting && (
-          <div style={{ ...card, borderColor: 'var(--role-color)', borderWidth: 3 }}>
+          <div key={'msg-' + (waiting.id || waiting.createdAt || waiting.content)} className="hub-new-shimmer" data-testid="hub-waiting" style={{ ...card, borderColor: 'var(--role-color)', borderWidth: 3 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '1.8vh', marginBottom: '1vh' }}>
               <SimpleFace photo={waiting.fromPhoto} name={waiting.from} size={Math.round(window.innerHeight * 0.08)} />
               <div style={{ fontSize: '3.4vh', color: 'var(--text-secondary)' }}>{waiting.isReply ? `${waiting.from} wrote back` : `Message from ${waiting.from}`}</div>
@@ -545,8 +562,8 @@ const HubBoard = ({ hub, first, now, show, calls, note, s, failed, readFlash, re
 
       {hasButtons && (
         <div style={{ gridColumn: '1 / 3', display: 'flex', gap: '2.2vw' }}>
-          {calls.map((c) => (
-            <button key={c.userId} onClick={() => onCall && onCall(c, s.callType || 'voice')} style={btn('#1b7a3d', '#fff')} aria-label={`Call ${c.firstName}`}>
+          {hubCalls.map((c) => (
+            <button key={c.userId} data-testid="hub-call" onClick={() => onCall && onCall(c, s.callType || 'voice')} style={btn('#1b7a3d', '#fff')} aria-label={`Call ${c.firstName}`}>
               <SimpleFace photo={c.photo} name={c.firstName} size={Math.round(window.innerHeight * 0.08)} ring="#fff" /> Call {c.firstName}
             </button>
           ))}
@@ -692,6 +709,23 @@ const SimpleViewInner = ({ initial, onPanelChange, startCall }) => {
     return () => { clearInterval(iv); if (off) off(); };
   }, [showMessages]);
 
+  // v1.155.1 — Pete: "the screen that mom types a message on [should] return to the main
+  // screen after some short period of inactivity...she sends a text, and it returns to the
+  // previous screen within a couple seconds." A panel left open goes home by itself: 90 s with
+  // no touch or key (3 min while there is unsent typing), and 3 s after a text is sent.
+  const goHome = () => { setPanel(null); setSentMsg(''); load(); };
+  const lastTouch = React.useRef(Date.now());
+  const touched = () => { lastTouch.current = Date.now(); };
+  useEffect(() => {
+    if (!panel) return undefined;
+    lastTouch.current = Date.now();
+    const iv = setInterval(() => {
+      const limit = (tellText || '').trim() ? 180000 : PANEL_IDLE_MS;
+      if (Date.now() - lastTouch.current > limit) goHome();
+    }, 5000);
+    return () => clearInterval(iv);
+  }, [panel, tellText]);
+
   const hubOn = !!(data?.simpleScreen?.hub?.on) && wide;
   const page = { minHeight: '100vh', background: 'var(--bg-surface)', padding: '20px 16px 32px', boxSizing: 'border-box', maxWidth: hubOn ? 900 : 560, margin: '0 auto' };
   const card = { background: 'var(--bg-card)', borderRadius: 20, padding: '20px', marginBottom: 18, border: '2px solid var(--border-color)' };
@@ -701,10 +735,13 @@ const SimpleViewInner = ({ initial, onPanelChange, startCall }) => {
     minHeight: 88, marginBottom: 14, borderRadius: 22, textDecoration: 'none', border: 'none', cursor: 'pointer',
     background: bg, color: fg, fontSize: 30, fontWeight: 800, fontFamily: 'inherit', boxSizing: 'border-box',
   });
+  // v1.155.1 — "make the back button a little bit more obvious": filled green, pinned to the top.
   const backBar = (
-    <button onClick={() => { setPanel(null); setSentMsg(''); load(); }} style={{ ...bigBtn('var(--bg-card)', 'var(--text-primary)'), border: '2px solid var(--border-color)', minHeight: 72, fontSize: 26 }}>
-      {'←'} Back to home
-    </button>
+    <div style={{ position: 'sticky', top: 0, zIndex: 5, background: 'var(--bg-surface)', paddingBottom: 4 }}>
+      <button data-testid="simple-back-home" onClick={goHome} style={{ ...bigBtn('var(--role-color)', 'var(--text-on-primary)'), minHeight: 80, fontSize: 30, marginBottom: 10 }}>
+        <span aria-hidden="true" style={{ fontSize: 38, lineHeight: 1 }}>{'←'}</span> Back to home
+      </button>
+    </div>
   );
 
   if (loading) return <div style={{ ...page, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 26, color: 'var(--text-secondary)' }}>One moment…</div>;
@@ -722,7 +759,7 @@ const SimpleViewInner = ({ initial, onPanelChange, startCall }) => {
   // ── Messages: the ordinary Messages screen, under a big way home ──
   if (panel === 'messages' && show.messages && typeof Messages !== 'undefined') {
     return (
-      <div style={{ ...page, padding: '12px 12px 0', maxWidth: 720 }}>
+      <div onPointerDown={touched} onKeyDown={touched} style={{ ...page, padding: '12px 12px 0', maxWidth: 720 }}>
         {backBar}
         <div style={{ height: 'calc(100vh - 110px)', overflow: 'hidden', borderRadius: 16, background: 'var(--bg-card)' }}>
           <Messages />
@@ -741,7 +778,15 @@ const SimpleViewInner = ({ initial, onPanelChange, startCall }) => {
       setSending(true);
       try {
         const res = await apiFetch(`/api/messages/conversations/${t.conversationId}`, { method: 'POST', body: JSON.stringify({ content: c }) });
-        if (res?.ok) { setTellText(''); setSentMsg(`Sent to ${names}`); await load(); }
+        if (res?.ok) {
+          setTellText(''); setSentMsg(`Sent to ${names}`);
+          // Home in a few seconds, with the confirmation carried onto the home screen.
+          setTimeout(() => {
+            setPanel((p) => (p === 'text' ? null : p)); setSentMsg('');
+            setReadFlash(`Sent to ${names}`); setTimeout(() => setReadFlash(''), 8000);
+            load();
+          }, SENT_HOME_MS);
+        }
         else setSentMsg("That didn't send. Please try again.");
       } catch { setSentMsg("That didn't send. Please try again."); }
       setSending(false);
@@ -753,7 +798,7 @@ const SimpleViewInner = ({ initial, onPanelChange, startCall }) => {
       whiteSpace: 'pre-wrap', overflowWrap: 'anywhere',
     });
     return (
-      <div style={page} className="simple-view">
+      <div style={page} className="simple-view" onPointerDown={touched} onKeyDown={touched} onInput={touched}>
         {backBar}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '6px 0 14px' }}>
           <SimpleFaces people={t.to} size={52} />
@@ -825,7 +870,7 @@ const SimpleViewInner = ({ initial, onPanelChange, startCall }) => {
       setSending(false);
     };
     return (
-      <div style={page} className="simple-view">
+      <div style={page} className="simple-view" onPointerDown={touched} onKeyDown={touched} onInput={touched}>
         {backBar}
         <div style={{ fontSize: 30, fontWeight: 800, color: 'var(--text-primary)', margin: '6px 0 16px' }}>Tell the family</div>
         {sentMsg && (
@@ -1178,7 +1223,7 @@ const SimpleModeSettings = window.SimpleModeSettings = ({ recipientId, firstName
               <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 13, color: 'var(--text-primary)', cursor: 'pointer' }}>
                 <input type="checkbox" disabled={saving} checked={!!hub.on} onChange={(e) => save({ hub: { on: e.target.checked } }, e.target.checked ? 'Hub on' : 'Hub off')}
                   style={{ width: 18, height: 18, marginTop: 1, accentColor: 'var(--role-color)' }} />
-                <span><strong>InPlace Hub</strong> <span style={{ color: 'var(--text-secondary)' }}>— a tablet on {name}'s counter, held sideways, shows this screen like a little TV: the date with the year, a big clock, who's here, the week ahead and who's who. The buttons are the same ones you pick here.</span></span>
+                <span><strong>InPlace Hub</strong> <span style={{ color: 'var(--text-secondary)' }}>— a tablet on {name}'s counter, held sideways, shows this screen like a little TV: the date with the year, a big clock, who's here, today and tomorrow, who's who and photos. Its buttons are the ones you pick here.</span></span>
               </label>
               {hub.on && (
                 <div style={{ margin: '10px 0 0 26px', display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -1190,10 +1235,27 @@ const SimpleModeSettings = window.SimpleModeSettings = ({ recipientId, firstName
                     <input type="checkbox" disabled={saving} checked={hub.photos !== false} onChange={(e) => save({ hub: { photos: e.target.checked } })} style={{ width: 16, height: 16, accentColor: 'var(--role-color)' }} data-testid="hub-photos-setting" />
                     <span><strong>Photos</strong> <span style={{ color: 'var(--text-secondary)' }}>— the photos the team chooses for {name}'s screen. Add one from Care photos on Home, or tap any care photo and pick "Show on {name}'s screen". A caregiver's photo shows only if they tick it at check-out.</span></span>
                   </label>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text-primary)', cursor: 'pointer' }}>
-                    <input type="checkbox" disabled={saving} checked={!!hub.week} onChange={(e) => save({ hub: { week: e.target.checked } })} style={{ width: 16, height: 16, accentColor: 'var(--role-color)' }} />
-                    <span><strong>The week ahead</strong> <span style={{ color: 'var(--text-secondary)' }}>— appointments and plans for the next seven days (off: tomorrow only). Today shows who's here and who's next.</span></span>
-                  </label>
+                  {/* v1.155.1 — the Hub's own Call buttons (Pete: "a 'call Peter' button at the bottom
+                      to split the 'text my family' button"). "The week ahead" went: the board now
+                      shows Today and Tomorrow. */}
+                  <div data-testid="hub-call-picker" style={{ fontSize: 13, color: 'var(--text-primary)' }}>
+                    <strong>Call buttons on the Hub</strong> <span style={{ color: 'var(--text-secondary)' }}>— up to 2, with their photo, beside Text. None picked: the same Call buttons as {name}'s phone.</span>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 6 }}>
+                      {(cfg.candidates || []).map((c) => {
+                        const ids = hub.callUserIds || [];
+                        const on = ids.includes(c.userId);
+                        const full = !on && ids.length >= 2;
+                        return (
+                          <label key={c.userId} style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: full ? 'not-allowed' : 'pointer', opacity: full ? 0.5 : 1 }}>
+                            <input type="checkbox" disabled={saving || full} checked={on}
+                              onChange={(e) => save({ hub: { callUserIds: e.target.checked ? [...ids, c.userId] : ids.filter((x) => x !== c.userId) } })}
+                              style={{ width: 16, height: 16, accentColor: 'var(--role-color)' }} />
+                            Call {c.firstName}
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', fontSize: 13, color: 'var(--text-primary)' }}>
                     <strong>Night</strong> <span style={{ color: 'var(--text-secondary)' }}>— dark with a big clock from</span>
                     <input type="time" value={hub.dimFrom} disabled={saving} onChange={(e) => e.target.value && save({ hub: { dimFrom: e.target.value } })} style={{ fontSize: 13, padding: '4px 6px' }} aria-label="Night starts" />
