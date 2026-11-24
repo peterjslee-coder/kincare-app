@@ -31,6 +31,21 @@ const WINDOW_DAYS = 45;
 
 const ENTRIES = [
   {
+    id: "hub-status-refresh",
+    version: "1.158.0",
+    date: "2026-11-24",
+    audience: ["family"],
+    title: "See the Hub from your phone, and it keeps itself up to date",
+    body: "Hub settings now shows whether the tablet is online, its version, whether it's locked to InPlace, and its battery. The Hub picks up new versions by itself when nobody's using it, and Refresh the Hub reloads it from your phone.",
+    howTo: [
+      "Care Team, then Accessibility Options, then InPlace Hub",
+      "Read the status line at the top",
+      "Tap Refresh the Hub if it looks out of date",
+    ],
+    examples: ["Online · seen 1 min ago · charging 100%"],
+    preview: "hubStatus",
+  },
+  {
     id: "hub-drop-in-and-kiosk",
     version: "1.157.0",
     date: "2026-11-24",

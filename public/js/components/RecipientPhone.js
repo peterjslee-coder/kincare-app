@@ -647,6 +647,128 @@ const HubWeather = ({ wx, onClose }) => {
   );
 };
 
+// ─── HubHeartbeat (v1.158.0) — a Hub nobody touches keeps itself current ───
+// Pete, 11/24: "does the app refresh itself?" A phone gets a new version the next time the app
+// opens; the Hub never closes, so it never did. Now it:
+//   • reports every 2 min — version, locked to InPlace, battery — for the status line in
+//     Hub settings (server keeps it in memory only, utils/hubStatus.js);
+//   • checks /api/version every 10 min and reloads itself onto a new version at a quiet moment:
+//     no call, and nobody has touched the screen for 3 minutes. Once per version, so a reload
+//     that comes back on the old version can never loop;
+//   • reloads when the family taps "Refresh the Hub" (socket hub_refresh) — after a call, never
+//     in the middle of one.
+const HUB_REPORT_MS = 2 * 60 * 1000;
+const HUB_VERSION_MS = 10 * 60 * 1000;
+const HUB_QUIET_MS = 3 * 60 * 1000;
+function hubReload() {
+  try {
+    if (window.caches) { caches.keys().then((keys) => Promise.all(keys.map((k) => caches.delete(k)))).finally(() => window.location.reload()); return; }
+  } catch { /* fall through */ }
+  window.location.reload();
+}
+function HubHeartbeat({ recipientId, busy }) {
+  const busyRef = React.useRef(busy);
+  busyRef.current = busy;
+  const wantReload = React.useRef(false);
+  const lastTouch = React.useRef(Date.now());
+  React.useEffect(() => {
+    if (!recipientId) return undefined;
+    const onTouch = () => { lastTouch.current = Date.now(); };
+    document.addEventListener('pointerdown', onTouch, true);
+    const report = async () => {
+      const body = { version: window.APP_VERSION || null };
+      try {
+        const C = window.Capacitor;
+        const k = C && C.isNativePlatform && C.isNativePlatform() && C.Plugins && C.Plugins.InPlaceKiosk;
+        if (k && k.getStatus) { const st = await k.getStatus(); body.kiosk = { deviceOwner: !!st.deviceOwner, locked: !!st.locked }; }
+      } catch { /* not a Hub tablet build */ }
+      try {
+        if (navigator.getBattery) { const b = await navigator.getBattery(); body.battery = { level: Math.round(b.level * 100), charging: !!b.charging }; }
+      } catch { /* no battery reading */ }
+      try { await apiFetch(`/api/care-recipients/${recipientId}/simple-screen/hub-status`, { method: 'POST', body: JSON.stringify(body) }); } catch { /* next time */ }
+    };
+    const quiet = () => !busyRef.current && Date.now() - lastTouch.current > HUB_QUIET_MS;
+    const checkVersion = async () => {
+      try {
+        const r = await fetch('/api/version', { cache: 'no-store' });
+        if (!r.ok) return;
+        const d = await r.json();
+        if (!d.version || d.version === window.APP_VERSION) return;
+        const KEY = 'inplace_hub_reloaded_for';
+        let tried = null;
+        try { tried = sessionStorage.getItem(KEY); } catch { /* private mode */ }
+        if (tried === d.version) return; // reloaded for this one already; don't loop
+        wantReload.current = d.version;
+      } catch { /* offline: try later */ }
+    };
+    const maybeReload = () => {
+      if (wantReload.current && quiet()) {
+        try { if (typeof wantReload.current === 'string') sessionStorage.setItem('inplace_hub_reloaded_for', wantReload.current); } catch { /* ok */ }
+        hubReload();
+      }
+    };
+    report();
+    const t1 = setInterval(report, HUB_REPORT_MS);
+    const t2 = setInterval(checkVersion, HUB_VERSION_MS);
+    const t3 = setInterval(maybeReload, 30 * 1000);
+    const first = setTimeout(checkVersion, 60 * 1000);
+    const off = typeof onSocketEvent === 'function' ? onSocketEvent('hub_refresh', () => {
+      if (!busyRef.current) hubReload(); else wantReload.current = true;
+    }) : null;
+    return () => {
+      document.removeEventListener('pointerdown', onTouch, true);
+      clearInterval(t1); clearInterval(t2); clearInterval(t3); clearTimeout(first);
+      if (off) off();
+    };
+  }, [recipientId]);
+  // A family-asked refresh waits only for the call to end, not for 3 quiet minutes.
+  React.useEffect(() => { if (!busy && wantReload.current === true) hubReload(); }, [busy]);
+  return null;
+}
+
+// v1.158.0 — "Online · seen 2 min ago · version 1.158.0 · locked · charging 100%", and Refresh.
+function HubStatusLine({ status, name, recipientId }) {
+  const { showToast } = useToast();
+  const [busy, setBusy] = useState(false);
+  const ago = (iso) => {
+    const m = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
+    if (m < 1) return 'just now';
+    if (m < 60) return `${m} min ago`;
+    const h = Math.round(m / 60);
+    return h < 24 ? `${h} hr ago` : `${Math.round(h / 24)} days ago`;
+  };
+  const refresh = async () => {
+    setBusy(true);
+    try {
+      const r = await apiFetch(`/api/care-recipients/${recipientId}/simple-screen/hub-refresh`, { method: 'POST', body: '{}' });
+      const d = r ? await r.json().catch(() => ({})) : {};
+      if (r && r.ok) showToast(d.sent ? 'The Hub is refreshing' : "The Hub isn't connected right now", d.sent ? 'success' : 'error');
+      else showToast(d.error || "Couldn't reach the Hub", 'error');
+    } catch { showToast("Couldn't reach the Hub", 'error'); }
+    setBusy(false);
+  };
+  const bits = [];
+  if (status) {
+    bits.push(status.online ? `Online · seen ${ago(status.at)}` : `Offline · last seen ${ago(status.at)}`);
+    if (status.version) bits.push(`version ${status.version}`);
+    if (status.kiosk && status.kiosk.deviceOwner) bits.push(status.kiosk.locked ? 'locked to InPlace' : 'not locked');
+    if (status.battery) bits.push(`${status.battery.charging ? 'charging' : 'on battery'} ${status.battery.level}%`);
+  }
+  const offline = !status || !status.online;
+  const unplugged = status && status.battery && !status.battery.charging;
+  return (
+    <div data-testid="hub-status" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', fontSize: 12.5, padding: '6px 8px', borderRadius: 8, background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
+      <span style={{ color: offline || unplugged ? 'var(--color-error)' : 'var(--text-secondary)' }}>
+        {status ? bits.join(' · ') : `No report from ${name}'s Hub yet`}
+      </span>
+      <button type="button" disabled={busy} onClick={refresh} data-testid="hub-refresh"
+        style={{ marginLeft: 'auto', padding: '4px 10px', borderRadius: 6, border: '1px solid var(--role-color)', background: 'none', color: 'var(--role-color)', fontWeight: 600, fontSize: 12, cursor: 'pointer' }}>
+        {'\u21BB'} Refresh the Hub
+      </button>
+    </div>
+  );
+}
+
 // ─── HubKiosk (1.3) — keep the tablet on InPlace ───
 // Tells the Android app the family's "Keep the tablet on InPlace" choice each time the Hub loads
 // or the choice changes. The app acts on it only on a tablet set up as a Hub (device owner, one
@@ -1320,6 +1442,7 @@ const SimpleViewInner = ({ initial, onPanelChange, startCall, callBusy }) => {
         onHubShape={(aspect) => { if (data && data.careRecipientId) apiFetch(`/api/care-recipients/${data.careRecipientId}/simple-screen/hub-shape`, { method: 'POST', body: JSON.stringify({ photoAspect: aspect }) }).catch(() => {}); }} />
       {s.hub && s.hub.noticeAwake && !callBusy && data && data.careRecipientId && <HubAwake recipientId={data.careRecipientId} />}
       {s.hub && <HubKiosk on={s.hub.kiosk !== false} />}
+      {s.hub && data && data.careRecipientId && <HubHeartbeat recipientId={data.careRecipientId} busy={!!callBusy} />}
       {s.hub && <HubPopups hub={s.hub} s={s} note={note} now={now} onRead={markRead} onAck={ackText} onText={openText} />}
       </>
     );
@@ -1782,6 +1905,8 @@ const SimpleModeSettings = window.SimpleModeSettings = ({ recipientId, firstName
                     <span style={{ color: 'var(--text-secondary)' }}>to</span>
                     <input type="time" value={hub.dimTo} disabled={saving} onChange={(e) => e.target.value && save({ hub: { dimTo: e.target.value } })} style={{ fontSize: 13, padding: '4px 6px' }} aria-label="Night ends" />
                   </div>
+                  {/* v1.158.0 — the Hub's live status, and a way to refresh it from here. */}
+                  <HubStatusLine status={cfg.hubStatus} name={name} recipientId={recipientId} />
                   {/* 1.3 — kiosk mode on a tablet set up as a Hub (Kiosk.java). Off lets the family use
                       the tablet for something else (Wi-Fi, an update) without touching adb. */}
                   <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text-primary)', cursor: 'pointer' }}>

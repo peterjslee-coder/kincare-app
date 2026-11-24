@@ -508,6 +508,16 @@ const WN_PREVIEWS = {
       </div>
     </div>
   ),
+  // v1.158.0 — the Hub's status line and Refresh
+  hubStatus: () => (
+    <div style={{ ...wnCard, padding: 10, fontSize: 11, color: 'var(--text-primary)' }}>
+      <div style={{ fontWeight: 800, marginBottom: 6 }}>InPlace Hub</div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 7px', borderRadius: 6, border: '1px solid var(--border-color)' }}>
+        <span style={{ color: 'var(--text-secondary)' }}>Online {'\u00b7'} seen 1 min ago {'\u00b7'} locked to InPlace {'\u00b7'} charging 100%</span>
+        <span style={{ marginLeft: 'auto', color: 'var(--role-color)', fontWeight: 700, whiteSpace: 'nowrap' }}>{'\u21BB'} Refresh</span>
+      </div>
+    </div>
+  ),
   // 1.157.0 — drop-in: the Hub chimes, says who, and opens video by itself
   hubDropIn: () => (
     <div style={{ background: '#1d1b19', borderRadius: 12, padding: 6 }}>
