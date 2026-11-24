@@ -27,6 +27,19 @@
 
   const available = () => !!plugin();
 
+  // Does the PHONE ring for this call, so the open app should stay quiet? (1.3, 11/24)
+  // iOS: always — CallKit shows its screen even with the app open.
+  // Android: only when InPlace is not on screen. With the app in front, CallRinger stays silent
+  // and the app's own ring (Messages banner, the Hub's big card) is the one way to answer. Pete,
+  // 11/24: the Hub showed its card AND a ringing notification, "multiple paths to the answer".
+  function ringsHere(d) {
+    if (!d || !d.ringingNatively || !available()) return false;
+    let platform = '';
+    try { platform = window.Capacitor.getPlatform(); } catch { /* unknown */ }
+    if (platform === 'ios') return true;
+    return typeof document !== 'undefined' && document.hidden === true;
+  }
+
   // A call answered natively: park it where Messages already looks for a call to pick up
   // (window.__pendingCall, the v1.105.99 path), marked so Messages joins instead of ringing
   // a second time on a screen the person just answered from.
@@ -88,5 +101,5 @@
     try { p.endCall({ roomName }); } catch {}
   }
 
-  window.NativeCalls = { available, start, ended };
+  window.NativeCalls = { available, start, ended, ringsHere };
 })();

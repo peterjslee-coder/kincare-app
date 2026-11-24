@@ -1726,7 +1726,7 @@ const Messages = window.Messages = () => {
       if (typeof warmVideoSdk === 'function') warmVideoSdk();
       // calls-native: this phone is ringing full-screen already; a second banner and a second
       // ringtone on top of the system call is the double-ring the plan warns about.
-      if (data && data.ringingNatively && window.NativeCalls && window.NativeCalls.available()) return;
+      if (window.NativeCalls && window.NativeCalls.ringsHere && window.NativeCalls.ringsHere(data)) return;
       if (!callState.active) {
         setIncomingCall(data);
         // Auto-dismiss after 30 seconds if not answered

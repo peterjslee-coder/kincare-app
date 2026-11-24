@@ -62,6 +62,22 @@ describe("Android native calling", () => {
     expect(calls).toMatch(/notifyListeners\("callAnswered", toJS\(answer\), true\)/);
   });
 
+  test("ONE way to answer: InPlace on screen rings in the app, otherwise the phone rings", () => {
+    // Pete, 11/24: the Hub showed its big card AND a ringing notification; neither answered.
+    expect(ringer).toMatch(/if \(MainActivity\.inFront\) \{[\s\S]*?return;/);
+    expect(main).toMatch(/inFront = false;[\s\S]*?super\.onPause\(\)/);
+    expect(main).toMatch(/super\.onResume\(\);\s*inFront = true;/);
+    // The web side makes the same decision: iOS always rings natively; Android only when hidden.
+    expect(web).toMatch(/if \(platform === 'ios'\) return true;\s*return typeof document !== 'undefined' && document\.hidden === true;/);
+    for (const f of ["public/js/app.js", "public/js/components/Messages.js", "public/js/components/RecipientPhone.js"]) {
+      expect(code(f)).toMatch(/window\.NativeCalls\.ringsHere\(d(ata)?\)\) return;/);
+      expect(code(f)).not.toMatch(/ringingNatively && window\.NativeCalls && window\.NativeCalls\.available\(\)\) return/);
+    }
+    // And a call answered on the phone's own screen is joined by the Hub, not offered again.
+    expect(phone).toMatch(/if \(pc && pc\.answeredNatively\) \{ window\.__pendingCall = null; joinRef\.current\(pc\); return; \}/);
+    expect(phone).toMatch(/addEventListener\('inplace:native-call-answered', pickUp\)/);
+  });
+
   test("camera is declared, but not required (camera-less devices stay on Play)", () => {
     expect(manifest).toMatch(/android\.permission\.CAMERA/);
     expect(manifest).toMatch(/android\.hardware\.camera"\s+android:required="false"/);

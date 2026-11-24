@@ -88,9 +88,20 @@ public class MainActivity extends BridgeActivity {
         return super.dispatchTouchEvent(ev);
     }
 
+    // 1.3 — is InPlace on screen? CallRinger stays silent when it is: the app's own ring is then
+    // the one way to answer (Pete, 11/24: two answer paths on the Hub, neither worked).
+    static volatile boolean inFront = false;
+
+    @Override
+    public void onPause() {
+        inFront = false;
+        super.onPause();
+    }
+
     @Override
     public void onResume() {
         super.onResume();
+        inFront = true;
         // 1.3 — on a Hub tablet made device owner, keep the screen locked to InPlace (or release
         // it) to match the family's last choice. Does nothing on any other phone.
         Kiosk.apply(this);
