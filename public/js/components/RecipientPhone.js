@@ -1117,7 +1117,7 @@ const HubBoard = ({ hub, first, now, show, calls, note, s, failed, readFlash, re
         <div style={{ gridColumn: '1 / 3', display: 'flex', gap: '2.2vw' }}>
           {hubCalls.map((c) => (
             <button key={c.userId} data-testid="hub-call" onClick={() => onCall && onCall(c, s.callType || 'voice')} style={btn('#1b7a3d', '#fff')} aria-label={`Call ${c.firstName}`}>
-              <SimpleFace photo={c.photo} name={c.firstName} size={Math.round(window.innerHeight * 0.08)} ring="#fff" /> Call {c.firstName}
+              <SimpleFace photo={c.photo} name={c.firstName} size={Math.round(window.innerHeight * 0.08)} ring="#fff" /> {s.callType === 'video' ? 'Video call' : 'Call'} {c.firstName}
             </button>
           ))}
           {show.text && s.text && (
@@ -1944,6 +1944,17 @@ const SimpleModeSettings = window.SimpleModeSettings = ({ recipientId, firstName
                       shows Today and Tomorrow. */}
                   <div data-testid="hub-call-picker" style={{ fontSize: 13, color: 'var(--text-primary)' }}>
                     <strong>Call buttons on the Hub</strong> <span style={{ color: 'var(--text-secondary)' }}>— up to 2, with their photo, beside Text. None picked: the same Call buttons as {name}'s phone.</span>
+                    {/* v1.158.4 — Pete: "I don't see ... a place for me to make it a button" (video). The
+                        same setting as the phone's "Calls start as", shown where the Hub's buttons are. */}
+                    <div data-testid="hub-call-type" style={{ display: 'flex', alignItems: 'center', gap: 14, marginTop: 6 }}>
+                      <span style={{ color: 'var(--text-secondary)' }}>The buttons start</span>
+                      {[['voice', '📞 Voice calls'], ['video', '🎥 Video calls']].map(([v, l]) => (
+                        <label key={v} style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+                          <input type="radio" name={`hub-calltype-${recipientId}`} disabled={saving} checked={(callType || 'voice') === v} onChange={() => save({ callType: v }, v === 'video' ? 'Hub calls start as video' : 'Hub calls start as voice')} style={{ accentColor: 'var(--role-color)' }} />
+                          {l}
+                        </label>
+                      ))}
+                    </div>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 6 }}>
                       {(cfg.candidates || []).map((c) => {
                         const ids = hub.callUserIds || [];
