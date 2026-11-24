@@ -1,0 +1,186 @@
+// ─── /api/drop-in — consent, who may drop in, and awake noticing (v1.156.0) ───
+// Rules: src/utils/dropIn.js. Every change lands in consent_audit_log.
+const express = require("express");
+const { v4: uuid } = require("uuid");
+const { getDb } = require("../models/database");
+const { captureException } = require("../utils/sentry");
+const { recipientCapabilities } = require("../utils/access");
+const D = require("../utils/dropIn");
+const { authenticate } = require("../middleware/auth");
+
+const router = express.Router();
+router.use(authenticate);
+
+/** Anyone with access to her record, or her own account. */
+async function access(db, req) {
+  const cr = await D.recipient(db, req.params.recipientId);
+  if (!cr) return { status: 404 };
+  const { trustedLinkedUserId } = require("../utils/linkedAccount");
+  const herself = (await trustedLinkedUserId(db, cr)) === req.user.id;
+  if (!herself) {
+    const caps = await recipientCapabilities(db, cr.id, req.user.id);
+    if (!caps.length) return { status: 404 };
+    const cg = await db.prepare("SELECT 1 FROM caregiver_profiles WHERE user_id = ? LIMIT 1").get(req.user.id);
+    if (cg && !(await D.isLeader(db, cr, req.user.id))) return { status: 404 }; // hired caregivers: none of this
+  }
+  return { status: 200, cr, herself };
+}
+
+async function view(db, cr, userId) {
+  const consent = await D.activeConsent(db, cr.id);
+  const capacity = await D.signerCapacity(db, cr, userId);
+  const leader = await D.isLeader(db, cr, userId);
+  const { parseSimpleMode } = require("../utils/simpleMode");
+  const hub = parseSimpleMode(cr.simple_mode).hub || {};
+  const candidates = leader ? await D.dropInCandidates(db, cr) : [];
+  return {
+    firstName: cr.first_name,
+    hubOn: !!hub.on,
+    consent: consent ? {
+      signerName: consent.signer_name, capacity: consent.signer_capacity,
+      capacityLabel: D.CAPACITY_LABEL[consent.signer_capacity] || consent.signer_capacity,
+      signedAt: consent.created_at, wording: consent.wording_text,
+    } : null,
+    wording: D.wordingFor(cr.first_name || "them"),
+    wordingVersion: D.WORDING_VERSION,
+    canSign: !!capacity,
+    capacity,
+    capacityLabel: capacity ? D.CAPACITY_LABEL[capacity] : null,
+    canRevoke: !!consent && (!!capacity || leader || consent.signed_by === userId),
+    isLeader: leader,
+    candidates,
+    chosen: (hub.dropInUserIds || []).filter((id) => candidates.length === 0 || candidates.some((c) => c.userId === id)),
+    noticeAwake: !!hub.noticeAwake,
+  };
+}
+
+router.get("/:recipientId", async (req, res) => {
+  try {
+    const db = await getDb();
+    const a = await access(db, req);
+    if (a.status !== 200) return res.status(a.status).json({ error: "Not found" });
+    res.json(await view(db, a.cr, req.user.id));
+  } catch (err) {
+    captureException(err, { where: "dropIn: get" });
+    res.status(500).json({ error: "Couldn't load drop-in settings" });
+  }
+});
+
+// POST /:recipientId/consent { signerName, agree: true, wordingVersion }
+router.post("/:recipientId/consent", async (req, res) => {
+  try {
+    if (req.user.impersonatedBy) return res.status(403).json({ error: "A consent can't be signed while viewing as someone else." });
+    const db = await getDb();
+    const a = await access(db, req);
+    if (a.status !== 200) return res.status(a.status).json({ error: "Not found" });
+    const capacity = await D.signerCapacity(db, a.cr, req.user.id);
+    if (!capacity) {
+      return res.status(403).json({ error: `Only ${a.cr.first_name || "the person"}, or the agent recorded under their power of attorney or as their healthcare agent, can sign this. Record the agent in Legal readiness first.` });
+    }
+    const name = String((req.body && req.body.signerName) || "").trim().slice(0, 120);
+    if (req.body?.agree !== true || name.length < 2) return res.status(400).json({ error: "Type your full name and tick that you agree." });
+    if (req.body?.wordingVersion !== D.WORDING_VERSION) return res.status(409).json({ error: "The wording changed. Please read it again." });
+    const existing = await D.activeConsent(db, a.cr.id);
+    if (existing) await db.prepare("UPDATE drop_in_consents SET revoked_at = NOW(), revoked_by = ? WHERE id = ?").run(req.user.id, existing.id);
+    const id = uuid();
+    await db.prepare(`
+      INSERT INTO drop_in_consents (id, care_recipient_id, signed_by, signer_capacity, signer_name, wording_version, wording_text)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run(id, a.cr.id, req.user.id, capacity, name, D.WORDING_VERSION, D.wordingFor(a.cr.first_name || "them"));
+    await D.audit(db, a.cr.id, req.user.id, "drop_in_consent_signed",
+      `${name} signed the drop-in and awake-noticing consent as ${D.CAPACITY_LABEL[capacity]}`,
+      { consentId: id, capacity, wordingVersion: D.WORDING_VERSION, replaced: existing ? existing.id : null });
+    res.status(201).json(await view(db, await D.recipient(db, a.cr.id), req.user.id));
+  } catch (err) {
+    captureException(err, { where: "dropIn: consent" });
+    res.status(500).json({ error: "Couldn't record the consent" });
+  }
+});
+
+router.post("/:recipientId/revoke", async (req, res) => {
+  try {
+    if (req.user.impersonatedBy) return res.status(403).json({ error: "Not while viewing as someone else." });
+    const db = await getDb();
+    const a = await access(db, req);
+    if (a.status !== 200) return res.status(a.status).json({ error: "Not found" });
+    const c = await D.activeConsent(db, a.cr.id);
+    if (!c) return res.json(await view(db, a.cr, req.user.id));
+    const allowed = a.herself || c.signed_by === req.user.id || (await D.signerCapacity(db, a.cr, req.user.id)) || (await D.isLeader(db, a.cr, req.user.id));
+    if (!allowed) return res.status(403).json({ error: "Only the signer, the person, their agent or the care team leader can withdraw this." });
+    await db.prepare("UPDATE drop_in_consents SET revoked_at = NOW(), revoked_by = ? WHERE id = ?").run(req.user.id, c.id);
+    await D.audit(db, a.cr.id, req.user.id, "drop_in_consent_revoked", "Withdrew the drop-in and awake-noticing consent", { consentId: c.id });
+    res.json(await view(db, a.cr, req.user.id));
+  } catch (err) {
+    captureException(err, { where: "dropIn: revoke" });
+    res.status(500).json({ error: "Couldn't withdraw the consent" });
+  }
+});
+
+// PUT /:recipientId/settings { userIds?: [], noticeAwake?: bool } — leader only
+router.put("/:recipientId/settings", async (req, res) => {
+  try {
+    if (req.user.impersonatedBy) return res.status(403).json({ error: "Not while viewing as someone else." });
+    const db = await getDb();
+    const a = await access(db, req);
+    if (a.status !== 200) return res.status(a.status).json({ error: "Not found" });
+    if (!(await D.isLeader(db, a.cr, req.user.id))) return res.status(403).json({ error: "Only the care team leader can choose this." });
+    const { parseSimpleMode, cleanHub } = require("../utils/simpleMode");
+    let raw = {};
+    try { raw = a.cr.simple_mode ? JSON.parse(a.cr.simple_mode) : {}; } catch { raw = {}; }
+    const hub = { ...parseSimpleMode(a.cr.simple_mode).hub, ...(raw.hub || {}) };
+    const changes = {};
+    if (Array.isArray(req.body?.userIds)) {
+      const ok = new Set((await D.dropInCandidates(db, a.cr)).map((c) => c.userId));
+      hub.dropInUserIds = [...new Set(req.body.userIds.filter((id) => ok.has(id)))];
+      changes.dropInUserIds = hub.dropInUserIds;
+    }
+    if (typeof req.body?.noticeAwake === "boolean") { hub.noticeAwake = req.body.noticeAwake; changes.noticeAwake = hub.noticeAwake; }
+    const clean = cleanHub(hub);
+    await db.prepare("UPDATE care_recipients SET simple_mode = ? WHERE id = ?").run(JSON.stringify({ ...raw, hub: clean }), a.cr.id);
+    await D.audit(db, a.cr.id, req.user.id, "drop_in_settings_changed", "Changed who may drop in or awake noticing", changes);
+    res.json(await view(db, await D.recipient(db, a.cr.id), req.user.id));
+  } catch (err) {
+    captureException(err, { where: "dropIn: settings" });
+    res.status(500).json({ error: "Couldn't save that" });
+  }
+});
+
+// ─── Awake noticing: the Hub reports each minute it noticed her ───
+// POST /:recipientId/awake { motion: bool, voiceSeconds: n, touches: n } — her own account only.
+// A minute counts as awake if there was movement, or ≥10 s of talking, or a touch (Pete:
+// "Speaking enough to be awake, call it 10 seconds...with movement or other noise be
+// considered awake"). Noise without movement or talking is not sent as awake by the Hub.
+// Minutes within AWAKE_JOIN_MIN of each other join one period.
+const AWAKE_JOIN_MIN = 10;
+const VOICE_AWAKE_SECONDS = 10;
+router.post("/:recipientId/awake", async (req, res) => {
+  try {
+    const db = await getDb();
+    const a = await access(db, req);
+    if (a.status !== 200 || !a.herself) return res.status(404).json({ error: "Not found" });
+    if (req.user.impersonatedBy) return res.json({ recorded: false });
+    if (!(await D.mayNotice(db, a.cr.id))) return res.json({ recorded: false, reason: "off" });
+    const motion = req.body?.motion === true;
+    const voice = Math.max(0, Math.min(60, Number(req.body?.voiceSeconds) || 0));
+    const touches = Math.max(0, Math.min(200, Math.floor(Number(req.body?.touches) || 0)));
+    const awake = motion || voice >= VOICE_AWAKE_SECONDS || touches > 0;
+    if (!awake) return res.json({ recorded: false });
+    const last = await db.prepare("SELECT * FROM hub_awake WHERE care_recipient_id = ? ORDER BY ended_at DESC LIMIT 1").get(a.cr.id);
+    const joins = last && (Date.now() - new Date(last.ended_at).getTime()) <= AWAKE_JOIN_MIN * 60000;
+    if (joins) {
+      await db.prepare(`UPDATE hub_awake SET ended_at = NOW(), motion_minutes = motion_minutes + ?, voice_minutes = voice_minutes + ?, touches = touches + ? WHERE id = ?`)
+        .run(motion ? 1 : 0, voice >= VOICE_AWAKE_SECONDS ? 1 : 0, touches, last.id);
+    } else {
+      await db.prepare(`INSERT INTO hub_awake (id, care_recipient_id, started_at, ended_at, motion_minutes, voice_minutes, touches) VALUES (?, ?, NOW() - INTERVAL '1 minute', NOW(), ?, ?, ?)`)
+        .run(uuid(), a.cr.id, motion ? 1 : 0, voice >= VOICE_AWAKE_SECONDS ? 1 : 0, touches);
+    }
+    res.json({ recorded: true });
+  } catch (err) {
+    captureException(err, { where: "dropIn: awake" });
+    res.status(500).json({ error: "Couldn't record that" });
+  }
+});
+
+module.exports = router;
+module.exports.AWAKE_JOIN_MIN = AWAKE_JOIN_MIN;
+module.exports.VOICE_AWAKE_SECONDS = VOICE_AWAKE_SECONDS;

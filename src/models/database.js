@@ -3821,6 +3821,44 @@ async function initializeDatabase() {
         `CREATE INDEX IF NOT EXISTS idx_visit_photos_hub ON visit_photos(created_at DESC) WHERE show_on_hub = 1`,
       ],
     },
+    {
+      // v1.156.0 — drop-in and awake noticing on the InPlace Hub. Pete, 11/24: "we just need an
+      // acknowledgment that someone with a durable POA or that person has signed up for drop-ins
+      // that might include microphone and camera usage without their active consent at the
+      // time...We just wanna make sure it is recorded as purposeful."
+      //
+      // drop_in_consents: one row per signature, never edited; revoking stamps revoked_at.
+      // The wording signed is stored whole (wording_text), not just a version number, so the
+      // record shows exactly what was agreed even after the wording changes.
+      // hub_awake: periods when the Hub noticed she was up (movement, ~10 s of talking, or a
+      // touch). Only times and which signals — no images, no audio, ever.
+      id: "099_drop_in_consent_awake",
+      statements: [
+        `CREATE TABLE IF NOT EXISTS drop_in_consents (
+          id TEXT PRIMARY KEY,
+          care_recipient_id TEXT NOT NULL,
+          signed_by TEXT NOT NULL,
+          signer_capacity TEXT NOT NULL,
+          signer_name TEXT NOT NULL,
+          wording_version TEXT NOT NULL,
+          wording_text TEXT NOT NULL,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          revoked_at TIMESTAMPTZ,
+          revoked_by TEXT
+        )`,
+        `CREATE INDEX IF NOT EXISTS idx_drop_in_consents_cr ON drop_in_consents(care_recipient_id, created_at DESC)`,
+        `CREATE TABLE IF NOT EXISTS hub_awake (
+          id TEXT PRIMARY KEY,
+          care_recipient_id TEXT NOT NULL,
+          started_at TIMESTAMPTZ NOT NULL,
+          ended_at TIMESTAMPTZ NOT NULL,
+          motion_minutes INTEGER NOT NULL DEFAULT 0,
+          voice_minutes INTEGER NOT NULL DEFAULT 0,
+          touches INTEGER NOT NULL DEFAULT 0
+        )`,
+        `CREATE INDEX IF NOT EXISTS idx_hub_awake_cr ON hub_awake(care_recipient_id, ended_at DESC)`,
+      ],
+    },
   ];
   for (const m of MIGRATIONS_V2) {
     if (applied.has(m.id)) continue;

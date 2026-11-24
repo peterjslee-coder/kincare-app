@@ -2267,6 +2267,13 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                       Someone else is next {'—'} leave a hand-off note {'›'}
                     </button>
                   )}
+                  {/* v1.156.0 — Pete: "if she was awake from 2 to 5 AM...Tina should know that when
+                      she checks in." From the InPlace Hub, only where the family signed for it. */}
+                  {data && data.nightNotes && data.nightNotes[s.careRecipientId] && (
+                    <div data-testid="night-note" style={{ marginTop: 10, padding: '10px 12px', borderRadius: 12, background: 'var(--bg-surface)', border: '1px solid var(--border-color)', fontSize: 14, color: 'var(--text-primary)', lineHeight: 1.4 }}>
+                      <span aria-hidden="true">{'\u{1F319}'}</span> {data.nightNotes[s.careRecipientId]}
+                    </div>
+                  )}
                   {/* The one left for this visit, before she checks in */}
                   {!isActive && s.incomingHandoff && !s.incomingHandoff.readAt && typeof HandoffIncoming !== 'undefined' && (
                     <div style={{ marginTop: 10 }} onClick={(e) => e.stopPropagation()}>

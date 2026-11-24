@@ -855,7 +855,6 @@ async function asTheLinkedPerson(db, req) {
   return { cr, ok: !!linkedUserId && linkedUserId === req.user.id };
 }
 
-// The screen was opened (or brought back to the front). Marks the note on it as seen.
 // v1.155.3 — Pete: "I liked the old half-screen view" for photos, and the crop has to match
 // what the screen shows. The photo space's shape depends on the tablet and on which Hub pieces
 // are on, so the Hub measures it and reports it here; Add photo frames to that shape.
@@ -881,6 +880,7 @@ router.post("/:id/simple-screen/hub-shape", async (req, res) => {
   }
 });
 
+// The screen was opened (or brought back to the front). Marks the note on it as seen.
 router.post("/:id/simple-screen/opened", async (req, res) => {
   try {
     const db = await getDb();

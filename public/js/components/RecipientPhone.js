@@ -305,7 +305,7 @@ const useSimpleCallHost = (enabled, { answers = true } = {}) => {
     const node = <>{card}{overlay}</>;
     ui = typeof ReactDOM !== 'undefined' && ReactDOM.createPortal ? ReactDOM.createPortal(node, document.body) : node;
   }
-  return { startCall, ui };
+  return { startCall, ui, busy: !!(incoming || callState.active) };
 };
 
 // ─── v1.152.0 — InPlace Hub ───
@@ -612,6 +612,90 @@ const HubWeather = ({ wx, onClose }) => {
   );
 };
 
+// v1.156.0 — noticing when she is up. Pete: "don't record audio. Speaking enough to be awake,
+// call it 10 seconds, should be noted and with movement or other noise be considered awake."
+// Runs only when the server says so (hub.noticeAwake: a signed consent and the leader's switch),
+// never during a call (the call needs the camera), and only on the Hub itself.
+// Nothing leaves the tablet but, once a minute: was there movement, how many seconds sounded
+// like talking, how many touches. Frames are compared in memory at 64×48 and thrown away; the
+// microphone is only measured for loudness in the speech band. Nothing is recorded or saved.
+const AWAKE_TICK_MS = 1000;
+const AWAKE_REPORT_MS = 60000;
+const MOTION_PIXEL_DELTA = 28;   // a pixel "changed" if its brightness moved this much
+const MOTION_SHARE = 0.02;       // ...and a frame "moved" if 2% of pixels changed
+const VOICE_OVER_FLOOR = 2.2;    // speech-band loudness this many times the room's quiet level
+const HubAwake = ({ recipientId }) => {
+  React.useEffect(() => {
+    // Touches anywhere on the Hub — the night screen included — count as "she's up".
+    let touches = 0;
+    const onTouch = () => { touches += 1; };
+    document.addEventListener('pointerdown', onTouch, true);
+    const touchesRef = { get current() { return touches; }, set current(v) { touches = v; } };
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !recipientId) return undefined;
+    let stream = null, ctx = null, analyser = null, tick = null, report = null, stopped = false;
+    let prev = null, motion = false, voiceSec = 0, floor = null;
+    const canvas = document.createElement('canvas'); canvas.width = 64; canvas.height = 48;
+    const g = canvas.getContext('2d', { willReadFrequently: true });
+    const video = document.createElement('video'); video.muted = true; video.playsInline = true;
+    (async () => {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ video: { width: 160, height: 120, frameRate: 5 }, audio: { echoCancellation: false, noiseSuppression: false } });
+        if (stopped) { stream.getTracks().forEach((t) => t.stop()); return; }
+        video.srcObject = stream; await video.play().catch(() => {});
+        const Ctx = window.AudioContext || window.webkitAudioContext;
+        if (Ctx && stream.getAudioTracks().length) {
+          ctx = new Ctx();
+          analyser = ctx.createAnalyser(); analyser.fftSize = 1024;
+          ctx.createMediaStreamSource(stream).connect(analyser);
+        }
+      } catch (e) {
+        // No camera yet (the tablet app before 1.3) or permission refused: report once, then nothing.
+        try { reportClientError(e, { page: 'hub-awake' }); } catch (_) { /* nothing */ }
+        return;
+      }
+      const bins = analyser ? new Uint8Array(analyser.frequencyBinCount) : null;
+      tick = setInterval(() => {
+        try {
+          g.drawImage(video, 0, 0, 64, 48);
+          const px = g.getImageData(0, 0, 64, 48).data;
+          const lum = new Uint8Array(64 * 48);
+          for (let i = 0, j = 0; i < px.length; i += 4, j += 1) lum[j] = (px[i] * 3 + px[i + 1] * 6 + px[i + 2]) / 10;
+          if (prev) {
+            let changed = 0;
+            for (let j = 0; j < lum.length; j += 1) if (Math.abs(lum[j] - prev[j]) > MOTION_PIXEL_DELTA) changed += 1;
+            if (changed / lum.length > MOTION_SHARE) motion = true;
+          }
+          prev = lum;
+        } catch { /* a dropped frame */ }
+        if (analyser && bins) {
+          analyser.getByteFrequencyData(bins);
+          const hz = (ctx.sampleRate / 2) / bins.length;
+          let sum = 0, n = 0;
+          for (let k = Math.floor(300 / hz); k < Math.min(bins.length, Math.ceil(3400 / hz)); k += 1) { sum += bins[k]; n += 1; }
+          const level = n ? sum / n : 0;
+          floor = floor == null ? level : Math.min(level, floor * 0.995 + level * 0.005); // slow-rising quiet level
+          if (level > Math.max(6, floor * VOICE_OVER_FLOOR)) voiceSec += AWAKE_TICK_MS / 1000;
+        }
+      }, AWAKE_TICK_MS);
+      report = setInterval(() => {
+        const touches = touchesRef.current; touchesRef.current = 0;
+        const body = { motion, voiceSeconds: Math.round(voiceSec), touches };
+        motion = false; voiceSec = 0;
+        if (!body.motion && body.voiceSeconds < 10 && !body.touches) return;
+        apiFetch(`/api/drop-in/${recipientId}/awake`, { method: 'POST', body: JSON.stringify(body) }).catch(() => {});
+      }, AWAKE_REPORT_MS);
+    })();
+    return () => {
+      stopped = true;
+      clearInterval(tick); clearInterval(report);
+      try { stream && stream.getTracks().forEach((t) => t.stop()); } catch { /* gone */ }
+      try { ctx && ctx.close(); } catch { /* gone */ }
+      document.removeEventListener('pointerdown', onTouch, true);
+    };
+  }, [recipientId]);
+  return null;
+};
+
 const HubBoard = ({ hub, first, now, show, calls, note, s, failed, readFlash, reading, acking, unread, awake, onWake, onRead, onAck, onText, onMessages, onCall, onHubShape }) => {
   const [showWx, setShowWx] = React.useState(false); // before the night return: hooks first
   const today = hub.today;
@@ -827,7 +911,7 @@ const HubBoard = ({ hub, first, now, show, calls, note, s, failed, readFlash, re
   );
 };
 
-const SimpleViewInner = ({ initial, onPanelChange, startCall }) => {
+const SimpleViewInner = ({ initial, onPanelChange, startCall, callBusy }) => {
   const [data, setData] = useState(initial || null);
   const [loading, setLoading] = useState(!initial);
   const [failed, setFailed] = useState(false);
@@ -1181,6 +1265,7 @@ const SimpleViewInner = ({ initial, onPanelChange, startCall }) => {
         onRead={markRead} onAck={ackText} onText={openText}
         onMessages={() => setPanel('messages')} onCall={startCall}
         onHubShape={(aspect) => { if (data && data.careRecipientId) apiFetch(`/api/care-recipients/${data.careRecipientId}/simple-screen/hub-shape`, { method: 'POST', body: JSON.stringify({ photoAspect: aspect }) }).catch(() => {}); }} />
+      {s.hub && s.hub.noticeAwake && !callBusy && data && data.careRecipientId && <HubAwake recipientId={data.careRecipientId} />}
       {s.hub && <HubPopups hub={s.hub} s={s} note={note} now={now} onRead={markRead} onAck={ackText} onText={openText} />}
       </>
     );
@@ -1307,7 +1392,7 @@ const SimpleView = window.SimpleView = (props) => {
   const host = useSimpleCallHost(panel !== 'messages');
   return (
     <>
-      <SimpleViewInner {...props} onPanelChange={setPanel} startCall={host.startCall} />
+      <SimpleViewInner {...props} onPanelChange={setPanel} startCall={host.startCall} callBusy={host.busy} />
       {host.ui}
     </>
   );
@@ -1346,6 +1431,100 @@ const SIMPLE_SECTIONS = [
   ['tellFamily', 'Tell the family', 'One-tap notes like "I’m hungry" or "I have pain", or typed. You get a "tap to read" notice; pain and "I need help" come as needs attention.'],
   ['comingUp', 'Coming up', 'Today\u2019s and tomorrow\u2019s visits and appointments, like "Haircut at Angie\u2019s — 1:00 PM".'],
 ];
+
+// v1.156.0 — drop-in and awake noticing, in the Hub settings. Pete: "we just need an
+// acknowledgment that someone with a durable POA or that person has signed up for drop-ins...
+// We just wanna make sure it is recorded as purposeful." Rules: src/utils/dropIn.js.
+const HubDropInSettings = window.HubDropInSettings = ({ recipientId, name }) => {
+  const { showToast } = useToast();
+  const [v, setV] = useState(null);
+  const [typed, setTyped] = useState('');
+  const [agree, setAgree] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [showWording, setShowWording] = useState(false);
+  const load = async () => { try { const r = await apiFetch(`/api/drop-in/${recipientId}`); if (r && r.ok) setV(await r.json()); } catch { /* hidden */ } };
+  useEffect(() => { if (recipientId) load(); }, [recipientId]);
+  if (!v) return null;
+  const call = async (path, method, body, okMsg) => {
+    setBusy(true);
+    try {
+      const r = await apiFetch(`/api/drop-in/${recipientId}${path}`, { method, body: JSON.stringify(body || {}) });
+      const d = r ? await r.json().catch(() => ({})) : {};
+      if (r && r.ok) { setV(d); if (okMsg) showToast(okMsg, 'success'); } else showToast(d.error || "Couldn't save that", 'error');
+    } catch { showToast("Couldn't save that", 'error'); }
+    setBusy(false);
+  };
+  const box = { marginTop: 14, paddingTop: 12, borderTop: '1px solid var(--border-color)', fontSize: 13, color: 'var(--text-primary)' };
+  const muted = { fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5, margin: '6px 0 0' };
+  const wordingBox = (text) => (
+    <div style={{ whiteSpace: 'pre-wrap', fontSize: 12.5, lineHeight: 1.5, background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: 8, padding: '10px 12px', margin: '8px 0', maxHeight: 220, overflowY: 'auto' }}>{text}</div>
+  );
+  return (
+    <div data-testid="hub-dropin-settings" style={box}>
+      <strong>Drop-in and noticing when {name} is up</strong>
+      {v.consent ? (
+        <div style={{ marginTop: 6 }}>
+          <div data-testid="dropin-consent-signed" style={{ color: 'var(--color-success)', fontWeight: 600 }}>
+            {'\u2713'} Signed by {v.consent.signerName} ({v.consent.capacityLabel}), {new Date(v.consent.signedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+          </div>
+          <button type="button" onClick={() => setShowWording(!showWording)} style={{ background: 'none', border: 'none', padding: 0, marginTop: 4, color: 'var(--accent-color)', cursor: 'pointer', fontSize: 12.5 }}>
+            {showWording ? 'Hide what was signed' : 'Read what was signed'}
+          </button>
+          {showWording && wordingBox(v.consent.wording)}
+          {v.canRevoke && (
+            <div><button type="button" disabled={busy} data-testid="dropin-revoke"
+              onClick={() => { if (window.confirm('Withdraw this consent? Drop-in and noticing stop right away.')) call('/revoke', 'POST', {}, 'Consent withdrawn'); }}
+              style={{ marginTop: 8, fontSize: 12.5, padding: '6px 12px', borderRadius: 8, border: '1px solid var(--color-error)', background: 'none', color: 'var(--color-error)', cursor: 'pointer' }}>Withdraw consent</button></div>
+          )}
+        </div>
+      ) : (
+        <div style={{ marginTop: 6 }}>
+          <div style={{ color: 'var(--text-secondary)' }}>Not signed. Nothing below works until it is.</div>
+          {wordingBox(v.wording)}
+          {v.canSign ? (
+            <div data-testid="dropin-sign">
+              <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', cursor: 'pointer', margin: '6px 0' }}>
+                <input type="checkbox" checked={agree} onChange={(e) => setAgree(e.target.checked)} style={{ width: 18, height: 18, marginTop: 1 }} />
+                <span>I agree, signing as {v.capacity === 'self' ? 'myself' : `${name}'s ${v.capacityLabel}`}.</span>
+              </label>
+              <input className="form-input" value={typed} onChange={(e) => setTyped(e.target.value)} placeholder="Type your full name" style={{ width: '100%', boxSizing: 'border-box' }} />
+              <button type="button" disabled={busy || !agree || typed.trim().length < 2}
+                onClick={() => call('/consent', 'POST', { signerName: typed.trim(), agree: true, wordingVersion: v.wordingVersion }, 'Consent signed and recorded')}
+                style={{ marginTop: 8, padding: '8px 14px', borderRadius: 8, border: 'none', background: 'var(--role-color)', color: 'var(--text-on-primary)', fontWeight: 700, cursor: 'pointer', opacity: (!agree || typed.trim().length < 2) ? 0.5 : 1 }}>Sign</button>
+            </div>
+          ) : (
+            <p style={muted}>Only {name}, or the agent recorded under {name}'s durable power of attorney or as healthcare agent, can sign this. Record who that is in Legal readiness, then that person signs here.</p>
+          )}
+        </div>
+      )}
+      {v.isLeader && (
+        <div style={{ marginTop: 12, opacity: v.consent ? 1 : 0.55 }}>
+          <div style={{ fontWeight: 600, marginBottom: 4 }}>Who may drop in</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 14px' }}>
+            {v.candidates.map((c) => {
+              const on = v.chosen.includes(c.userId);
+              return (
+                <label key={c.userId} style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+                  <input type="checkbox" disabled={busy} checked={on} data-testid={'dropin-person-' + c.userId}
+                    onChange={() => call('/settings', 'PUT', { userIds: on ? v.chosen.filter((x) => x !== c.userId) : [...v.chosen, c.userId] })}
+                    style={{ width: 16, height: 16, accentColor: 'var(--role-color)' }} />
+                  {c.name}
+                </label>
+              );
+            })}
+          </div>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10, cursor: 'pointer' }}>
+            <input type="checkbox" disabled={busy} checked={v.noticeAwake} data-testid="dropin-notice"
+              onChange={(e) => call('/settings', 'PUT', { noticeAwake: e.target.checked })}
+              style={{ width: 16, height: 16, accentColor: 'var(--role-color)' }} />
+            <span><strong>Notice when {name} is up</strong> <span style={{ color: 'var(--text-secondary)' }}>— movement, about 10 seconds of talking, or a touch. Only the times are kept; nothing is recorded. Last night goes into {name}'s care notes each morning, and the caregiver sees it at check-in.</span></span>
+          </label>
+          <p style={muted}>The tablet needs the next InPlace app update (with camera access) before drop-in and noticing can start.</p>
+        </div>
+      )}
+    </div>
+  );
+};
 
 const SimpleModeSettings = window.SimpleModeSettings = ({ recipientId, firstName }) => {
   const { showToast } = useToast();
@@ -1521,6 +1700,7 @@ const SimpleModeSettings = window.SimpleModeSettings = ({ recipientId, firstName
                   <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: 0, lineHeight: 1.5 }}>
                     To set up the tablet: install InPlace Care from Google Play, sign in as {name}, and turn the tablet sideways. Pin the app (Settings → Security → Pin app) so it stays on this screen.
                   </p>
+                  {typeof HubDropInSettings !== 'undefined' && <HubDropInSettings recipientId={recipientId} name={name} />}
                 </div>
               )}
             </div>

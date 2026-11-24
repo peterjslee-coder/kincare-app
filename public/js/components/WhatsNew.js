@@ -508,6 +508,16 @@ const WN_PREVIEWS = {
       </div>
     </div>
   ),
+  // v1.156.0 — the drop-in consent, signed and recorded
+  hubConsent: () => (
+    <div style={{ ...wnCard, padding: 10, fontSize: 11.5, color: 'var(--text-primary)' }}>
+      <div style={{ fontWeight: 800, marginBottom: 4 }}>Drop-in and noticing when Jane is up</div>
+      <div style={{ color: 'var(--color-success)', fontWeight: 700 }}>{'\u2713'} Signed by Sam (agent under the durable power of attorney)</div>
+      <div style={{ marginTop: 6, fontWeight: 700 }}>Who may drop in</div>
+      <div>{'\u2611'} Sam {'\u00a0\u00a0'} {'\u2610'} Alex</div>
+      <div style={{ marginTop: 6, background: 'var(--bg-surface)', borderRadius: 6, padding: '4px 6px' }}>{'\u{1F319}'} Jane was up last night from about 2:04 to 5:10 AM.</div>
+    </div>
+  ),
   // v1.155.7 — every year, and the holidays
   yearlyEvents: () => (
     <div style={{ ...wnCard, padding: 10 }}>
