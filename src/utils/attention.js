@@ -80,7 +80,7 @@ const name = (first, last) => [first, last].filter(Boolean).join(" ").trim() || 
 
 const EMPTY = {
   total: 0, reimbursements: 0, timeChanges: 0, timeChangeSessionId: null,
-  careTasks: 0, approvals: 0, safetyFlags: 0, messages: 0, emptyWeeks: 0, medUncovered: 0, seriesChanges: 0, cancelFees: 0, financialConcerns: 0, identity: 0, holdDeclined: 0, checkinOverdue: 0, items: [],
+  careTasks: 0, approvals: 0, safetyFlags: 0, messages: 0, emptyWeeks: 0, medUncovered: 0, seriesChanges: 0, cancelFees: 0, financialConcerns: 0, identity: 0, holdDeclined: 0, checkinOverdue: 0, dropInConsents: 0, items: [],
 };
 
 /**
@@ -716,6 +716,19 @@ async function attentionItemsFor(db, userId) {
     ORDER BY fc.shared_at
   `).all(userId));
 
+  // ── v1.156.1 — a drop-in consent the leader asked ME to review ──
+  // Pete: "she gets a 'needs you' card to click approve." Only while nothing is signed yet;
+  // she is the blocker until she signs or says no. utils/dropIn.js, routes/dropIn.js.
+  const dropInRows = await safeRows("dropInRequests", () => db.prepare(`
+    SELECT r.id, r.care_recipient_id, r.created_at, cr.first_name AS recipient_first, b.first_name AS by_first
+    FROM drop_in_requests r
+    JOIN care_recipients cr ON cr.id = r.care_recipient_id
+    JOIN users b ON b.id = r.requested_by
+    WHERE r.requested_of = ? AND r.answered_at IS NULL
+      AND NOT EXISTS (SELECT 1 FROM drop_in_consents c WHERE c.care_recipient_id = r.care_recipient_id AND c.revoked_at IS NULL)
+    ORDER BY r.created_at
+  `).all(userId));
+
   // ── The list the card draws ──
   //
   // Each item carries the sentence to show and the ONE request that clears it. The endpoint
@@ -728,6 +741,20 @@ async function attentionItemsFor(db, userId) {
   // after it closes.
   const items = [
     ...idItems,
+    ...dropInRows.map((r) => ({
+      kind: "dropInConsent",
+      id: `dropIn:${r.id}`,
+      title: `Review the InPlace Hub consent for ${r.recipient_first || "your loved one"}`,
+      detail: `${r.by_first || "The care team leader"} asked you, as the agent on record`,
+      forWhom: r.recipient_first || null,
+      when: r.created_at || null,
+      // No one-tap approve: the wording has to be read and a name typed. "Review" opens it.
+      verb: "Review",
+      action: null,
+      page: "dashboard",
+      focus: `dropIn:${r.care_recipient_id}`,
+      note: "Drop-in and noticing when they're up stay off until this is signed.",
+    })),
     ...reimbursementRows.map((r) => ({
       kind: "reimbursement",
       id: r.id,
@@ -1187,7 +1214,7 @@ async function attentionItemsFor(db, userId) {
     total: reimbursementRows.length + timeChanges + taskRows.length + approvalRows.length
       // v1.120.1 — unpaidRows: an approved reimbursement still to pay; the payer is the blocker.
       + unpaidRows.length + cancelFeeRows.length + financialConcernRows.length + safetyRows.length + holdDeclinedRows.length
-      + checkinOverdueRows.length + medUncoveredRows.length + seriesChangeRows.length, // v1.128.0; v1.138.0 medUncovered; v1.139.0 seriesChange
+      + checkinOverdueRows.length + medUncoveredRows.length + seriesChangeRows.length + dropInRows.length, // v1.128.0; v1.138.0 medUncovered; v1.139.0 seriesChange; v1.156.1 dropIn
     cancelFees: cancelFeeRows.length,
     holdDeclined: holdDeclinedRows.length, // v1.117.0
     checkinOverdue: checkinOverdueRows.length, // v1.128.0
@@ -1195,6 +1222,7 @@ async function attentionItemsFor(db, userId) {
     emptyWeeks: emptyWeekRows.length,
     medUncovered: medUncoveredRows.length, // v1.138.0
     seriesChanges: seriesChangeRows.length, // v1.139.0
+    dropInConsents: dropInRows.length, // v1.156.1
     paymentChecks: paymentArrivedRows.length, // v1.120.0, soft
     unpaidReimbursements: unpaidRows.length, // v1.120.1, counts
     reimbursements: reimbursementRows.length,

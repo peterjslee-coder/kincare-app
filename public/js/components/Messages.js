@@ -1679,18 +1679,25 @@ const Messages = window.Messages = () => {
     // v1.105.99 — a call that arrived as a push while the app was closed. app.js parks it on
     // window.__pendingCall; pick it up on mount so the incoming-call UI appears rather than
     // dumping her into Messages with no idea why she is there.
-    try {
-      // v1.155.2 — a call parked by the live socket carries `at`; one more than 30 s old has
-      // stopped ringing on the caller's side, so it is dropped rather than offered.
-      const pc = window.__pendingCall;
-      if (pc) {
-        window.__pendingCall = null;
-        if (!pc.at || Date.now() - pc.at < 30000) {
-          setIncomingCall(pc);
-          setTimeout(() => { setIncomingCall((prev) => (prev && prev.roomName === pc.roomName ? null : prev)); }, 30000);
+    // v1.155.2 — a call parked by the live socket carries `at`; one more than 30 s old has
+    // stopped ringing on the caller's side, so it is dropped rather than offered.
+    // v1.156.1 — and it is looked for again whenever a push tap parks one while this screen is
+    // already open (Pete: tapping the call push on a locked iPhone "opens inplace but doesn't
+    // show me an answer" — the app resumed on Messages and nothing looked).
+    const pickUpParkedCall = () => {
+      try {
+        const pc = window.__pendingCall;
+        if (pc) {
+          window.__pendingCall = null;
+          if (!pc.at || Date.now() - pc.at < 30000) {
+            setIncomingCall(pc);
+            setTimeout(() => { setIncomingCall((prev) => (prev && prev.roomName === pc.roomName ? null : prev)); }, 30000);
+          }
         }
-      }
-    } catch {}
+      } catch {}
+    };
+    pickUpParkedCall();
+    window.addEventListener('inplace:pending-call', pickUpParkedCall);
 
     const cleanupRing = onSocketEvent('call_ring_status', (data) => {
       setRingStatus(data?.via || null);
@@ -1730,7 +1737,19 @@ const Messages = window.Messages = () => {
     };
     const cleanup2 = onSocketEvent('call_ended', () => clearRinging('ended the call'));
     const cleanup3 = onSocketEvent('call_declined', () => clearRinging('is not available'));
-    return () => { cleanupRing(); cleanup(); cleanup2(); cleanup3(); };
+    // v1.156.1 — answered (or declined) on another of MY devices: this one stops ringing,
+    // quietly. Only the ringing banner goes; a call already joined here is not touched.
+    const cleanup4 = onSocketEvent('call_answered_elsewhere', (d) => {
+      try { if (window.__pendingCall && window.__pendingCall.roomName === d?.roomName) window.__pendingCall = null; } catch { /* nothing parked */ }
+      setIncomingCall((prev) => {
+        if (prev && prev.roomName === d?.roomName) {
+          if (showToast) showToast(d?.how === 'declined' ? 'Declined on your other device' : 'Answered on your other device', 'info');
+          return null;
+        }
+        return prev;
+      });
+    });
+    return () => { cleanupRing(); cleanup(); cleanup2(); cleanup3(); cleanup4(); window.removeEventListener('inplace:pending-call', pickUpParkedCall); };
   }, [callState.active]);
 
   // ─── v1.105.143 — make it actually ring ───
