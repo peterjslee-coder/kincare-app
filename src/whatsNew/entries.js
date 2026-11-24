@@ -31,6 +31,21 @@ const WINDOW_DAYS = 45;
 
 const ENTRIES = [
   {
+    id: "hub-tomorrow-calls",
+    version: "1.155.1",
+    date: "2026-11-23",
+    audience: ["family"],
+    title: "The Hub: Tomorrow, a Call button, and photos that fit",
+    body: "The Hub now shows Tomorrow in one glance, like \"Jane at 9:00 AM, Sam at 5:00 PM\", in place of the week list. You can give it its own Call buttons with photos beside Text, and a photo you add can be framed to fit the screen.",
+    howTo: [
+      "Care Team, then Accessibility Options, then InPlace Hub",
+      "Under Call buttons on the Hub, tick up to two people",
+      "Adding a photo from Home: drag it in the frame and zoom, or pick Whole photo",
+    ],
+    examples: ["Tomorrow: Jane at 9:00 AM, Sam at 5:00 PM", "Call Sam, next to Text my family"],
+    preview: "hubTomorrow",
+  },
+  {
     id: "hub-photos-family",
     version: "1.155.0",
     date: "2026-11-23",

@@ -190,22 +190,26 @@ const multer = require("multer");
 const { uploadQuota } = require("../utils/usageLimits");
 const { validateMagicBytes } = require("../utils/fileValidation");
 const hubPhotos = require("../utils/hubPhotos");
+const { shrinkPhoto, PHOTO_UPLOAD_MAX } = require("../utils/photoShrink");
 
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 5 * 1024 * 1024 },
+  limits: { fileSize: PHOTO_UPLOAD_MAX },
   fileFilter: (req, file, cb) => {
     const mime = String(file.mimetype || "").split(";")[0].trim().toLowerCase();
     if (IMAGE_MIMES.includes(mime)) cb(null, true);
     else cb(new Error("Photos must be JPEG, PNG, WebP, GIF or HEIC"));
   },
 });
+const multerMessage = (err) => (err && err.code === "LIMIT_FILE_SIZE")
+  ? "That photo is over 25 MB. Try a screenshot of it instead."
+  : ((err && err.message) || "That photo couldn't be read");
 const truthy = (v) => v === true || v === 1 || v === "1" || v === "true";
 
 // POST /api/care-photos/upload (multipart: photo, careRecipientId, caption?, showOnHub?)
 router.post("/upload", uploadQuota(), (req, res, next) => {
   upload.single("photo")(req, res, (err) => {
-    if (err) return res.status(400).json({ error: err.message || "That photo couldn't be read" });
+    if (err) return res.status(400).json({ error: multerMessage(err) });
     next();
   });
 }, async (req, res) => {
@@ -220,9 +224,12 @@ router.post("/upload", uploadQuota(), (req, res, next) => {
     if (!validateMagicBytes(file.buffer, file.mimetype).valid) {
       return res.status(400).json({ error: "That file isn't the picture it says it is" });
     }
+    // v1.155.1 — the server makes the stored copy: upright, cropped if asked, ≤2000 px JPEG.
+    const shrunk = await shrinkPhoto(file.buffer, file.mimetype, req.body && req.body.crop);
+    if (!shrunk.ok) return res.status(400).json({ error: shrunk.error });
     const caption = String((req.body && req.body.caption) || "").trim().slice(0, CAPTION_MAX) || null;
     const showOnHub = truthy(req.body && req.body.showOnHub) ? 1 : 0;
-    const stored = await storage.storeFileData("care-photo", `data:${file.mimetype};base64,${file.buffer.toString("base64")}`);
+    const stored = await storage.storeFileData("care-photo", `data:${shrunk.mime};base64,${shrunk.buffer.toString("base64")}`);
     const id = uuid();
     await db.prepare(`
       INSERT INTO care_photos (id, care_recipient_id, session_id, source_message_id, photo_url, caption, added_by, show_on_hub)

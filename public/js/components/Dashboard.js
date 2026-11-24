@@ -131,6 +131,51 @@ const PhotoActions = window.PhotoActions = ({ photo, onChanged, hubRecipients })
 // v1.155.0 — family adds a photo straight to Care photos, and (by default) to the person's
 // InPlace Hub. Shown only when at least one loved one has the Hub on. No `capture` attribute:
 // it would force the camera and hide the photo library.
+// v1.155.1 — Pete: "downsize photos to share with mom. Crop option...to fit right." The photo
+// opens in a frame the shape of the Hub's photo space (4:3): drag to move it, slide to zoom, or
+// pick "Whole photo". The server does the cutting and shrinking (utils/photoShrink.js), so a
+// photo the phone's browser cannot decode still uploads, just without the frame.
+const HUB_PHOTO_ASPECT = 4 / 3;
+const PhotoCropFrame = ({ src, onCrop, onUnreadable }) => {
+  const boxRef = React.useRef(null);
+  const [W, setW] = React.useState(320);
+  const [nat, setNat] = React.useState(null);
+  const [zoom, setZoom] = React.useState(1);
+  const [off, setOff] = React.useState({ x: 0, y: 0 });
+  const drag = React.useRef(null);
+  const H = Math.round(W / HUB_PHOTO_ASPECT);
+  React.useEffect(() => { if (boxRef.current) setW(boxRef.current.clientWidth || 320); }, []);
+  const scale = nat ? Math.max(W / nat.w, H / nat.h) * zoom : 1;
+  const dw = nat ? nat.w * scale : W, dh = nat ? nat.h * scale : H;
+  const clamp = (o) => ({ x: Math.min(0, Math.max(W - dw, o.x)), y: Math.min(0, Math.max(H - dh, o.y)) });
+  // Keep the picture covering the frame, centred, whenever the size changes.
+  React.useEffect(() => { if (nat) setOff((o) => clamp(o.x === 0 && o.y === 0 && zoom === 1 ? { x: (W - dw) / 2, y: (H - dh) / 2 } : o)); }, [nat, zoom, W]);
+  React.useEffect(() => {
+    if (!nat) return;
+    const c = clamp(off);
+    onCrop({ x: -c.x / dw, y: -c.y / dh, w: W / dw, h: H / dh });
+  }, [nat, off, zoom, W]);
+  const down = (e) => { drag.current = { x: e.clientX, y: e.clientY, o: off }; try { e.currentTarget.setPointerCapture(e.pointerId); } catch (_) {} };
+  const move = (e) => { if (!drag.current) return; const d = drag.current; setOff(clamp({ x: d.o.x + e.clientX - d.x, y: d.o.y + e.clientY - d.y })); };
+  const up = () => { drag.current = null; };
+  return (
+    <div ref={boxRef} style={{ width: '100%' }}>
+      <div data-testid="photo-crop-frame" onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up}
+        style={{ position: 'relative', width: W, height: H, overflow: 'hidden', borderRadius: 10, background: '#000', touchAction: 'none', cursor: 'grab' }}>
+        <img src={src} alt="" draggable={false}
+          onLoad={(e) => setNat({ w: e.target.naturalWidth, h: e.target.naturalHeight })}
+          onError={() => onUnreadable && onUnreadable()}
+          style={{ position: 'absolute', left: off.x, top: off.y, width: dw, height: dh, maxWidth: 'none', userSelect: 'none', pointerEvents: 'none' }} />
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 8, fontSize: 13, color: 'var(--text-secondary)' }}>
+        <span>Zoom</span>
+        <input type="range" min="1" max="3" step="0.05" value={zoom} onChange={(e) => setZoom(Number(e.target.value))} style={{ flex: 1 }} aria-label="Zoom" />
+      </div>
+      <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 2 }}>Drag the photo to choose what shows on the screen.</div>
+    </div>
+  );
+};
+
 const AddCarePhoto = window.AddCarePhoto = ({ hubRecipients, onAdded }) => {
   const { showToast } = useToast();
   const [file, setFile] = React.useState(null);
@@ -138,27 +183,31 @@ const AddCarePhoto = window.AddCarePhoto = ({ hubRecipients, onAdded }) => {
   const [caption, setCaption] = React.useState('');
   const [recipientId, setRecipientId] = React.useState(hubRecipients[0] && hubRecipients[0].id);
   const [onHub, setOnHub] = React.useState(true);
+  const [fit, setFit] = React.useState('fill'); // 'fill' = cropped to the frame, 'whole' = as taken
+  const [unreadable, setUnreadable] = React.useState(false);
+  const crop = React.useRef(null);
   const [busy, setBusy] = React.useState(false);
   const inputRef = React.useRef(null);
   const who = hubRecipients.find((r) => r.id === recipientId) || hubRecipients[0];
-  const reset = () => { if (preview) URL.revokeObjectURL(preview); setFile(null); setPreview(null); setCaption(''); setOnHub(true); };
+  const reset = () => { if (preview) URL.revokeObjectURL(preview); setFile(null); setPreview(null); setCaption(''); setOnHub(true); setFit('fill'); setUnreadable(false); crop.current = null; };
   const pick = (e) => {
     const f = e.target.files && e.target.files[0];
     e.target.value = '';
     if (!f) return;
-    if (!/^image\//.test(f.type || '')) { showToast('Choose a photo', 'error'); return; }
+    if (!/^image\//.test(f.type || '') && !/\.(heic|heif)$/i.test(f.name || '')) { showToast('Choose a photo', 'error'); return; }
     setFile(f); setPreview(URL.createObjectURL(f));
   };
   const save = async () => {
     if (!file || !who) return;
     setBusy(true);
     try {
-      const small = await downscaleImageFile(file, { maxDim: 1600, quality: 0.85 });
+      const small = await downscaleImageFile(file, { maxDim: 2400, quality: 0.88 });
       const fd = new FormData();
       fd.append('photo', await uploadSafeFile(small, small.name || 'photo.jpg'));
       fd.append('careRecipientId', who.id);
       fd.append('caption', caption.trim());
       fd.append('showOnHub', onHub ? '1' : '0');
+      if (fit === 'fill' && !unreadable && crop.current) fd.append('crop', JSON.stringify(crop.current));
       const r = await apiFetch('/api/care-photos/upload', { method: 'POST', body: fd });
       if (r && r.ok) {
         showToast(onHub ? `Added — showing on ${who.firstName}'s screen` : 'Added to Care photos', 'success');
@@ -171,6 +220,7 @@ const AddCarePhoto = window.AddCarePhoto = ({ hubRecipients, onAdded }) => {
     } catch { showToast("Couldn't add that photo", 'error'); }
     setBusy(false);
   };
+  const seg = (active) => ({ flex: 1, minHeight: 40, borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer', border: active ? '2px solid var(--role-color)' : '1px solid var(--border-color)', background: active ? 'var(--role-color-light, transparent)' : 'none', color: active ? 'var(--role-color)' : 'var(--text-secondary)' });
   return (
     <>
       <input ref={inputRef} type="file" accept="image/*" onChange={pick} style={{ display: 'none' }} data-testid="add-care-photo-input" />
@@ -181,16 +231,26 @@ const AddCarePhoto = window.AddCarePhoto = ({ hubRecipients, onAdded }) => {
         </button>
       ) : (
         <div data-testid="add-care-photo-panel" style={{ position: 'fixed', inset: 0, zIndex: 2100, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-          <div style={{ background: 'var(--bg-surface)', color: 'var(--text-primary)', borderRadius: 14, padding: 16, width: 'min(380px, 100%)', maxHeight: '90vh', overflowY: 'auto' }}>
+          <div style={{ background: 'var(--bg-surface)', color: 'var(--text-primary)', borderRadius: 14, padding: 16, width: 'min(380px, 100%)', maxHeight: '90vh', overflowY: 'auto', boxSizing: 'border-box' }}>
             <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 10 }}>Add a photo</div>
-            <img src={preview} alt="" style={{ width: '100%', maxHeight: '40vh', objectFit: 'contain', borderRadius: 10, background: 'var(--bg-primary)' }} />
+            {!unreadable && (
+              <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+                <button type="button" data-testid="photo-fit-fill" onClick={() => setFit('fill')} style={seg(fit === 'fill')}>Fit the screen</button>
+                <button type="button" data-testid="photo-fit-whole" onClick={() => setFit('whole')} style={seg(fit === 'whole')}>Whole photo</button>
+              </div>
+            )}
+            {fit === 'fill' && !unreadable
+              ? <PhotoCropFrame src={preview} onCrop={(c) => { crop.current = c; }} onUnreadable={() => setUnreadable(true)} />
+              : unreadable
+                ? <div style={{ fontSize: 13, color: 'var(--text-secondary)', padding: '10px 0' }}>This phone can't preview that photo, but it will still upload, sized for the screen.</div>
+                : <img src={preview} alt="" onError={() => setUnreadable(true)} style={{ width: '100%', maxHeight: '40vh', objectFit: 'contain', borderRadius: 10, background: '#000' }} />}
             {hubRecipients.length > 1 && (
               <select value={recipientId} onChange={(e) => setRecipientId(e.target.value)} className="form-input" style={{ marginTop: 10, width: '100%' }}>
                 {hubRecipients.map((r) => <option key={r.id} value={r.id}>{r.firstName}</option>)}
               </select>
             )}
             <input className="form-input" value={caption} maxLength={200} onChange={(e) => setCaption(e.target.value)}
-              placeholder="Say something (optional) — e.g. Sam's first day of school" style={{ marginTop: 10, width: '100%' }} />
+              placeholder="Say something (optional) — e.g. Sam's first day of school" style={{ marginTop: 10, width: '100%', boxSizing: 'border-box' }} />
             <label style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 12, fontSize: 15, minHeight: 44, cursor: 'pointer' }}>
               <input type="checkbox" checked={onHub} onChange={(e) => setOnHub(e.target.checked)} style={{ width: 22, height: 22 }} data-testid="add-care-photo-hub" />
               Show on {who ? who.firstName : 'their'}'s screen

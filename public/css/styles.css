@@ -3260,6 +3260,38 @@
   animation: exclusivePulse 1.2s ease-in-out infinite;
 }
 
+/* ===== v1.155.1 — InPlace Hub: a new message or note shimmers green ===== */
+/* Pete, 11/23: "can we get the shimmer treatment for new texts that show up?" It sweeps on
+   arrival and again every few seconds until she taps Got it / I read it, so a message that
+   came in while she was in the other room still catches her eye when she walks past. */
+@keyframes hubNewShimmer {
+  0%   { left: -100%; }
+  30%  { left: 100%; }
+  100% { left: 100%; }
+}
+.hub-new-shimmer { position: relative; overflow: hidden; }
+.hub-new-shimmer::after {
+  content: '';
+  position: absolute;
+  top: 0; bottom: 0;
+  width: 100%;
+  left: -100%;
+  background: linear-gradient(
+    105deg,
+    transparent 20%,
+    rgba(27, 107, 90, 0.14) 35%,
+    rgba(27, 107, 90, 0.28) 50%,
+    rgba(27, 107, 90, 0.14) 65%,
+    transparent 80%
+  );
+  animation: hubNewShimmer 6s ease-in-out 0.3s infinite;
+  pointer-events: none;
+  border-radius: inherit;
+}
+@media (prefers-reduced-motion: reduce) {
+  .hub-new-shimmer::after { animation: none; }
+}
+
 /* ===== Recent Activity notification shimmer — blue accent ===== */
 .activity-new-shimmer {
   position: relative;

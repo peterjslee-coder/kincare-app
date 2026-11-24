@@ -30,7 +30,9 @@ async function isCareTeamMember(db, careRecipientId, userId) {
 // Store uploads in memory (convert to base64 for DB storage)
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB max
+  // v1.155.1 — phones send 6–15 MB originals when the browser can't shrink them first; the
+  // server makes the stored copy (utils/photoShrink.js), so accept the original off the wire.
+  limits: { fileSize: require("../utils/photoShrink").PHOTO_UPLOAD_MAX },
   fileFilter: (req, file, cb) => {
     // v1.106.3 — this was `startsWith("image/")`, which accepts image/svg+xml. An SVG is a
     // script container, and the file comes back from our own origin, so that was stored XSS.
@@ -92,7 +94,9 @@ router.post(
       if (!magicCheck.valid) {
         return res.status(400).json({ error: `Photo ${i + 1}: file content doesn't match its claimed type` });
       }
-      const base64 = `data:${file.mimetype};base64,${file.buffer.toString("base64")}`;
+      const shrunk = await require("../utils/photoShrink").shrinkPhoto(file.buffer, file.mimetype);
+      if (!shrunk.ok) return res.status(400).json({ error: `Photo ${i + 1}: ${shrunk.error}` });
+      const base64 = `data:${shrunk.mime};base64,${shrunk.buffer.toString("base64")}`;
       const id = uuid();
       // v1.106.8 — to R2 when it is configured, unchanged base64 when it is not. The marker
       // and the data URI are both readable by every reader (storage.resolveFileData), so this
@@ -234,7 +238,9 @@ router.post(
       if (!magicCheck.valid) {
         return res.status(400).json({ error: `Photo ${i + 1}: file content doesn't match its claimed type` });
       }
-      const base64 = `data:${file.mimetype};base64,${file.buffer.toString("base64")}`;
+      const shrunk = await require("../utils/photoShrink").shrinkPhoto(file.buffer, file.mimetype);
+      if (!shrunk.ok) return res.status(400).json({ error: `Photo ${i + 1}: ${shrunk.error}` });
+      const base64 = `data:${shrunk.mime};base64,${shrunk.buffer.toString("base64")}`;
       const id = uuid();
       const stored = await storage.storeFileData("visit-photo", base64);
       await db.prepare(
@@ -366,7 +372,7 @@ router.delete("/:photoId", async (req, res) => {
 router.use((err, req, res, next) => {
   if (err instanceof multer.MulterError) {
     if (err.code === "LIMIT_FILE_SIZE") {
-      return res.status(400).json({ error: "File too large (max 5MB)" });
+      return res.status(400).json({ error: "That photo is over 25 MB. Try a screenshot of it instead." });
     }
     return res.status(400).json({ error: err.message });
   }

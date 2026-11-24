@@ -79,7 +79,7 @@ test("only the leader changes it, and bad hours are ignored", async () => {
   const ok = await h.request.put(`/api/care-recipients/${recipientId}/simple-mode`).set(h.auth(leader.token))
     .send({ on: true, callUserIds: [], hub: { on: true, dimFrom: "25:99", dimTo: "06:30", extra: "x" } });
   expect(ok.status).toBe(200);
-  expect(ok.body.hub).toEqual({ on: true, faces: true, week: true, photos: true, dimFrom: "21:00", dimTo: "06:30" });
+  expect(ok.body.hub).toEqual({ on: true, faces: true, week: true, photos: true, dimFrom: "21:00", dimTo: "06:30", callUserIds: [] });
 });
 
 test("a later Simple-screen save keeps the Hub settings", async () => {
@@ -127,4 +127,18 @@ test("week off: the Hub shows today and tomorrow; faces off: no faces", async ()
   const hub = d.body.simpleScreen.hub;
   expect(hub.days.every((x) => x.date <= soon(1))).toBe(true);
   expect(hub.people).toEqual([]);
+});
+
+test("v1.155.1: the Hub's own Call buttons, care team only, with a photo", async () => {
+  const put = await h.request.put(`/api/care-recipients/${recipientId}/simple-mode`).set(h.auth(leader.token))
+    .send({ on: true, callUserIds: [], hub: { on: true, callUserIds: [sister.user.id, tina.user.id] } });
+  expect(put.status).toBe(200);
+  expect(put.body.hub.callUserIds).toEqual([sister.user.id, tina.user.id]);
+  const d = await h.request.get("/api/dashboard").set(h.auth(mom.token));
+  const calls = d.body.simpleScreen.hub.calls;
+  // Tina is a caregiver, not on the care team: she is not offered as a Call button.
+  expect(calls.map((c) => c.firstName)).toEqual(["Sara"]);
+  expect(calls[0]).toHaveProperty("photo");
+  // The phone's own Call buttons are untouched.
+  expect(d.body.simpleScreen.callContacts).toEqual([]);
 });
