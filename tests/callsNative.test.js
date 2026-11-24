@@ -219,6 +219,8 @@ describe("the 1.2 store build cannot tell any of this exists", () => {
 
   test("the banner is hidden only when this phone really is ringing natively", () => {
     const messages = read("public/js/components/Messages.js");
-    expect(messages).toMatch(/data\.ringingNatively && window\.NativeCalls && window\.NativeCalls\.available\(\)/);
+    expect(messages).toMatch(/window\.NativeCalls\.ringsHere\(data\)\) return;/);
+    // ringsHere itself needs the server's flag AND the plugin; a 1.2 build has no plugin.
+    expect(read("public/js/nativeCalls.js")).toMatch(/if \(!d \|\| !d\.ringingNatively \|\| !available\(\)\) return false;/);
   });
 });

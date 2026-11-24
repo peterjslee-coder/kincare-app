@@ -1240,7 +1240,7 @@ const App = () => {
       // Start pulling the 624 KB video SDK now, while the phone is still ringing (v1.106.6).
       if (typeof warmVideoSdk === 'function') warmVideoSdk();
       // calls-native (1.3): the phone itself is ringing full-screen; no banner, no page jump.
-      if (data && data.ringingNatively && window.NativeCalls && window.NativeCalls.available()) return;
+      if (window.NativeCalls && window.NativeCalls.ringsHere && window.NativeCalls.ringsHere(data)) return;
       // If on Messages page, the Messages component handles the banner UI
       // But always fire browser notification if tab is hidden/unfocused
       // v1.105.49 — navigate FIRST. This used to come after `new Notification(...)`, which

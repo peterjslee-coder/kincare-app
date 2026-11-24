@@ -186,7 +186,7 @@ describe("the plugins the build actually installs", () => {
     expect(proj).toMatch(/MARKETING_VERSION = 1\.3;/);
     const gradle = require("fs").readFileSync(require("path").join(__dirname, "..", "android", "app", "build.gradle"), "utf8");
     // v1.134.0 — Android 1.2.1 (23): App Links, the 130% text-size cap.
-    expect(gradle).toMatch(/versionCode 24\b/); // 1.3 (24): native calls, kiosk, camera
+    expect(gradle).toMatch(/versionCode 25\b/); // 1.3 (25): native calls, kiosk, camera
   });
 });
 

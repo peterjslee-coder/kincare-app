@@ -205,6 +205,14 @@ const useSimpleCallHost = (enabled, { answers = true } = {}) => {
   const [ringStatus, setRingStatus] = useState(null);
   const activeRef = React.useRef(false);
   activeRef.current = callState.active;
+  // 1.3 — join a call already answered on the phone's own call screen.
+  const joinRef = React.useRef(() => {});
+  joinRef.current = (c) => {
+    if (!c || !c.roomName) return;
+    setIncoming(null);
+    setCallState({ active: true, roomName: c.roomName, callType: c.callType, remoteParticipantName: c.callerName, remoteParticipantPhoto: c.callerPhoto || null, callDirection: 'incoming', otherId: c.callerId });
+    if (window._socket) window._socket.emit('call_accept', { callerId: c.callerId, roomName: c.roomName });
+  };
 
   useEffect(() => {
     if (!enabled || typeof onSocketEvent !== 'function') return undefined;
@@ -215,16 +223,22 @@ const useSimpleCallHost = (enabled, { answers = true } = {}) => {
       if (!answers) return;
       try {
         const pc = window.__pendingCall;
+        // 1.3 — answered on the phone's own call screen (Android full-screen ring, CallKit):
+        // join at once; nobody should have to press Answer twice.
+        if (pc && pc.answeredNatively) { window.__pendingCall = null; joinRef.current(pc); return; }
         if (pc) { window.__pendingCall = null; if (!pc.at || Date.now() - pc.at < 30000) setIncoming((cur) => cur || pc); }
       } catch { /* nothing waiting */ }
     };
     pickUp();
     window.addEventListener('inplace:pending-call', pickUp); // v1.156.1 — a push tap while open
+    window.addEventListener('inplace:native-call-answered', pickUp); // 1.3
     const offs = [
       onSocketEvent('call_ring_status', (d) => setRingStatus(d?.via || null)),
       answers && onSocketEvent('call_incoming', (d) => {
         if (typeof warmVideoSdk === 'function') warmVideoSdk();
         if (activeRef.current) return;
+        // 1.3 — the phone itself is ringing (InPlace not on screen, or iOS): one way to answer.
+        if (window.NativeCalls && window.NativeCalls.ringsHere && window.NativeCalls.ringsHere(d)) return;
         setIncoming(d);
         setTimeout(() => setIncoming((p) => (p && p.roomName === d.roomName ? null : p)), 45000);
       }),
@@ -233,7 +247,7 @@ const useSimpleCallHost = (enabled, { answers = true } = {}) => {
       // v1.156.1 — answered on another of this person's devices: stop ringing here.
       onSocketEvent('call_answered_elsewhere', (d) => setIncoming((p) => (p && p.roomName === d?.roomName ? null : p))),
     ];
-    return () => { offs.forEach((o) => o && o()); window.removeEventListener('inplace:pending-call', pickUp); };
+    return () => { offs.forEach((o) => o && o()); window.removeEventListener('inplace:pending-call', pickUp); window.removeEventListener('inplace:native-call-answered', pickUp); };
   }, [enabled]);
 
   // Ring out loud while the card is up: a call is the one thing allowed to make a noise.

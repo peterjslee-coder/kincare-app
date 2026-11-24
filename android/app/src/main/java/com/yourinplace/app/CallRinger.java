@@ -109,6 +109,13 @@ public final class CallRinger {
             return;
         }
         if (calls.containsKey(call.roomName)) return; // the same ring twice
+        // InPlace is on screen: its own ring (the Hub's card, Messages' banner) is the one to
+        // answer. Ringing here too gave two Answer buttons (Pete, 11/24). The web app makes the
+        // same call (nativeCalls.js ringsHere: Android rings only when the app is hidden).
+        if (MainActivity.inFront) {
+            Log.i(TAG, "app on screen; it rings instead");
+            return;
+        }
         calls.put(call.roomName, call);
         ensureChannel(ctx);
         Context app = ctx.getApplicationContext();
