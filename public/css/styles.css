@@ -3291,6 +3291,8 @@
 @media (prefers-reduced-motion: reduce) {
   .hub-new-shimmer::after { animation: none; }
 }
+/* v1.155.5 — the Hub's 10-second weather card counts down to closing */
+@keyframes hubWeatherBar { from { width: 100%; } to { width: 0%; } }
 
 /* ===== Recent Activity notification shimmer — blue accent ===== */
 .activity-new-shimmer {

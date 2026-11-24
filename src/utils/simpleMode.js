@@ -344,6 +344,9 @@ async function hubScreenFor(db, recipient, linkedUserId, todayStr, hubCfg) {
     out.calls = hubCfg.callUserIds.map((id) => byId.get(id)).filter(Boolean)
       .map((c) => ({ userId: c.userId, firstName: c.firstName, photo: c.photo }));
   }
+  // v1.155.5 — the weather at the care location (her coordinates, her time zone), from a cache;
+  // null until the first fetch lands or when the address has no coordinates.
+  try { out.weather = require("./weather").weatherFor(recipient); } catch { out.weather = null; }
   // v1.155.0 — photos the team flagged for her screen (utils/hubPhotos.js), newest first.
   if (out.showPhotos) {
     const { hubPhotosFor } = require("./hubPhotos");
