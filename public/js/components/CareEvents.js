@@ -13,6 +13,9 @@ const CARE_EVENT_CATEGORIES = [
   { id: 'transport', label: 'Transport', icon: '🚗' },
   { id: 'other',     label: 'Other',     icon: '📅' },
 ];
+// v1.155.7 — every week, every year, or a holiday (which repeats every year on its own day).
+const repeatsLabel = (ev) => (!ev || !ev.series_id || !ev.repeat_rule) ? ''
+  : ev.repeat_rule === 'weekly' ? 'every week' : 'every year';
 const careEventIcon = (cat) => (CARE_EVENT_CATEGORIES.find(c => c.id === cat) || CARE_EVENT_CATEGORIES[3]).icon;
 
 const careEventWhen = (ev, tz) => {
@@ -458,9 +461,10 @@ const CareEventSheet = window.CareEventSheet = ({ ev, canManage, onClose, onEdit
     addingRef.current = false;
   };
 
-  // v1.130.2 — a weekly series asks which: this week, or this and every later week.
+  // v1.130.2 — a series asks which: this one, or this and every later one.
   const [askRemove, setAskRemove] = useState(false);
-  const isSeries = !!(ev.series_id && ev.repeat_rule === 'weekly');
+  const isSeries = !!repeatsLabel(ev);
+  const unit = ev.repeat_rule === 'weekly' ? 'week' : 'year';
   const remove = async (scope) => {
     if (deleting) return;
     if (isSeries && !scope) { setAskRemove(true); return; }
@@ -487,7 +491,7 @@ const CareEventSheet = window.CareEventSheet = ({ ev, canManage, onClose, onEdit
         </div>
         <div style={{ fontSize: 14, color: 'var(--text-secondary)', marginTop: 4 }}>
           {careEventWhen(ev)}{ev.recipientFirstName ? ` · for ${ev.recipientFirstName}` : ''}
-          {ev.series_id && ev.repeat_rule === 'weekly' ? ' · 🔁 every week' : ''}
+          {repeatsLabel(ev) ? ` · 🔁 ${repeatsLabel(ev)}` : ''}
         </div>
         {/* v1.106.30 — the address opens the map. openExternalUrl, not <a target="_blank">:
             WKWebView drops window.open after an await and Capacitor installs no download
@@ -772,8 +776,8 @@ const CareEventSheet = window.CareEventSheet = ({ ev, canManage, onClose, onEdit
           )}
           {canManage && askRemove && (
             <div style={{ display: 'flex', gap: 8 }}>
-              <button disabled={deleting} onClick={() => remove('one')} style={{ ...btn, flex: 1 }}>Just this week</button>
-              <button disabled={deleting} onClick={() => remove('following')} style={{ ...btn, flex: 1, color: 'var(--color-error)' }}>This and later weeks</button>
+              <button disabled={deleting} onClick={() => remove('one')} style={{ ...btn, flex: 1 }}>Just this {unit}</button>
+              <button disabled={deleting} onClick={() => remove('following')} style={{ ...btn, flex: 1, color: 'var(--color-error)' }}>This and later {unit}s</button>
             </div>
           )}
         </div>
@@ -809,8 +813,8 @@ const CareEventFormModal = window.CareEventFormModal = ({ recipientId, recipient
   const [details, setDetails] = useState(ex.details || '');
   const [saving, setSaving] = useState(false);
   // v1.130.2 — Pete: "make events repeating...like church being every sunday."
-  const inSeries = !!(existing && ex.series_id && ex.repeat_rule === 'weekly');
-  const [repeat, setRepeat] = useState(inSeries ? 'weekly' : 'once');
+  const inSeries = !!(existing && repeatsLabel(ex));
+  const [repeat, setRepeat] = useState(inSeries ? (ex.repeat_rule === 'weekly' ? 'weekly' : 'yearly') : 'once');
   const [askScope, setAskScope] = useState(false);
   // v1.106.30 — who else is going. Pete: "today I am going to the Dr. Lambert appointment,
   // but Tina is also going. So I would like to be able to tag her so that she gets updates
@@ -871,7 +875,7 @@ const CareEventFormModal = window.CareEventFormModal = ({ recipientId, recipient
       event_date: date, event_time: allDay ? null : time, end_time: allDay ? null : (endTime || null),
       location: location.trim() || null, details: details.trim() || null,
       attendee_user_ids: [...tagged],
-      ...(repeat === 'weekly' && !inSeries ? { repeat: 'weekly' } : {}),
+      ...((repeat === 'weekly' || repeat === 'yearly') && !inSeries ? { repeat } : {}),
       ...(scope === 'following' ? { scope: 'following' } : {}),
     };
     setSaving(true);
@@ -944,12 +948,16 @@ const CareEventFormModal = window.CareEventFormModal = ({ recipientId, recipient
 
         <div style={label}>Repeats</div>
         {inSeries ? (
-          <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>🔁 Every week. When you save, you choose this week only or this and later weeks.</div>
+          <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>🔁 {repeat === 'weekly' ? 'Every week' : 'Every year'}. When you save, you choose this one only or this and later ones.</div>
         ) : (
-          <div style={{ display: 'flex', gap: 6 }}>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
             <button style={chip(repeat === 'once')} onClick={() => setRepeat('once')}>Just once</button>
             <button style={chip(repeat === 'weekly')} onClick={() => setRepeat('weekly')}>
               🔁 Every week{date ? ` on ${new Date(date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long' })}` : ''}
+            </button>
+            {/* v1.155.7 — birthdays, anniversaries: "repeating on days that we chose and labels as we typed" */}
+            <button data-testid="repeat-yearly" style={chip(repeat === 'yearly')} onClick={() => setRepeat('yearly')}>
+              🎂 Every year{date ? ` on ${new Date(date + 'T12:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}` : ''}
             </button>
           </div>
         )}
@@ -1011,10 +1019,10 @@ const CareEventFormModal = window.CareEventFormModal = ({ recipientId, recipient
 
         {askScope && (
           <div style={{ marginTop: 16, padding: 12, borderRadius: 12, background: 'var(--bg-surface)', border: '1px solid var(--border-color)' }}>
-            <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8 }}>This repeats every week. Change…</div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8 }}>This repeats {repeat === 'weekly' ? 'every week' : 'every year'}. Change…</div>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              <button disabled={saving} onClick={() => save('one')} style={chip(false)}>Just this week</button>
-              <button disabled={saving} onClick={() => save('following')} style={chip(true)}>This and later weeks</button>
+              <button disabled={saving} onClick={() => save('one')} style={chip(false)}>Just this {repeat === 'weekly' ? 'week' : 'year'}</button>
+              <button disabled={saving} onClick={() => save('following')} style={chip(true)}>This and later {repeat === 'weekly' ? 'weeks' : 'years'}</button>
             </div>
           </div>
         )}
@@ -1040,6 +1048,8 @@ const CareEventsSection = window.CareEventsSection = ({ recipientId, recipientFi
   const [editing, setEditing] = useState(null);
   const [sheet, setSheet] = useState(null);
   const [showPast, setShowPast] = useState(false); // v1.140.0 — Coming up | Past
+  const [addingHolidays, setAddingHolidays] = useState(false); // v1.155.7
+  const { showToast } = useToast();
 
   const load = async () => {
     try {
@@ -1059,6 +1069,19 @@ const CareEventsSection = window.CareEventsSection = ({ recipientId, recipientFi
       {'\u{1F4DD}'} {Number(ev.notes_count) === 1 ? `Notes from ${ev.notes_first_author || 'the team'}` : `${ev.notes_count} notes`} {'\u00b7'} in the care record {'\u203A'}
     </div>
   ) : null);
+  // v1.155.7 — Pete: "import major holiday lists like Christmas and Thanksgiving...Add emojis."
+  const hasHolidays = events.some((ev) => String(ev.repeat_rule || '').startsWith('holiday:'));
+  const addHolidays = async () => {
+    if (addingHolidays) return;
+    setAddingHolidays(true);
+    try {
+      const r = await apiFetch('/api/care-events/holidays', { method: 'POST', body: JSON.stringify({ care_recipient_id: recipientId }) });
+      const d = r ? await r.json().catch(() => ({})) : {};
+      if (r && r.ok) { showToast(d.added ? `Added ${d.added} holidays, every year` : 'The holidays are already on the calendar', 'success'); load(); }
+      else showToast(d.error || "Couldn't add the holidays", 'error');
+    } catch { showToast("Couldn't add the holidays", 'error'); }
+    setAddingHolidays(false);
+  };
   const tabBtn = (on) => ({ padding: '7px 14px', minHeight: 36, borderRadius: 18, fontSize: 13, fontWeight: on ? 700 : 500, cursor: 'pointer',
     border: on ? 'none' : '1px solid var(--border-color)', background: on ? 'var(--role-color)' : 'var(--bg-surface)', color: on ? 'var(--text-on-primary)' : 'var(--text-primary)' });
 
@@ -1120,6 +1143,12 @@ const CareEventsSection = window.CareEventsSection = ({ recipientId, recipientFi
             </div>
           ))}
         </>
+      )}
+      {canManage && !hasHolidays && (
+        <button type="button" data-testid="add-holidays" onClick={addHolidays} disabled={addingHolidays}
+          style={{ marginTop: 10, width: '100%', minHeight: 40, borderRadius: 10, border: '1px dashed var(--border-color)', background: 'none', color: 'var(--text-secondary)', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+          {addingHolidays ? 'Adding…' : '\u{1F384} Add the holidays (Christmas, Thanksgiving, Mother\'s Day…)'}
+        </button>
       )}
       </div>
       {showForm && (

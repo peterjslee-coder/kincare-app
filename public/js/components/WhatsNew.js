@@ -508,6 +508,20 @@ const WN_PREVIEWS = {
       </div>
     </div>
   ),
+  // v1.155.7 — every year, and the holidays
+  yearlyEvents: () => (
+    <div style={{ ...wnCard, padding: 10 }}>
+      <div style={{ fontSize: 10, fontWeight: 800, color: 'var(--text-secondary)', marginBottom: 4 }}>REPEATS</div>
+      <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginBottom: 8 }}>
+        <span style={{ fontSize: 10.5, border: '1px solid var(--border-color)', borderRadius: 12, padding: '2px 8px', color: 'var(--text-secondary)' }}>Just once</span>
+        <span style={{ fontSize: 10.5, border: '1px solid var(--border-color)', borderRadius: 12, padding: '2px 8px', color: 'var(--text-secondary)' }}>{'\u{1F501}'} Every week</span>
+        <span style={{ fontSize: 10.5, background: 'var(--role-color)', color: 'var(--text-on-primary)', borderRadius: 12, padding: '2px 8px', fontWeight: 700 }}>{'\u{1F382}'} Every year on March 14</span>
+      </div>
+      <div style={{ fontSize: 11.5, color: 'var(--text-primary)', lineHeight: 1.6 }}>
+        {'\u{1F382}'} Sam's birthday {'\u00b7'} Mar 14<br />{'\u{1F983}'} Thanksgiving {'\u00b7'} Nov 26<br />{'\u{1F384}'} Christmas {'\u00b7'} Dec 25
+      </div>
+    </div>
+  ),
   // v1.155.5 — the sky background and the weather button under the clock
   hubWeather: () => (
     <div style={{ background: '#1d1b19', borderRadius: 12, padding: 6 }}>

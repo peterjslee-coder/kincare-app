@@ -31,6 +31,21 @@ const WINDOW_DAYS = 45;
 
 const ENTRIES = [
   {
+    id: "yearly-and-holidays",
+    version: "1.155.7",
+    date: "2026-11-24",
+    audience: ["family"],
+    title: "Birthdays, anniversaries and holidays",
+    body: "Any event can now repeat every year, with whatever name you give it. One tap adds the major holidays, each with its own emoji, and they show on your loved one's screen as the day comes.",
+    howTo: [
+      "Add an event, name it, and pick \"Every year\" under Repeats",
+      "On the Events card, tap \"Add the holidays\"",
+      "To stop one, open it and remove this and later years",
+    ],
+    examples: ["Sam's birthday, every year on March 14", "\u{1F983} Thanksgiving, \u{1F384} Christmas"],
+    preview: "yearlyEvents",
+  },
+  {
     id: "hub-next-caregiver",
     version: "1.155.6",
     date: "2026-11-23",
