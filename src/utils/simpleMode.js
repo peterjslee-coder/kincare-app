@@ -75,10 +75,14 @@ const MAX_HUB_CALLS = 2;
 const ARRIVING_LEAD_MIN = 15; // v1.155.2 — "Tina will be here soon" from 15 minutes before...
 const ARRIVING_LATE_MIN = 60; // ...until she checks in, or an hour past the start
 function cleanHub(raw) {
-  const out = { ...HUB_DEFAULTS, callUserIds: [] };
+  const out = { ...HUB_DEFAULTS, callUserIds: [], photoAspect: null };
   if (raw && typeof raw === "object") {
     for (const k of ["on", "faces", "week", "photos"]) if (typeof raw[k] === "boolean") out[k] = raw[k];
     for (const k of ["dimFrom", "dimTo"]) if (typeof raw[k] === "string" && HHMM.test(raw[k])) out[k] = raw[k];
+    // v1.155.3 — the shape of the photo space as the tablet last measured it (width / height),
+    // so Add photo can frame a photo to exactly that shape. Null until the Hub has drawn one.
+    const pa = Number(raw.photoAspect);
+    if (Number.isFinite(pa) && pa >= 0.4 && pa <= 3) out.photoAspect = Math.round(pa * 1000) / 1000;
     if (Array.isArray(raw.callUserIds)) {
       out.callUserIds = [...new Set(raw.callUserIds.filter((x) => typeof x === "string" && x.length <= 64))].slice(0, MAX_HUB_CALLS);
     }
@@ -262,7 +266,7 @@ function relationLabel(label) {
 }
 
 async function hubScreenFor(db, recipient, linkedUserId, todayStr, hubCfg) {
-  const out = { on: true, faces: hubCfg.faces, week: hubCfg.week, showPhotos: hubCfg.photos !== false, photos: [], dimFrom: hubCfg.dimFrom, dimTo: hubCfg.dimTo, today: todayStr, here: null, days: [], people: [] };
+  const out = { on: true, faces: hubCfg.faces, week: hubCfg.week, showPhotos: hubCfg.photos !== false, photos: [], photoAspect: hubCfg.photoAspect || null, dimFrom: hubCfg.dimFrom, dimTo: hubCfg.dimTo, today: todayStr, here: null, days: [], people: [] };
 
   // Who is here right now: a visit in progress today.
   const here = await db.prepare(`

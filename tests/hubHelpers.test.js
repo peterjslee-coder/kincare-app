@@ -2,9 +2,9 @@
 const { cleanHub, addHours, weekdayLabel, nextVisitLabel, relationLabel, parseSimpleMode } = require("../src/utils/simpleMode");
 
 test("cleanHub keeps known booleans and valid HH:MM only", () => {
-  expect(cleanHub(null)).toEqual({ on: false, faces: true, week: true, photos: true, dimFrom: "21:00", dimTo: "07:00", callUserIds: [] });
+  expect(cleanHub(null)).toEqual({ on: false, faces: true, week: true, photos: true, dimFrom: "21:00", dimTo: "07:00", callUserIds: [], photoAspect: null });
   expect(cleanHub({ on: true, faces: "yes", dimFrom: "9pm", dimTo: "06:15", x: 1 }))
-    .toEqual({ on: true, faces: true, week: true, photos: true, dimFrom: "21:00", dimTo: "06:15", callUserIds: [] });
+    .toEqual({ on: true, faces: true, week: true, photos: true, dimFrom: "21:00", dimTo: "06:15", callUserIds: [], photoAspect: null });
 });
 
 test("a record saved before the Hub existed reads as Hub off", () => {

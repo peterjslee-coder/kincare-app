@@ -79,7 +79,7 @@ test("only the leader changes it, and bad hours are ignored", async () => {
   const ok = await h.request.put(`/api/care-recipients/${recipientId}/simple-mode`).set(h.auth(leader.token))
     .send({ on: true, callUserIds: [], hub: { on: true, dimFrom: "25:99", dimTo: "06:30", extra: "x" } });
   expect(ok.status).toBe(200);
-  expect(ok.body.hub).toEqual({ on: true, faces: true, week: true, photos: true, dimFrom: "21:00", dimTo: "06:30", callUserIds: [] });
+  expect(ok.body.hub).toEqual({ on: true, faces: true, week: true, photos: true, dimFrom: "21:00", dimTo: "06:30", callUserIds: [], photoAspect: null });
 });
 
 test("a later Simple-screen save keeps the Hub settings", async () => {
@@ -167,4 +167,21 @@ test("v1.155.2: 'Faith will be here soon' from 15 minutes before until she check
   hub = (await h.request.get("/api/dashboard").set(h.auth(mom.token))).body.simpleScreen.hub;
   expect(hub.arriving).toBeNull();
   await db.prepare("DELETE FROM care_sessions WHERE id IN (?, ?)").run(later, soonId);
+});
+
+test("v1.155.3: the tablet reports its photo space's shape; only her own account may", async () => {
+  const no = await h.request.post(`/api/care-recipients/${recipientId}/simple-screen/hub-shape`).set(h.auth(leader.token)).send({ photoAspect: 0.86 });
+  expect([403, 404]).toContain(no.status);
+  const bad = await h.request.post(`/api/care-recipients/${recipientId}/simple-screen/hub-shape`).set(h.auth(mom.token)).send({ photoAspect: 9 });
+  expect(bad.status).toBe(400);
+  const ok = await h.request.post(`/api/care-recipients/${recipientId}/simple-screen/hub-shape`).set(h.auth(mom.token)).send({ photoAspect: 0.8612 });
+  expect(ok.status).toBe(200);
+  const g = await h.request.get(`/api/care-recipients/${recipientId}/simple-mode`).set(h.auth(leader.token));
+  expect(g.body.hub.photoAspect).toBe(0.861);
+  const d = await h.request.get("/api/dashboard").set(h.auth(leader.token));
+  expect(d.body.hubRecipients.find((r) => r.id === recipientId).photoAspect).toBe(0.861);
+  // a later settings change by the leader keeps it
+  await h.request.put(`/api/care-recipients/${recipientId}/simple-mode`).set(h.auth(leader.token)).send({ on: true, callUserIds: [], hub: { faces: false } });
+  const g2 = await h.request.get(`/api/care-recipients/${recipientId}/simple-mode`).set(h.auth(leader.token));
+  expect(g2.body.hub.photoAspect).toBe(0.861);
 });

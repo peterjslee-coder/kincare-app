@@ -856,6 +856,31 @@ async function asTheLinkedPerson(db, req) {
 }
 
 // The screen was opened (or brought back to the front). Marks the note on it as seen.
+// v1.155.3 — Pete: "I liked the old half-screen view" for photos, and the crop has to match
+// what the screen shows. The photo space's shape depends on the tablet and on which Hub pieces
+// are on, so the Hub measures it and reports it here; Add photo frames to that shape.
+router.post("/:id/simple-screen/hub-shape", async (req, res) => {
+  try {
+    const db = await getDb();
+    const { cr, ok } = await asTheLinkedPerson(db, req);
+    if (!cr) return res.status(404).json({ error: "Not found" });
+    if (!ok) return res.status(403).json({ error: "Not allowed" });
+    if (req.user.impersonatedBy) return res.json({ recorded: false });
+    const sm = require("../utils/simpleMode");
+    const aspect = Number(req.body && req.body.photoAspect);
+    if (!Number.isFinite(aspect) || aspect < 0.4 || aspect > 3) return res.status(400).json({ error: "Bad shape" });
+    const row = await db.prepare("SELECT simple_mode FROM care_recipients WHERE id = ?").get(cr.id);
+    let raw = {};
+    try { raw = row && row.simple_mode ? JSON.parse(row.simple_mode) : {}; } catch { raw = {}; }
+    const hub = sm.cleanHub({ ...(raw.hub || {}), photoAspect: aspect });
+    await db.prepare("UPDATE care_recipients SET simple_mode = ? WHERE id = ?").run(JSON.stringify({ ...raw, hub }), cr.id);
+    res.json({ recorded: true, photoAspect: hub.photoAspect });
+  } catch (err) {
+    captureException(err, { where: "careRecipients: hub-shape" });
+    res.status(500).json({ error: "Couldn't record that" });
+  }
+});
+
 router.post("/:id/simple-screen/opened", async (req, res) => {
   try {
     const db = await getDb();
