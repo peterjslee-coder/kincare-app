@@ -75,9 +75,14 @@ const MAX_HUB_CALLS = 2;
 const ARRIVING_LEAD_MIN = 15; // v1.155.2 — "Tina will be here soon" from 15 minutes before...
 const ARRIVING_LATE_MIN = 60; // ...until she checks in, or an hour past the start
 function cleanHub(raw) {
-  const out = { ...HUB_DEFAULTS, callUserIds: [], photoAspect: null };
+  const out = { ...HUB_DEFAULTS, callUserIds: [], photoAspect: null, dropInUserIds: [], noticeAwake: false };
   if (raw && typeof raw === "object") {
-    for (const k of ["on", "faces", "week", "photos"]) if (typeof raw[k] === "boolean") out[k] = raw[k];
+    for (const k of ["on", "faces", "week", "photos", "noticeAwake"]) if (typeof raw[k] === "boolean") out[k] = raw[k];
+    // v1.156.0 — who the leader chose for drop-in (utils/dropIn.js re-checks each one, and
+    // the signed consent, every time; being listed here alone allows nothing).
+    if (Array.isArray(raw.dropInUserIds)) {
+      out.dropInUserIds = [...new Set(raw.dropInUserIds.filter((x) => typeof x === "string" && x.length <= 64))].slice(0, 12);
+    }
     for (const k of ["dimFrom", "dimTo"]) if (typeof raw[k] === "string" && HHMM.test(raw[k])) out[k] = raw[k];
     // v1.155.3 — the shape of the photo space as the tablet last measured it (width / height),
     // so Add photo can frame a photo to exactly that shape. Null until the Hub has drawn one.
@@ -370,6 +375,13 @@ async function hubScreenFor(db, recipient, linkedUserId, todayStr, hubCfg) {
     out.calls = hubCfg.callUserIds.map((id) => byId.get(id)).filter(Boolean)
       .map((c) => ({ userId: c.userId, firstName: c.firstName, photo: c.photo }));
   }
+  // v1.156.0 — awake noticing: whether this Hub should watch and listen (consent signed and the
+  // leader turned it on), and once each morning last night goes into her care notes.
+  try {
+    const { mayNotice } = require("./dropIn");
+    out.noticeAwake = await mayNotice(db, recipient.id);
+    if (out.noticeAwake) await require("./awake").recordNightNote(db, recipient, linkedUserId);
+  } catch (e) { out.noticeAwake = false; try { require("./sentry").captureException(e, { where: "simpleMode: awake" }); } catch { /* best effort */ } }
   // v1.155.5 — the weather at the care location (her coordinates, her time zone), from a cache;
   // null until the first fetch lands or when the address has no coordinates.
   try { out.weather = require("./weather").weatherFor(recipient); } catch { out.weather = null; }

@@ -31,6 +31,22 @@ const WINDOW_DAYS = 45;
 
 const ENTRIES = [
   {
+    id: "hub-dropin-consent",
+    version: "1.156.0",
+    date: "2026-11-24",
+    audience: ["family"],
+    title: "Getting the Hub ready for drop-in and night notes",
+    body: "Your loved one, or the agent under their power of attorney, can now sign a consent for drop-in and for the Hub to notice when they're up. The leader picks who may drop in, and last night's times go into the care notes each morning, with no pictures or sound kept.",
+    howTo: [
+      "Care Team, then Accessibility Options, then InPlace Hub",
+      "Under Drop-in, read the wording; the person or their agent signs",
+      "Pick who may drop in, and turn on noticing when they're up",
+      "The tablet starts once the next InPlace app update arrives",
+    ],
+    examples: ["Jane was up last night from about 2:04 to 5:10 AM", "Sam may drop in"],
+    preview: "hubConsent",
+  },
+  {
     id: "yearly-and-holidays",
     version: "1.155.7",
     date: "2026-11-24",

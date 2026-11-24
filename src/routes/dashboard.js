@@ -980,6 +980,23 @@ async function caregiverDashboard(db, userId, res) {
       reviewerName: r.reviewer_name,
       createdAt: r.created_at,
     })),
+    // v1.156.0 — Pete: "if she was awake from 2 to 5 AM...Tina should know that when she checks
+    // in." For each person this caregiver sees today, last night from the Hub (utils/awake.js),
+    // only where the consent is signed and noticing is on. { [careRecipientId]: sentence }
+    nightNotes: await (async () => {
+      const out = {};
+      try {
+        const { getTodayStringInZone: today } = require("../utils/timezone");
+        const ids = [...new Set(upcoming.filter((s) => (s.status === "confirmed" || s.status === "in_progress")
+          && s.scheduled_date === today(s.care_timezone || "America/New_York")).map((s) => s.care_recipient_id))];
+        for (const id of ids) {
+          const cr = await db.prepare("SELECT id, first_name, timezone, simple_mode FROM care_recipients WHERE id = ?").get(id);
+          const line = cr ? await require("../utils/awake").nightSummary(db, cr) : null;
+          if (line) out[id] = line;
+        }
+      } catch (e) { require("../utils/sentry").captureException(e, { where: "dashboard: nightNotes" }); }
+      return out;
+    })(),
     // v1.105.121 — do we know where she is? NULL coordinates are the state that makes a
     // caregiver unbookable (assignments.js only offers people with a point within 25 miles), and
     // until now it was also completely invisible to her: she saw every job on the platform while
