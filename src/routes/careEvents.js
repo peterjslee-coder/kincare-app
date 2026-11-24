@@ -666,10 +666,11 @@ router.post("/", async (req, res) => {
         JSON.stringify({ eventId: id }));
     } catch (feedErr) { /* non-critical */ }
 
-    // v1.130.2 — every week: this row starts the series.
-    const weekly = req.body.repeat === "weekly";
+    // v1.130.2 — every week: this row starts the series. v1.155.7 — or every year.
+    const repeats = require("../utils/eventRepeats");
+    const weekly = repeats.REPEAT_CHOICES.includes(req.body.repeat);
     if (weekly) {
-      await db.prepare("UPDATE care_events SET series_id = ?, repeat_rule = 'weekly' WHERE id = ?").run(id, id);
+      await db.prepare("UPDATE care_events SET series_id = ?, repeat_rule = ? WHERE id = ?").run(id, req.body.repeat, id);
     }
 
     const ev = await db.prepare("SELECT * FROM care_events WHERE id = ?").get(id);
@@ -706,16 +707,23 @@ router.post("/", async (req, res) => {
 const SERIES_AHEAD_DAYS = 84; // 12 weeks
 
 async function extendSeries(db, seriesId, todayStr) {
+  // v1.155.7 — any repeat rule: weekly keeps 12 weeks filled; yearly and holidays keep the next
+  // one (a birthday two years out is noise in Coming up). utils/eventRepeats.js has the dates.
+  const repeats = require("../utils/eventRepeats");
   const last = await db.prepare(`
-    SELECT * FROM care_events WHERE series_id = ? AND repeat_rule = 'weekly' AND is_active = 1
+    SELECT * FROM care_events WHERE series_id = ? AND repeat_rule IS NOT NULL AND is_active = 1
     ORDER BY event_date DESC LIMIT 1
   `).get(seriesId);
-  if (!last) return 0;
+  if (!last || !repeats.isRepeatRule(last.repeat_rule)) return 0;
+  const rule = last.repeat_rule;
   const horizon = addDaysToDateString(todayStr, SERIES_AHEAD_DAYS);
   const attendees = await db.prepare("SELECT user_id, added_by FROM care_event_attendees WHERE care_event_id = ?").all(last.id);
-  let date = addDaysToDateString(last.event_date, 7);
+  let lastDate = last.event_date;
   let added = 0;
-  while (date <= horizon && added < 60) {
+  while (!repeats.isFilled(rule, lastDate, todayStr) && added < 60) {
+    const date = repeats.nextDate(rule, lastDate);
+    if (!date || date <= lastDate) break;
+    if (rule === "weekly" && date > horizon) break; // weekly: up to 12 weeks out, as before
     const exists = await db.prepare("SELECT id FROM care_events WHERE series_id = ? AND event_date = ?").get(seriesId, date);
     if (!exists) {
       const id = uuid();
@@ -723,9 +731,9 @@ async function extendSeries(db, seriesId, todayStr) {
       await db.prepare(`
         INSERT INTO care_events (id, care_recipient_id, created_by, title, category,
           event_date, event_time, end_time, tz, starts_at, location, details, source, source_meta, series_id, repeat_rule)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'weekly')
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(id, last.care_recipient_id, last.created_by, last.title, last.category, date, last.event_time,
-        last.end_time, last.tz, startsAt.toISOString(), last.location, last.details, last.source || "manual", null, seriesId);
+        last.end_time, last.tz, startsAt.toISOString(), last.location, last.details, last.source || "manual", last.source_meta || null, seriesId, rule);
       for (const a of attendees) {
         await db.prepare(`
           INSERT INTO care_event_attendees (id, care_event_id, user_id, added_by) VALUES (?, ?, ?, ?)
@@ -734,20 +742,59 @@ async function extendSeries(db, seriesId, todayStr) {
       }
       added++;
     }
-    date = addDaysToDateString(date, 7);
+    lastDate = date;
   }
   return added;
 }
 
 async function extendAllSeries(db) {
   const series = await db.prepare(
-    "SELECT DISTINCT e.series_id, cr.timezone FROM care_events e JOIN care_recipients cr ON cr.id = e.care_recipient_id WHERE e.repeat_rule = 'weekly' AND e.is_active = 1 AND e.series_id IS NOT NULL"
+    "SELECT DISTINCT e.series_id, cr.timezone FROM care_events e JOIN care_recipients cr ON cr.id = e.care_recipient_id WHERE e.repeat_rule IS NOT NULL AND e.is_active = 1 AND e.series_id IS NOT NULL"
   ).all();
   for (const s of series) {
     try { await extendSeries(db, s.series_id, getTodayStringInZone(s.timezone || DEFAULT_TZ)); }
     catch (e) { captureException(e, { where: "careEvents: extendSeries", seriesId: s.series_id }); }
   }
 }
+
+// ─── POST /api/care-events/holidays ─── v1.155.7
+// Pete: "import major holiday lists like Christmas and Thanksgiving" / "yes to all those
+// holidays. Add emojis." Adds each holiday from utils/eventRepeats.js HOLIDAYS as an all-day
+// yearly series. Running it again adds only the ones that aren't there (or were removed).
+router.post("/holidays", async (req, res) => {
+  try {
+    const db = await getDb();
+    const recipientId = String((req.body && req.body.care_recipient_id) || "");
+    const access = await hasAccess(db, recipientId, req.user.id);
+    if (!canScheduleEvents(access)) return res.status(403).json({ error: "You don't have permission to add events for this person" });
+    const cr = await db.prepare("SELECT timezone FROM care_recipients WHERE id = ?").get(recipientId);
+    if (!cr) return res.status(404).json({ error: "Not found" });
+    const tz = cr.timezone || DEFAULT_TZ;
+    const todayStr = getTodayStringInZone(tz);
+    const { HOLIDAYS, nextHolidayDate } = require("../utils/eventRepeats");
+    const existing = new Set((await db.prepare(
+      "SELECT DISTINCT repeat_rule FROM care_events WHERE care_recipient_id = ? AND is_active = 1 AND repeat_rule LIKE 'holiday:%'"
+    ).all(recipientId)).map((r) => r.repeat_rule));
+    const added = [];
+    for (const h of HOLIDAYS) {
+      const rule = `holiday:${h.key}`;
+      if (existing.has(rule)) continue;
+      const date = nextHolidayDate(h.key, todayStr);
+      const id = uuid();
+      const startsAt = eventStartInstant({ event_date: date, event_time: null, tz });
+      await db.prepare(`
+        INSERT INTO care_events (id, care_recipient_id, created_by, title, category,
+          event_date, event_time, end_time, tz, starts_at, location, details, source, source_meta, series_id, repeat_rule)
+        VALUES (?, ?, ?, ?, 'social', ?, NULL, NULL, ?, ?, NULL, NULL, 'holidays', ?, ?, ?)
+      `).run(id, recipientId, req.user.id, h.title, date, tz, startsAt.toISOString(), JSON.stringify({ holiday: h.key }), id, rule);
+      added.push({ title: h.title, date });
+    }
+    res.status(201).json({ added: added.length, holidays: added });
+  } catch (err) {
+    captureException(err, { where: "careEvents: holidays" });
+    res.status(500).json({ error: "Could not add the holidays" });
+  }
+});
 
 // ─── PUT /api/care-events/:id ─── edit
 router.put("/:id", async (req, res) => {
@@ -803,8 +850,8 @@ router.put("/:id", async (req, res) => {
       }
     }
     // Turning repeat ON for a one-off makes it the start of a series.
-    if (req.body.repeat === "weekly" && !ev.series_id) {
-      await db.prepare("UPDATE care_events SET series_id = ?, repeat_rule = 'weekly' WHERE id = ?").run(ev.id, ev.id);
+    if (require("../utils/eventRepeats").REPEAT_CHOICES.includes(req.body.repeat) && !ev.series_id) {
+      await db.prepare("UPDATE care_events SET series_id = ?, repeat_rule = ? WHERE id = ?").run(ev.id, req.body.repeat, ev.id);
       await extendSeries(db, ev.id, getTodayStringInZone(tz));
     }
     const updated = await db.prepare("SELECT * FROM care_events WHERE id = ?").get(ev.id);

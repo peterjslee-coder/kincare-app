@@ -88,3 +88,44 @@ test("Just once is still just once", async () => {
   expect(r.status).toBe(201);
   expect(r.body.event.series_id).toBeNull();
 });
+
+// ─── v1.155.7 — every year, and the holidays ───
+// Pete: "repeating on days that we chose and labels as we typed...anniversaries or birthdays
+// or we could import major holiday lists like Christmas and Thanksgiving" / "Add emojis."
+
+test("Every year keeps the next one filled — today's birthday rolls to next year once it has passed", async () => {
+  const past = etDate(-10);
+  const r = await h.request.post("/api/care-events").set(h.auth(family.token)).send({
+    care_recipient_id: recipientId, title: "Caden's birthday", category: "social", event_date: past, repeat: "yearly",
+  });
+  expect(r.status).toBe(201);
+  const sid = r.body.event.series_id;
+  const all = await db.prepare("SELECT event_date, title, repeat_rule FROM care_events WHERE series_id = ? ORDER BY event_date").all(sid);
+  expect(all.map((x) => x.event_date)).toEqual([past, `${Number(past.slice(0, 4)) + 1}${past.slice(4)}`]);
+  expect(all[1]).toMatchObject({ title: "Caden's birthday", repeat_rule: "yearly" });
+  await require("../../src/routes/careEvents")._extendAllSeries(db);
+  expect((await db.prepare("SELECT COUNT(*)::int AS n FROM care_events WHERE series_id = ?").get(sid)).n).toBe(2);
+});
+
+test("Add holidays: nine all-day yearly holidays with emojis, once only", async () => {
+  const r = await h.request.post("/api/care-events/holidays").set(h.auth(family.token)).send({ care_recipient_id: recipientId });
+  expect(r.status).toBe(201);
+  expect(r.body.added).toBe(9);
+  const rows2 = await db.prepare("SELECT title, event_date, event_time, repeat_rule FROM care_events WHERE care_recipient_id = ? AND source = 'holidays' ORDER BY event_date").all(recipientId);
+  expect(rows2).toHaveLength(9);
+  const today = etDate(0);
+  for (const x of rows2) {
+    expect(x.event_time).toBeNull();
+    expect(x.event_date >= today).toBe(true);
+    expect(x.repeat_rule).toMatch(/^holiday:/);
+  }
+  expect(rows2.map((x) => x.title)).toEqual(expect.arrayContaining(["\u{1F983} Thanksgiving", "\u{1F384} Christmas"]));
+  const again = await h.request.post("/api/care-events/holidays").set(h.auth(family.token)).send({ care_recipient_id: recipientId });
+  expect(again.body.added).toBe(0);
+});
+
+test("Add holidays needs scheduling rights", async () => {
+  const stranger = await h.createUser({ roles: ["family"], firstName: "Nobody" });
+  const r = await h.request.post("/api/care-events/holidays").set(h.auth(stranger.token)).send({ care_recipient_id: recipientId });
+  expect(r.status).toBe(403);
+});
