@@ -1,0 +1,15 @@
+# Keep the image to what the server serves. Backups/ holds database dumps and must never be
+# baked into an image (v1.124.9).
+.git
+node_modules
+Backups
+android
+ios
+screenshots
+archive
+mockups
+tests
+docs
+.env
+*.p8
+*.p12

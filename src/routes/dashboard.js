@@ -1,0 +1,1353 @@
+const express = require("express");
+const { activeVouchesFor } = require("../utils/vouches");
+const { maySeeRecipientDetails, isTrustedCaregiver, detailsWithheldReason } = require("../utils/caregiverTrust");
+const { recipientPhotoUrl, userPhotoUrl, userHasPhoto, hasPhotoSql } = require("./media");
+const { storedImageUrl } = require("../utils/serveMedia");
+const { getDb } = require("../models/database");
+const { authenticate } = require("../middleware/auth");
+const { getNowInZone, getTodayStringInZone, DEFAULT_TIMEZONE } = require("../utils/timezone");
+const { haversineDistance } = require("../utils/geocode");
+const { computeJobConflicts, computeMatchScore } = require("../utils/jobMatching");
+const { calculateSessionCost, SURCHARGE_CAREGIVER_SHARE, SURCHARGE_PLATFORM_SHARE } = require("../utils/rateCalculator");
+const { scoreMatch } = require("../utils/aiMatching");
+const { expireStaleProposals } = require("../utils/proposals");
+const { getPlatformFeePercent, loadFeeTable } = require("../utils/platformFee");
+const { phaseFor: checkrPhaseFor } = require("../constants/checkrStatus");
+const { noteAccess } = require("../utils/noteVisibility"); // v1.106.38, v1.107.2
+const { breakBudgetMinutes } = require("../utils/visitBreaks"); // v1.106.41
+const { conditionReadDue } = require("../utils/settledCheck"); // v1.106.48
+const { instructionsNeedAck } = require("../utils/instructionAck"); // v1.109.6
+const { TRUSTED_LINK_SQL } = require("../utils/linkedAccount"); // stale-link sweep
+
+const router = express.Router();
+router.use(authenticate);
+
+// Helper: get platform fee percent from DB (default 20)
+// v1.106.16 — was a byte-identical second copy, default and all. See utils/platformFee.
+
+// ─── GET /api/dashboard ───
+// Role-aware dashboard data
+router.get("/", async (req, res) => {
+  const db = await getDb();
+  const userId = req.user.id;
+  const role = req.user.activeRole || req.user.role;
+
+  if (role === "family") {
+    return familyDashboard(db, userId, res);
+  } else if (role === "caregiver") {
+    return caregiverDashboard(db, userId, res);
+  } else if (role === "care_for") {
+    return careForDashboard(db, userId, res);
+  }
+
+  res.status(403).json({ error: "Unknown role" });
+});
+
+// ─── Family Dashboard (Pete's view) ───
+async function familyDashboard(db, userId, res) {
+  const t0 = Date.now();
+  try {
+    // v1.106.10 — the two offer-expiry UPDATEs that used to run here, fire-and-forget, on
+    // every single dashboard load moved to poller 102. They seq-scanned an unindexed column
+    // to do housekeeping unrelated to this request, and a read endpoint that writes is one
+    // anybody can make write by holding down refresh. expireStaleProposals stays: it is
+    // scoped to what this response is about to show, and returning a proposal the viewer can
+    // still act on after it has expired is a correctness problem, not housekeeping.
+    expireStaleProposals(db, null, null).catch(() => {});
+
+    // Parallel batch 1: fee + all three recipient sources at once
+    const [feeTable, ownedRecipients, sharedRecipients, teamRecipients] = await Promise.all([
+      loadFeeTable(db), // v1.111.0 — per-family special rate
+      db.prepare("SELECT * FROM care_recipients WHERE family_user_id = ?").all(userId),
+      db.prepare(`
+        SELECT cr.* FROM care_recipient_shares crs
+        JOIN care_recipients cr ON crs.care_recipient_id = cr.id
+        WHERE crs.shared_with_user_id = ?
+      `).all(userId),
+      db.prepare(`
+        SELECT cr.* FROM care_team_members ctm
+        JOIN care_teams ct ON ctm.care_team_id = ct.id
+        JOIN care_recipients cr ON ct.care_recipient_id = cr.id
+        WHERE ctm.user_id = ?
+      `).all(userId),
+    ]);
+    console.log(`[dashboard] batch1 (recipients) ${Date.now() - t0}ms`);
+    const ownedIds = new Set(ownedRecipients.map(r => r.id));
+    const sharedIds = new Set(sharedRecipients.map(r => r.id));
+    const recipients = [
+      ...ownedRecipients,
+      ...sharedRecipients.filter(r => !ownedIds.has(r.id)),
+      ...teamRecipients.filter(r => !ownedIds.has(r.id) && !sharedIds.has(r.id)),
+    ];
+
+    const famEtNow = getNowInZone();
+    const monthStart = new Date(famEtNow); monthStart.setDate(1);
+    const monthStr = monthStart.getFullYear() + '-' + String(monthStart.getMonth() + 1).padStart(2, '0') + '-01';
+
+    // All recipient IDs this user can see (owned + shared)
+    const allRecipientIds = recipients.map(r => r.id);
+    const recipientPlaceholders = allRecipientIds.length > 0 ? allRecipientIds.map(() => '?').join(',') : "'__none__'";
+
+    // Use care-location timezone for "today" — all times are care-location times
+    const today = getTodayStringInZone();
+    const etNow = getNowInZone();
+    const next30Date = new Date(etNow); next30Date.setDate(next30Date.getDate() + 30);
+    const next30 = next30Date.getFullYear() + '-' + String(next30Date.getMonth() + 1).padStart(2, '0') + '-' + String(next30Date.getDate()).padStart(2, '0');
+    const sevenDaysAgo = new Date(etNow); sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    const sevenDaysAgoStr = sevenDaysAgo.getFullYear() + '-' + String(sevenDaysAgo.getMonth() + 1).padStart(2, '0') + '-' + String(sevenDaysAgo.getDate()).padStart(2, '0');
+
+    // Parallel batch 2: ALL read queries at once (none depend on each other)
+    const [monthlyStats, upcoming, recentCompleted, recentActivity, unreadCount, recentPhotos, pendingProposals, avgRating, assignedCount, visitsLoggedRecently] = await Promise.all([
+      // Monthly stats
+      db.prepare(`
+        SELECT
+          COUNT(*) as total_sessions,
+          SUM(duration_hours) as total_hours,
+          SUM(COALESCE(actual_cost, estimated_cost)) as total_spend
+        FROM care_sessions cs
+        WHERE (cs.family_user_id = ? OR cs.care_recipient_id IN (${recipientPlaceholders}))
+          AND cs.scheduled_date >= ?
+          AND cs.status IN ('confirmed', 'completed', 'in_progress')
+      `).get(userId, ...allRecipientIds, monthStr),
+
+      // Upcoming sessions
+      db.prepare(`
+        SELECT * FROM (
+          SELECT DISTINCT ON (cs.id) cs.*,
+            cr.first_name || ' ' || cr.last_name AS recipient_name,
+            cr.timezone AS care_timezone,
+            u.first_name || ' ' || u.last_name AS caregiver_name,
+            u.phone AS caregiver_phone,
+            cp.rating_avg AS caregiver_rating,
+            fu.first_name || ' ' || fu.last_name AS booked_by_name,
+            vl.check_in_time,
+            ofu.first_name AS offered_caregiver_name,
+            tcp.proposed_time AS tc_proposed_time, tcp.proposed_date AS tc_proposed_date,
+            tcp.proposed_duration AS tc_proposed_duration,
+            tcp.proposed_by AS tc_proposed_by,
+            dcu.first_name AS dropped_by_first_name
+          FROM care_sessions cs
+          LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
+          LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+          LEFT JOIN users u ON cp.user_id = u.id
+          LEFT JOIN users fu ON cs.family_user_id = fu.id
+          LEFT JOIN visit_logs vl ON vl.session_id = cs.id
+          LEFT JOIN caregiver_profiles ocp ON cs.offered_to_caregiver_id = ocp.id
+          LEFT JOIN users ofu ON ocp.user_id = ofu.id
+          LEFT JOIN time_change_proposals tcp ON cs.pending_time_change_id = tcp.id
+          -- v1.125.2 — who dropped an open visit, so its card can say "Tina cancelled this one"
+          LEFT JOIN caregiver_profiles dcp ON cs.cancelled_caregiver_id = dcp.id
+          LEFT JOIN users dcu ON dcp.user_id = dcu.id
+          WHERE (cs.family_user_id = ? OR cs.care_recipient_id IN (${recipientPlaceholders}))
+            AND cs.scheduled_date >= ?
+            AND cs.scheduled_date <= ?
+            AND cs.status IN ('pending', 'confirmed', 'open', 'requested', 'in_progress', 'payment_hold')
+          ORDER BY cs.id
+        ) sub
+        ORDER BY sub.scheduled_date ASC, sub.scheduled_time ASC
+        LIMIT 15
+      `).all(userId, ...allRecipientIds, today, next30),
+
+      // Recently completed sessions (last 7 days)
+      db.prepare(`
+        SELECT * FROM (
+          SELECT DISTINCT ON (cs.id) cs.*,
+            cr.first_name || ' ' || cr.last_name AS recipient_name,
+            u.first_name || ' ' || u.last_name AS caregiver_name,
+            vl.summary AS visit_summary,
+            vl.care_feedback,
+            vl.departure_mood,
+            vl.condition_tags
+          FROM care_sessions cs
+          LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
+          LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+          LEFT JOIN users u ON cp.user_id = u.id
+          LEFT JOIN visit_logs vl ON vl.session_id = cs.id
+          WHERE (cs.family_user_id = ? OR cs.care_recipient_id IN (${recipientPlaceholders}))
+            AND cs.status = 'completed'
+            AND cs.cancelled_by IS NULL
+            AND cs.caregiver_no_show = 0
+            AND cs.scheduled_date >= ?
+          ORDER BY cs.id
+        ) sub
+        ORDER BY sub.scheduled_date DESC, sub.scheduled_time DESC
+        LIMIT 5
+      `).all(userId, ...allRecipientIds, sevenDaysAgoStr),
+
+      // Recent activity
+      db.prepare(`
+        SELECT * FROM activity_feed
+        WHERE family_user_id = ? OR care_recipient_id IN (${recipientPlaceholders})
+        ORDER BY created_at DESC LIMIT 5
+      `).all(userId, ...allRecipientIds),
+
+      // Unread count
+      db.prepare(
+        `SELECT COUNT(*) as count FROM activity_feed WHERE (family_user_id = ? OR care_recipient_id IN (${recipientPlaceholders})) AND is_read = 0`
+      ).get(userId, ...allRecipientIds),
+
+      // Recent visit photos
+      db.prepare(`
+        SELECT vp.id, vp.photo_url, vp.caption, vp.created_at,
+          u.first_name || ' ' || u.last_name AS caregiver_name,
+          cr.first_name || ' ' || cr.last_name AS recipient_name,
+          cs.id AS session_id, cs.scheduled_date
+        FROM visit_photos vp
+        JOIN visit_logs vl ON vp.visit_log_id = vl.id
+        JOIN care_sessions cs ON vl.session_id = cs.id
+        JOIN caregiver_profiles cp ON vl.caregiver_id = cp.id
+        JOIN users u ON cp.user_id = u.id
+        LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
+        WHERE (cs.family_user_id = ? OR cs.care_recipient_id IN (${recipientPlaceholders}))
+        ORDER BY vp.created_at DESC
+        LIMIT 12
+      `).all(userId, ...allRecipientIds).catch(() => []),
+
+      // Pending time proposals
+      db.prepare(`
+        SELECT tp.*,
+          u.first_name || ' ' || u.last_name AS caregiver_name,
+          cp.rating_avg AS caregiver_rating,
+          cs.scheduled_date AS original_date,
+          cs.scheduled_time AS original_time,
+          cs.service_type,
+          cs.duration_hours,
+          cr.first_name || ' ' || cr.last_name AS recipient_name
+        FROM time_proposals tp
+        JOIN care_sessions cs ON tp.session_id = cs.id
+        JOIN caregiver_profiles cp ON tp.caregiver_profile_id = cp.id
+        JOIN users u ON tp.caregiver_user_id = u.id
+        LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
+        WHERE (cs.family_user_id = ? OR cs.care_recipient_id IN (${recipientPlaceholders}))
+          AND tp.status = 'pending'
+        ORDER BY tp.created_at DESC
+        LIMIT 20
+      `).all(userId, ...allRecipientIds).catch(() => []),
+
+      // Average caregiver rating
+      db.prepare(`
+        SELECT AVG(cp.rating_avg) as avg
+        FROM care_sessions cs
+        JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+        WHERE (cs.family_user_id = ? OR cs.care_recipient_id IN (${recipientPlaceholders})) AND cs.status = 'completed'
+      `).get(userId, ...allRecipientIds),
+
+      // Assigned caregiver count
+      db.prepare(`
+        SELECT COUNT(DISTINCT ca.caregiver_profile_id) as count
+        FROM caregiver_assignments ca
+        LEFT JOIN care_recipients cr ON ca.care_recipient_id = cr.id
+        WHERE (ca.family_user_id = ? OR ca.care_recipient_id IN (${recipientPlaceholders})) AND ca.is_active = 1
+      `).get(userId, ...allRecipientIds),
+
+      // ─── v1.106.44 — visits this person has already logged ───
+      //
+      // Pete: "I hit log this visit when it tagged me at mom's house. I left a note. The log
+      // visit option is still remaining at the top of the screen. It should understand that
+      // I've logged a visit and then not prompt me again."
+      //
+      // The client had a `visitsToday` flag for exactly this and it was never once seeded from
+      // the server — it started false on every load and was only ever flipped by the save
+      // handler in the same session. So the nudge came back on the next open, the next
+      // refresh, and the next device, about a visit already in the record.
+      //
+      // 36 hours rather than a date expression: "today" is a question about the RECIPIENT's
+      // timezone, and this family may be in another one. The window is deliberately wider
+      // than a day so the comparison can be made properly below.
+      db.prepare(`
+        SELECT fv.care_recipient_id, fv.visited_at, cr.timezone
+          FROM family_visits fv
+          JOIN care_recipients cr ON cr.id = fv.care_recipient_id
+         WHERE fv.user_id = ? AND fv.visited_at >= NOW() - INTERVAL '36 hours'
+      `).all(userId).catch(() => []),
+    ]);
+    console.log(`[dashboard] batch2 (10 queries) ${Date.now() - t0}ms`);
+
+    const primary = recipients[0];
+    const parent = primary
+      ? {
+          id: primary.id,
+          name: `${primary.first_name} ${primary.last_name}`,
+          age: primary.age,
+          location: `${primary.location_city}, ${primary.location_state}`,
+          healthConditions: JSON.parse(primary.health_conditions || "[]"),
+          medications: JSON.parse(primary.medications || "[]"),
+          preferences: primary.preferences,
+          photo: recipientPhotoUrl(primary),  // v1.106.7 — one owner for this URL shape
+          emoji: primary.emoji || null,
+          consent_status: primary.consent_status || 'pending',
+          authorization_tier: primary.authorization_tier || 'unset',
+          emergencyContact: {
+            name: primary.emergency_contact_name,
+            phone: primary.emergency_contact_phone,
+          },
+        }
+      : null;
+
+    // v1.106.44 — which of these people has this person already logged a visit for TODAY, in
+    // that person's own timezone. Computed here rather than in SQL because "today" differs per
+    // recipient, and answered per recipient rather than as one boolean because logging a visit
+    // to Betty should not silence the nudge about someone else.
+    const visitLoggedToday = [...new Set(
+      (visitsLoggedRecently || [])
+        .filter((v) => {
+          try {
+            const tz = v.timezone || DEFAULT_TIMEZONE;
+            return getTodayStringInZone(tz) ===
+              new Date(v.visited_at).toLocaleDateString("en-CA", { timeZone: tz });
+          } catch { return false; }
+        })
+        .map((v) => v.care_recipient_id)
+    )];
+
+    console.log(`[dashboard] family ${Date.now() - t0}ms`);
+    res.json({
+      role: "family",
+      // The ids, not a boolean: see above.
+      visitLoggedToday,
+      parent,
+      isNewUser: recipients.length === 0,
+      careRecipients: recipients.map((r) => ({
+        ...r,
+        // v1.106.7 — `parent.photo` above has been a URL since v1.66.0; this list, built from
+        // the same rows a few lines later, was still spreading the raw base64. Six recipients
+        // with photos is several megabytes of JSON on every dashboard load.
+        photo: recipientPhotoUrl(r),
+        healthConditions: JSON.parse(r.health_conditions || "[]"),
+        medications: JSON.parse(r.medications || "[]"),
+      })),
+      stats: {
+        sessionsThisMonth: (monthlyStats && monthlyStats.total_sessions) || 0,
+        totalHours: Math.round(((monthlyStats && monthlyStats.total_hours) || 0) * 10) / 10,
+        monthlySpend: Math.round(((monthlyStats && monthlyStats.total_spend) || 0) * 100) / 100,
+        avgCaregiverRating: Math.round(((avgRating && avgRating.avg) || 0) * 10) / 10,
+        unreadNotifications: (unreadCount && unreadCount.count) || 0,
+        assignedCaregivers: (assignedCount && assignedCount.count) || 0,
+      },
+      platformFeePercent: feeTable.pctFor({ care_recipient_id: (recipients[0] || {}).id, family_user_id: userId }),
+      upcomingSessions: upcoming.map((s) => {
+        const feePercent = feeTable.pctFor(s);
+        const familyPrice = parseFloat(s.estimated_cost) || 0;
+        const fee = Math.round(familyPrice * (feePercent / 100) * 100) / 100;
+        return {
+          id: s.id,
+          date: s.scheduled_date,
+          time: s.scheduled_time,
+          serviceType: s.service_type,
+          status: s.status,
+          durationHours: s.duration_hours,
+          caregiverName: s.caregiver_name,
+          caregiverPhone: s.caregiver_phone || null,
+          caregiverRating: s.caregiver_rating,
+          recipientName: s.recipient_name,
+          specialInstructions: s.special_instructions,
+          estimatedCost: s.estimated_cost,
+          caregiverPayout: Math.round((familyPrice - fee) * 100) / 100,
+          platformFee: fee,
+          familyTotal: familyPrice,
+          timezone: s.care_timezone || "America/New_York",
+          bookedBy: s.family_user_id !== userId ? s.booked_by_name : null,
+          checkInTime: s.check_in_time || null,
+          offeredToCaregiverId: s.offered_to_caregiver_id || null,
+          exclusiveUntil: s.exclusive_until || null,
+          offeredCaregiverName: s.offered_caregiver_name || null,
+          pendingTimeChangeId: s.pending_time_change_id || null,
+          tcProposedTime: s.tc_proposed_time || null,
+          tcProposedDate: s.tc_proposed_date || null, // v1.124.0
+          tcProposedDuration: s.tc_proposed_duration || null,
+          tcProposedBy: s.tc_proposed_by || null,
+          // v1.105.192 — so the dashboard can fold a series into one card
+          recurrenceGroupId: s.recurrence_group_id || null,
+          recurrenceRule: s.recurrence_rule || null,
+          // v1.125.2 — an open visit the caregiver dropped: who, so the card can say it was
+          // that one day and not the series. Only while it is still open and unfilled.
+          droppedByName: s.cancelled_by === "caregiver" && !s.caregiver_id && ['open', 'requested'].includes(s.status)
+            ? (s.dropped_by_first_name || null) : null,
+        };
+      }),
+      recentActivity: recentActivity.map((a) => {
+        let meta = {};
+        try { meta = a.metadata ? JSON.parse(a.metadata) : {}; } catch(e) {} // expected: tolerated parse fallback
+        return {
+          id: a.id,
+          eventType: a.event_type,
+          title: a.title,
+          message: a.message,
+          isRead: a.is_read,
+          timestamp: a.created_at,
+          sessionId: meta.sessionId || null,
+          // v1.105.182 — enough to open the row, and no more. The whole metadata blob is not
+          // forwarded: other writers put their own fields in there and this renders on a
+          // dashboard. Only the deep-link keys travel.
+          link: meta.type ? {
+            type: meta.type, page: meta.page || null,
+            careRecipientId: meta.careRecipientId || null,
+            noteId: meta.noteId || null, visitId: meta.visitId || null,
+          } : null,
+        };
+      }),
+      pendingProposals: pendingProposals.map(p => ({
+        id: p.id,
+        sessionId: p.session_id,
+        caregiverName: p.caregiver_name,
+        caregiverRating: p.caregiver_rating,
+        proposedDate: p.proposed_date,
+        proposedTime: p.proposed_time,
+        message: p.message,
+        originalDate: p.original_date,
+        originalTime: p.original_time,
+        serviceType: p.service_type,
+        durationHours: p.duration_hours,
+        recipientName: p.recipient_name,
+        createdAt: p.created_at,
+        expiresAt: p.expires_at,
+      })),
+      recentPhotos: recentPhotos.map(p => ({
+        id: p.id,
+        // v1.106.7 — twelve visit photos inline was the single biggest thing in this response:
+        // 4–6 MB of base64 parsed on the main thread before the dashboard could paint, and
+        // re-fetched in full every time. Now twelve <img> requests the browser caches for a day.
+        photoUrl: storedImageUrl("/api/photos", p),
+        caption: p.caption,
+        createdAt: p.created_at,
+        caregiverName: p.caregiver_name,
+        recipientName: p.recipient_name,
+        sessionId: p.session_id,
+        sessionDate: p.scheduled_date,
+      })),
+      recentlyCompleted: await (async () => {
+        // Batch-fetch reviews for all completed sessions in one query (no N+1)
+        const sessionIds = recentCompleted.map(s => s.id);
+        const reviewMap = {};
+        if (sessionIds.length > 0) {
+          const placeholders = sessionIds.map(() => '?').join(',');
+          const reviews = await db.prepare(
+            `SELECT session_id, id, rating FROM reviews WHERE session_id IN (${placeholders}) AND family_user_id = ?`
+          ).all(...sessionIds, userId);
+          for (const r of reviews) reviewMap[r.session_id] = r;
+        }
+        return recentCompleted.map(s => {
+          let condTags = [];
+          try { condTags = s.condition_tags ? JSON.parse(s.condition_tags) : []; } catch(e) {} // expected: tolerated parse fallback
+          const existingReview = reviewMap[s.id];
+          return {
+            id: s.id,
+            date: s.scheduled_date,
+            time: s.scheduled_time,
+            serviceType: s.service_type,
+            durationHours: s.duration_hours,
+            caregiverName: s.caregiver_name,
+            caregiverId: s.caregiver_id,
+            recipientName: s.recipient_name,
+            visitSummary: s.care_feedback || s.visit_summary,
+            departureMood: s.departure_mood,
+            conditionTags: condTags,
+            hasReview: !!existingReview,
+            reviewRating: existingReview ? existingReview.rating : null,
+          };
+        });
+      })(),
+    });
+  } catch (err) {
+    console.error("Family dashboard error:", err);
+    // v1.105.60 — this used to answer 200 with `isNewUser: true, careRecipients: []`, on the
+    // reasoning that a valid shape keeps the frontend from breaking. What it actually did was
+    // tell a family whose mother has an active care team, medications and a caregiver arriving
+    // today that they have no loved one — and then Dashboard.js auto-navigated them into the
+    // add-a-loved-one wizard, because that is the correct thing to do for a genuinely new user.
+    //
+    // The client already handles this properly: two silent retries, then a real "Something went
+    // wrong / Try Again" screen. A 200 defeated all of it, because res.ok was true. Five screens
+    // read from this endpoint (Dashboard, FindWork, CaredForView, ActivityFeed, Caregivers) and
+    // every one of them showed a reassuring empty state instead of an error.
+    //
+    // An error is not a shape. Say so, and let the client do what it already knows how to do.
+    res.status(500).json({ error: "Could not load your dashboard." });
+  }
+}
+
+// ─── Caregiver Dashboard (Maria's view) ───
+async function caregiverDashboard(db, userId, res) {
+  // v1.105.192 — an invite this caregiver never clicked, but whose email is theirs (Tina).
+  // Idempotent and cheap: one indexed lookup on pending invites by email.
+  try {
+    const { claimPendingByEmail } = require("../utils/knownCaregivers");
+    const me = await db.prepare("SELECT email FROM users WHERE id = ?").get(userId);
+    if (me && me.email) await claimPendingByEmail(db, userId, me.email);
+  } catch (e) { console.error("dashboard: claim known-caregiver invite (non-blocking):", e.message); }
+  // Expire time proposals that have passed their 2-hour response window
+  await expireStaleProposals(db, null, null).catch(() => {});
+
+  // v1.106.10 — the exclusive-offer expiry that used to run here too, AWAITED, so every
+  // caregiver dashboard load waited on a seq scan of an unindexed column before it could
+  // return. It was also a second copy of the family dashboard's version, with its own
+  // fallback branch, which is two places to fix a housekeeping rule. Poller 102 owns it now
+  // and runs it every minute for everyone, which is more often than either dashboard was
+  // being opened.
+
+  const profile = await db.prepare("SELECT * FROM caregiver_profiles WHERE user_id = ?").get(userId);
+  if (!profile) return res.status(404).json({ error: "Caregiver profile not found" });
+
+  // v1.106.22 — this read `avatar_url` alone and the payload handed it straight to the
+  // client as the answer to "does she have a photo". Since v1.106.8 an upload writes
+  // `profile_photo` and NULLs `avatar_url`, so uploading a photo made this field *less*
+  // true, not more. Tina uploaded hers three times and the First Steps item never ticked —
+  // and the same read feeds the auto-complete counter below, so onboarding could never
+  // finish either. media.js already owns this question; ask it.
+  const user = await db.prepare(
+    `SELECT id, first_name, last_name, avatar_url, profile_photo, ${hasPhotoSql("users")} FROM users WHERE id = ?`
+  ).get(userId);
+
+  // Assigned families (deduplicate by care_recipient — siblings may each have an assignment for same recipient)
+  const assignments = await db.prepare(`
+    SELECT DISTINCT ON (ca.care_recipient_id)
+      ca.*, cr.first_name AS recipient_first_name, cr.last_name AS recipient_last_name,
+      cr.location_address, cr.location_city, cr.location_state, cr.latitude, cr.longitude,
+      cr.health_conditions, cr.preferences,
+      fu.first_name AS family_first_name, fu.last_name AS family_last_name
+    FROM caregiver_assignments ca
+    JOIN care_recipients cr ON ca.care_recipient_id = cr.id
+    JOIN users fu ON ca.family_user_id = fu.id
+    WHERE ca.caregiver_profile_id = ? AND ca.is_active = 1
+    ORDER BY ca.care_recipient_id, ca.is_favorite DESC, ca.created_at ASC
+  `).all(profile.id);
+
+  // Upcoming sessions — use care-location timezone
+  const cgEtNow = getNowInZone();
+  const today = getTodayStringInZone();
+  const upcoming = await db.prepare(`
+    SELECT cs.*,
+      cr.first_name || ' ' || cr.last_name AS recipient_name,
+      cr.location_address, cr.location_city,
+      cr.preferences AS recipient_preferences,
+      cr.timezone AS care_timezone,
+      cr.health_conditions AS cr_health_conditions,
+      cr.caregiver_briefing AS cr_caregiver_briefing,
+      cr.latitude AS recipient_lat,
+      cr.longitude AS recipient_lng,
+      fu.first_name || ' ' || fu.last_name AS family_name,
+      cp.hourly_rate AS cg_hourly_rate, cp.rate_daytime AS cg_rate_daytime,
+      cp.rate_nighttime AS cg_rate_nighttime, cp.rate_overnight AS cg_rate_overnight,
+      vl.check_in_time,
+      -- v1.106.48 — the settled-in question. Both facts, not the verdict: the caregiver's card
+      -- decides with conditionReadDue() so the rule lives in one file rather than in this
+      -- SELECT and in the poller separately.
+      vl.arrival_mood,
+      vl.check_out_time,
+      -- v1.106.41 — the caregiver's own card needs to know whether she is out right now, and
+      -- how much of her paid break budget is left, without a second request per session.
+      -- Aggregated in the SELECT rather than joined: a join against visit_breaks multiplies
+      -- the session row once per break, which would silently double a day's earnings total.
+      (SELECT COUNT(*) FROM visit_breaks vb WHERE vb.session_id = cs.id AND vb.ended_at IS NULL) AS open_breaks,
+      (SELECT COALESCE(SUM(EXTRACT(EPOCH FROM (COALESCE(vb.ended_at, NOW()) - vb.started_at)) / 60), 0)
+         FROM visit_breaks vb WHERE vb.session_id = cs.id) AS break_minutes_total,
+      (SELECT MAX(vb.started_at) FROM visit_breaks vb WHERE vb.session_id = cs.id AND vb.ended_at IS NULL) AS break_started_at,
+      tcp.proposed_time AS tc_proposed_time, tcp.proposed_date AS tc_proposed_date,
+      tcp.proposed_duration AS tc_proposed_duration,
+      tcp.proposed_by AS tc_proposed_by
+    FROM care_sessions cs
+    LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
+    LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+    LEFT JOIN users fu ON cs.family_user_id = fu.id
+    LEFT JOIN visit_logs vl ON vl.session_id = cs.id
+    LEFT JOIN time_change_proposals tcp ON cs.pending_time_change_id = tcp.id
+    WHERE cs.caregiver_id = ? AND cs.scheduled_date >= ? AND cs.status IN ('pending', 'confirmed', 'in_progress', 'payment_hold')
+    ORDER BY cs.scheduled_date ASC, cs.scheduled_time ASC
+    LIMIT 20
+  `).all(profile.id, today);
+
+  // Monthly stats
+  const cgMonthStart = new Date(cgEtNow); cgMonthStart.setDate(1);
+  const monthStr = cgMonthStart.getFullYear() + '-' + String(cgMonthStart.getMonth() + 1).padStart(2, '0') + '-01';
+
+  const monthlyStats = await db.prepare(`
+    SELECT COUNT(*) as completed_sessions,
+      SUM(COALESCE(actual_cost, estimated_cost)) as total_earnings,
+      SUM(COALESCE(short_notice_surcharge, 0)) as total_surcharges,
+      SUM(duration_hours) as total_hours
+    FROM care_sessions
+    WHERE caregiver_id = ? AND scheduled_date >= ? AND status = 'completed'
+  `).get(profile.id, monthStr);
+
+  const pending = await db.prepare(`
+    SELECT SUM(estimated_cost) as pending_earnings,
+      SUM(COALESCE(short_notice_surcharge, 0)) as pending_surcharges
+    FROM care_sessions
+    WHERE caregiver_id = ? AND status IN ('confirmed', 'pending') AND scheduled_date >= ?
+  `).get(profile.id, today);
+
+  // Open care requests — jobs available to claim (next 30 days)
+  const thirtyDaysOut = new Date(cgEtNow);
+  thirtyDaysOut.setDate(thirtyDaysOut.getDate() + 30);
+  const fiveDayStr = thirtyDaysOut.getFullYear() + '-' + String(thirtyDaysOut.getMonth() + 1).padStart(2, '0') + '-' + String(thirtyDaysOut.getDate()).padStart(2, '0');
+
+  // Demo isolation: only show jobs from families with matching demo status
+  const me = await db.prepare("SELECT is_demo FROM users WHERE id = ?").get(userId);
+  const isDemo = me && me.is_demo ? 1 : 0;
+
+  // Build a cutoff: for today's date, exclude sessions whose start time has already passed
+  const nowTimeStr = String(cgEtNow.getHours()).padStart(2, '0') + ':' + String(cgEtNow.getMinutes()).padStart(2, '0');
+
+  const openJobs = await db.prepare(`
+    SELECT cs.*,
+      cr.first_name || ' ' || cr.last_name AS recipient_name,
+      cr.location_city AS recipient_city,
+      cr.latitude AS recipient_lat,
+      cr.longitude AS recipient_lng,
+      cr.timezone AS care_timezone,
+      cr.health_conditions AS cr_health_conditions,
+      cr.caregiver_briefing AS cr_caregiver_briefing,
+      cr.age AS recipient_age,
+      fu.first_name || ' ' || fu.last_name AS family_name,
+      /* v1.105.90 — a request YOU posted. Shown rather than hidden, and not acceptable by you,
+         because accepting it would mean paying yourself. Nothing broader than that: Pete's
+         instruction is explicit — "do not prohibit members of the team from also doing things
+         for money if they can't hire someone." If Sara posts for Betty and nobody else takes
+         it, Pete takes it and gets paid. */
+      (cs.family_user_id = ?) AS is_own_request
+    FROM care_sessions cs
+    LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
+    LEFT JOIN users fu ON cs.family_user_id = fu.id
+    WHERE (
+        (cs.status IN ('open', 'requested', 'pending') AND (cs.caregiver_id IS NULL OR cs.caregiver_id = ?))
+        OR (cs.status = 'pending' AND cs.offered_to_caregiver_id = ?)
+      )
+      AND cs.scheduled_date >= ?
+      AND cs.scheduled_date <= ?
+      AND COALESCE(fu.is_demo, 0) = ?
+      /* Exclude today's sessions whose start time has already passed */
+      AND NOT (cs.scheduled_date = ? AND cs.scheduled_time <= ?)
+      /* v1.105.89 — NOT excluded any more, flagged instead. See ownFamily below.
+         Pete, a caregiver as well as a family user: "why can't i see the job i posted?" He
+         could not, because this line removed it from the list entirely — so a job he had just
+         posted was indistinguishable from a job that had failed to post. "Not there" and
+         "there but not for you" looked identical, which is the same silent absence that has
+         cost a day of debugging elsewhere in this app. */
+      /* Exclude sessions exclusively offered to a DIFFERENT caregiver */
+      AND (cs.offered_to_caregiver_id IS NULL OR cs.offered_to_caregiver_id = ?)
+      /* Exclude sessions that have a pending or expired time proposal from this caregiver */
+      AND NOT EXISTS (
+        SELECT 1 FROM time_proposals tp
+        WHERE tp.session_id = cs.id
+          AND tp.caregiver_user_id = ?
+          AND tp.status IN ('pending', 'expired')
+      )
+    ORDER BY cs.scheduled_date ASC, cs.scheduled_time ASC
+    LIMIT 30
+  `).all(userId, profile.id, profile.id, today, fiveDayStr, isDemo, today, nowTimeStr, profile.id, userId);
+
+  // Recent reviews
+  const reviews = await db.prepare(`
+    SELECT r.*, u.first_name || ' ' || u.last_name AS reviewer_name
+    FROM reviews r JOIN users u ON r.family_user_id = u.id
+    WHERE r.caregiver_id = ?
+    ORDER BY r.created_at DESC LIMIT 5
+  `).all(profile.id);
+
+  // Recently completed sessions (last 7 days) for the dashboard
+  const sevenDaysAgoCg = new Date(cgEtNow); sevenDaysAgoCg.setDate(sevenDaysAgoCg.getDate() - 7);
+  const sevenDaysAgoCgStr = sevenDaysAgoCg.getFullYear() + '-' + String(sevenDaysAgoCg.getMonth() + 1).padStart(2, '0') + '-' + String(sevenDaysAgoCg.getDate()).padStart(2, '0');
+  const recentCompletedCg = await db.prepare(`
+    SELECT * FROM (
+      SELECT DISTINCT ON (cs.id) cs.*,
+        cr.first_name || ' ' || cr.last_name AS recipient_name,
+        cr.location_city,
+        cr.timezone AS care_timezone,
+        vl.summary AS visit_summary,
+        vl.care_feedback,
+        vl.departure_mood,
+        cp.hourly_rate AS cg_hourly_rate, cp.rate_daytime AS cg_rate_daytime,
+        cp.rate_nighttime AS cg_rate_nighttime, cp.rate_overnight AS cg_rate_overnight
+      FROM care_sessions cs
+      LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
+      LEFT JOIN visit_logs vl ON vl.session_id = cs.id
+      LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+      WHERE cs.caregiver_id = ?
+        AND cs.status = 'completed'
+        AND cs.scheduled_date >= ?
+      ORDER BY cs.id
+    ) sub
+    ORDER BY sub.scheduled_date DESC, sub.scheduled_time DESC
+    LIMIT 5
+  `).all(profile.id, sevenDaysAgoCgStr);
+
+  // Caregiver's own sent proposals — so they can track what they proposed
+  let myProposals = [];
+  try {
+    myProposals = await db.prepare(`
+      SELECT tp.*,
+        cs.scheduled_date AS original_date,
+        cs.scheduled_time AS original_time,
+        cs.service_type,
+        cs.duration_hours,
+        cr.first_name || ' ' || cr.last_name AS recipient_name,
+        fu.first_name || ' ' || fu.last_name AS family_name
+      FROM time_proposals tp
+      JOIN care_sessions cs ON tp.session_id = cs.id
+      LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
+      LEFT JOIN users fu ON cs.family_user_id = fu.id
+      WHERE tp.caregiver_user_id = ?
+        AND tp.created_at > NOW() - INTERVAL '30 days'
+      ORDER BY tp.created_at DESC
+      LIMIT 20
+    `).all(userId);
+  } catch (e) {
+    console.log('My proposals query skipped:', e.message);
+  }
+
+  // Fetch recent no-show cancelled sessions for this caregiver (alert banner)
+  let noShowAlerts = [];
+  try {
+    noShowAlerts = await db.prepare(`
+      SELECT cs.id, cs.scheduled_date, cs.scheduled_time, cs.caregiver_no_show_at,
+        cs.review_required, cs.review_completed,
+        cr.first_name || ' ' || cr.last_name AS recipient_name
+      FROM care_sessions cs
+      LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
+      WHERE cs.caregiver_id = ?
+        AND cs.caregiver_no_show = 1
+        AND COALESCE(cs.no_show_acknowledged, 0) = 0
+        AND cs.cancelled_by = 'system'
+        AND cs.scheduled_date::date >= CURRENT_DATE - INTERVAL '30 days'
+      ORDER BY cs.caregiver_no_show_at DESC
+      LIMIT 5
+    `).all(profile.id);
+  } catch (e) {
+    console.log('No-show alerts query skipped:', e.message);
+  }
+
+  const feePercentCg = await getPlatformFeePercent(db);
+
+  // Families this caregiver holds an active admin vouch for (v1.64.0)
+  const vouchedFamilyIds = new Set(
+    (await db.prepare("SELECT family_user_id FROM bg_admin_vouches WHERE caregiver_user_id = ? AND revoked_at IS NULL").all(userId))
+      .map((v) => v.family_user_id)
+  );
+
+  res.json({
+    role: "caregiver",
+    platformFeePercent: feePercentCg,
+    profile: {
+      id: profile.id,
+      name: `${user.first_name} ${user.last_name}`,
+      bio: profile.bio,
+      rating: profile.rating_avg,
+      reviewCount: profile.rating_count,
+      hourlyRate: profile.hourly_rate,
+      rateDaytime: profile.rate_daytime || profile.hourly_rate,
+      rateNighttime: profile.rate_nighttime || profile.hourly_rate,
+      rateOvernight: profile.rate_overnight || profile.hourly_rate,
+      specialties: JSON.parse(profile.specialties || "[]"),
+      certifications: JSON.parse(profile.certifications || "[]"),
+      isAvailable: !!profile.is_available,
+      accountPaused: !!profile.account_paused,
+      accountPausedReason: profile.account_paused_reason || null,
+      accountPausedAt: profile.account_paused_at || null,
+      city: profile.location_city,
+      state: profile.location_state,
+      zip: profile.zip,
+      workLocationAddress: profile.work_location_address,
+      onboardingComplete: !!profile.onboarding_complete,
+      earlyCheckInAllowed: !!profile.early_check_in_allowed,
+      background_check_paid: !!profile.background_check_paid,
+      // v1.105.63 — whether the caregiver actually paid or an admin waived it for them.
+      // Same flag either way; only background_check_payments knows if money moved. The
+      // caregiver's First Steps copy explains the $30 fee, which reads as a bill to
+      // someone whose fee was waived on their behalf and never told.
+      backgroundCheckFeeWaived: !!profile.background_check_paid && !(await db.prepare(
+        "SELECT id FROM background_check_payments WHERE user_id = ? AND status = 'completed' LIMIT 1"
+      ).get(userId).catch(() => null)),
+      isBackgroundChecked: !!profile.is_background_checked,
+      checkrStatus: profile.is_background_checked ? 'clear' : (profile.checkr_status || 'pending'),
+      // v1.106.13 — the derived situation, from the one owner. CaretakerHub's banner enumerated
+      // five raw statuses and rendered nothing for the other ten, including did_not_pass and
+      // suspended. See src/constants/checkrStatus.js.
+      checkrPhase: checkrPhaseFor(profile.checkr_status, profile.is_background_checked),
+      adminVouches: (await activeVouchesFor(db, userId)).map((v) => ({ familyName: v.family_name, familyBrought: v.note === 'family-brought' /* v1.105.186 */ })),
+      stripeConnected: !!profile.stripe_onboard_complete,
+      stripeOnboardComplete: !!profile.stripe_onboard_complete,
+      // Stripe not yet live — cleared if BG check passed OR admin set is_available override
+      // v1.64.0: is_available bypass removed; vouches count. v1.105.107: one definition, in
+      // src/utils/caregiverTrust.js, so this and the per-job gate below cannot drift apart.
+      caregiverCleared: isTrustedCaregiver(profile, vouchedFamilyIds),
+      bgCheckRejectionReason: profile.bg_check_rejection_reason || null,
+      legalFirstName: profile.legal_first_name,
+      legalMiddleName: profile.legal_middle_name || '',
+      legalLastName: profile.legal_last_name,
+      dateOfBirth: profile.date_of_birth,
+      ssnLast4: profile.ssn_last4,
+      idDocType: profile.id_doc_type,
+      dlNumber: profile.dl_number,
+      dlState: profile.dl_state,
+      care_stoplight: profile.care_stoplight,
+      care_preferences: profile.care_preferences,
+      // v1.106.22 — one fact, one name. `avatar_url` is a storage column, not an answer;
+      // nothing on the client should be deciding anything from it.
+      hasPhoto: userHasPhoto(user),
+      photoUrl: userPhotoUrl(user),
+      academicProgram: profile.academic_program || null,
+      academicProgramYear: profile.academic_program_year || null,
+      needsHourReports: !!profile.needs_hour_reports,
+      // v1.105.95 — the First Steps 'security' step is decided by a localStorage flag, so no
+      // amount of seeding can tick it: every fresh visitor to the demo saw Maria's dashboard
+      // with an onboarding panel telling THEM to enable 2FA on an account that isn't theirs.
+      // The demo account's security settings are not the visitor's to configure.
+      isDemo: !!isDemo,
+    },
+    assignments: assignments.map(a => ({
+      ...a,
+      health_conditions: a.health_conditions ? JSON.parse(a.health_conditions) : [],
+    })),
+    upcomingSessions: upcoming.map(s => {
+      // If family offered a specific rate (proposed_rate), use it — the offer is the offer.
+      // Only fall back to caregiver profile rates when no offer was made.
+      let caregiverPayout;
+      // v1.107.7 — estimated_cost first: it is the number the hold, the capture and the payout
+      // are made from (agreed offer × time, or actual time once the visit is finished). The
+      // fallbacks below only cover a row that somehow has none.
+      if (parseFloat(s.estimated_cost) > 0) {
+        caregiverPayout = Math.round(parseFloat(s.estimated_cost) * 100) / 100;
+      } else if (s.proposed_rate && parseFloat(s.proposed_rate) > 0) {
+        // Family's offered rate × duration = what the caregiver earns
+        caregiverPayout = Math.round(parseFloat(s.proposed_rate) * parseFloat(s.duration_hours || 2) * 100) / 100;
+      } else {
+        const rates = {
+          daytime: s.cg_rate_daytime || s.cg_hourly_rate || 28,
+          nighttime: s.cg_rate_nighttime || s.cg_hourly_rate || 28,
+          overnight: s.cg_rate_overnight || s.cg_hourly_rate || 28,
+          base: s.cg_hourly_rate || 28,
+        };
+        const storedSurcharge = parseFloat(s.short_notice_surcharge) || 0;
+        const shortNotice = storedSurcharge > 0;
+        const costResult = calculateSessionCost(s.scheduled_time, null, rates, {
+          scheduledDate: s.scheduled_date,
+          durationHours: parseFloat(s.duration_hours || 2),
+          shortNotice,
+        });
+        const surchargeToCaregiver = Math.round((costResult.surcharge || 0) * SURCHARGE_CAREGIVER_SHARE * 100) / 100;
+        caregiverPayout = Math.round((costResult.subtotal + surchargeToCaregiver) * 100) / 100;
+      }
+      return {
+        id: s.id,
+        date: s.scheduled_date,
+        time: s.scheduled_time,
+        serviceType: s.service_type,
+        status: s.status,
+        durationHours: s.duration_hours,
+        recipientName: s.recipient_name,
+        location: s.location_address ? `${s.location_address}, ${s.location_city}` : s.location_city,
+        hasAddress: !!(s.location_address || s.location_city),
+        familyUserId: s.family_user_id,
+        careRecipientId: s.care_recipient_id,
+        specialInstructions: s.special_instructions,
+        // v1.109.6 — her active-visit card asks her to read instructions she has not confirmed
+        instructionsNeedAck: instructionsNeedAck(s),
+        instructionsAcknowledgedAt: s.instructions_acknowledged_at || null,
+        recipientPreferences: s.recipient_preferences,
+        estimatedCost: s.estimated_cost,
+        caregiverPayout: caregiverPayout,
+        timezone: s.care_timezone || "America/New_York",
+        offeredToCaregiverId: s.offered_to_caregiver_id || null,
+        exclusiveUntil: s.exclusive_until || null,
+        // v1.106.24 — a recurring direct offer is one arrangement, not twelve jobs. The
+        // caregiver card groups on this; without it every occurrence is its own full-height
+        // card, which is what put eleven of them above Tina's check-in.
+        recurrenceGroupId: s.recurrence_group_id || null,
+        recurrenceRule: s.recurrence_rule || null,
+        familyName: s.family_name || null,
+        healthTags: (() => { try { return JSON.parse(s.cr_health_conditions || '[]').slice(0, 3); } catch { return []; } })(),
+        // v1.105.91 — sent in FULL. It was cut to 200 characters here, so v1.105.88's
+        // "Read more" could only ever expand to what the server had already thrown away.
+        // Julia: "Still doesn't show her full description when I click to see it. Only
+        // partly." I fixed the visible half and never checked the producer.
+        careSummary: s.cr_caregiver_briefing || null,
+        recipientCity: s.location_city || null,
+        recipientLat: s.recipient_lat || null,
+        recipientLng: s.recipient_lng || null,
+        interviewRequired: !!s.interview_required,
+        interviewType: s.interview_type || null,
+        interviewStatus: s.interview_status || null,
+        checkInTime: s.check_in_time || null,
+        // v1.106.48 — has she been there long enough to be asked how she found things, and
+        // not answered yet. The same helper the poller's sibling question uses.
+        conditionReadDue: conditionReadDue(s),
+        // v1.106.41 — see src/utils/visitBreaks.js for the rule these numbers come from.
+        onBreak: Number(s.open_breaks || 0) > 0,
+        breakStartedAt: s.break_started_at || null,
+        breakBudgetMinutes: breakBudgetMinutes(s.duration_hours),
+        breakMinutesUsed: Math.round(Number(s.break_minutes_total || 0)),
+        pendingTimeChangeId: s.pending_time_change_id || null,
+        tcProposedTime: s.tc_proposed_time || null,
+          tcProposedDate: s.tc_proposed_date || null, // v1.124.0
+        tcProposedDuration: s.tc_proposed_duration || null,
+        tcProposedBy: s.tc_proposed_by || null,
+        on_my_way_at: s.on_my_way_at || null,
+      };
+    }),
+    reviews: reviews.map(r => ({
+      id: r.id,
+      rating: r.rating,
+      comment: r.comment,
+      reviewerName: r.reviewer_name,
+      createdAt: r.created_at,
+    })),
+    // v1.105.121 — do we know where she is? NULL coordinates are the state that makes a
+    // caregiver unbookable (assignments.js only offers people with a point within 25 miles), and
+    // until now it was also completely invisible to her: she saw every job on the platform while
+    // no family could see her.
+    //
+    // Pete: "if they get to know where jobs are, we get to know where they are." So the job list
+    // is the thing that depends on it. This flag is what FindWork renders instead.
+    locationKnown: !!(profile && profile.latitude && profile.longitude),
+    locationSource: (profile && profile.location_source) || null,
+    openJobs: await (async () => {
+      // v1.105.121 — the reciprocity, enforced. Not a nag above a list she can still read: no
+      // location, no jobs. It is a policy AND a reality — every distance, sort and proximity
+      // score below is measured from a point we do not have.
+      if (!profile || !profile.latitude || !profile.longitude) return [];
+
+      // v1.105.107 — TRUST decides what she may see; STRIPE decides whether she can be paid.
+      // This used to require `stripe_onboard_complete` as well, so a caregiver personally
+      // vouched for by a family still saw "Care Recipient", no city, no family name, no
+      // instructions and no care summary until she had finished setting up a bank account
+      // (Julia, 7d94657c). See src/utils/caregiverTrust.js for why that was backwards.
+      const results = [];
+
+      for (const s of openJobs) {
+        const bgCleared = maySeeRecipientDetails(profile, vouchedFamilyIds, s.family_user_id);
+        // Conflict detection: check against caregiver's upcoming sessions
+        const conflict = computeJobConflicts(s, upcoming);
+        // Distance from caregiver's location
+        const cgLat = profile.latitude || profile.work_latitude;
+        const cgLng = profile.longitude || profile.work_longitude;
+        const dist = (cgLat && cgLng && s.recipient_lat && s.recipient_lng)
+          ? Math.round(haversineDistance(cgLat, cgLng, s.recipient_lat, s.recipient_lng) * 10) / 10
+          : null;
+        // Legacy match score (kept for backward compatibility)
+        const match = computeMatchScore(s, profile, conflict.hasConflict, dist);
+
+        // Compute AI-powered match score (without insights for list view)
+        let aiScore = match.score; // fallback to legacy score
+        try {
+          const recipient = await db.prepare(`
+            SELECT * FROM care_recipients WHERE id = ?
+          `).get(s.care_recipient_id);
+
+          if (recipient) {
+            const aiMatchData = await scoreMatch(s, s, recipient, {}, null); // null = no DB/insights
+            aiScore = aiMatchData.score;
+          }
+        } catch (err) {
+          console.error(`AI matching error for session ${s.id}:`, err.message);
+          // Fall back to legacy score on error
+        }
+
+        // If background check not cleared, strip sensitive care recipient info
+        results.push({
+          id: s.id,
+          // v1.105.89 — shown, not hidden, and never acceptable. The client greys the card and
+          // drops the Accept/Propose buttons rather than leaving a gap where a job should be.
+          isOwnRequest: s.is_own_request === true || s.is_own_request === 1,
+          // v1.105.100 — is this job actually MINE to decline?
+          //
+          // Julia pressed "Can't make it" and got "Care request not found", twice. v1.105.91
+          // fixed the server to recognise offered_to_caregiver_id, but the BUTTON rendered on
+          // every job that was not your own — including open-pool jobs, where nobody was named
+          // and the server correctly refuses, because you decline an open job by not claiming
+          // it. A button that cannot succeed is worse than no button.
+          //
+          // Worse still: this same file expires an exclusive offer by clearing
+          // offered_to_caregiver_id and reverting the session to 'open'. So a request that WAS
+          // hers becomes an open job when the window lapses, and the button that worked
+          // yesterday silently stops working with nothing on screen changing.
+          isDirectedAtMe: s.offered_to_caregiver_id === profile.id || s.caregiver_id === profile.id,
+          // v1.105.108 — say WHY the person's details are missing, instead of leaving a card
+          // that looks like the app forgot who she was. The gate had three inputs and the
+          // payload reported none of them, so a wrong guess about which one was false cost a
+          // whole release to find out. Her own standing, never the family's.
+          detailsWithheld: !bgCleared,
+          detailsWithheldReason: detailsWithheldReason(profile, vouchedFamilyIds, s.family_user_id),
+          isBackgroundChecked: !!profile.is_background_checked,
+          vouchedByThisFamily: vouchedFamilyIds.has(s.family_user_id),
+          date: s.scheduled_date,
+          time: s.scheduled_time,
+          serviceType: s.service_type,
+          status: s.status,
+          durationHours: s.duration_hours,
+          recipientName: bgCleared ? s.recipient_name : null,
+          recipientCity: bgCleared ? s.recipient_city : (s.recipient_city ? s.recipient_city.split(',')[0] : null),
+          familyName: bgCleared ? s.family_name : null,
+          specialInstructions: bgCleared ? s.special_instructions : null,
+          estimatedCost: s.estimated_cost,
+          caregiverPayout: s.estimated_cost,
+          proposedRate: s.proposed_rate,
+          shortNoticeSurcharge: s.short_notice_surcharge,
+          timezone: s.care_timezone || "America/New_York",
+          hasConflict: conflict.hasConflict,
+          conflictWith: conflict.conflictWith,
+          conflictEndTime: conflict.conflictEndTime || null,
+          distanceMiles: dist,
+          matchScore: aiScore,
+          matchQuality: aiScore >= 75 ? 'great' : aiScore >= 50 ? 'good' : null,
+          offeredToCaregiverId: s.offered_to_caregiver_id || null,
+          exclusiveUntil: s.exclusive_until || null,
+          recipientAge: bgCleared ? (s.recipient_age || null) : null,
+          // v1.105.91 — full text for a cleared caregiver; still withheld entirely otherwise.
+          careSummary: bgCleared ? (s.cr_caregiver_briefing || null) : null,
+          healthTags: bgCleared ? (() => { try { return JSON.parse(s.cr_health_conditions || '[]').slice(0, 3); } catch { return []; } })() : [],
+          recipientLat: bgCleared ? (s.recipient_lat || null) : null,
+          recipientLng: bgCleared ? (s.recipient_lng || null) : null,
+          interviewRequired: !!s.interview_required,
+          interviewType: s.interview_type || null,
+          interviewStatus: s.interview_status || null,
+          careRecipientId: s.care_recipient_id,
+        });
+      }
+
+      return results;
+    })(),
+    recentlyCompleted: recentCompletedCg.map(s => {
+      // If family offered a specific rate (proposed_rate), use it — the offer is the offer.
+      let caregiverPayout;
+      // v1.107.7 — estimated_cost first: it is the number the hold, the capture and the payout
+      // are made from (agreed offer × time, or actual time once the visit is finished). The
+      // fallbacks below only cover a row that somehow has none.
+      if (parseFloat(s.estimated_cost) > 0) {
+        caregiverPayout = Math.round(parseFloat(s.estimated_cost) * 100) / 100;
+      } else if (s.proposed_rate && parseFloat(s.proposed_rate) > 0) {
+        caregiverPayout = Math.round(parseFloat(s.proposed_rate) * parseFloat(s.duration_hours || 2) * 100) / 100;
+      } else {
+        const rates = {
+          daytime: s.cg_rate_daytime || s.cg_hourly_rate || 28,
+          nighttime: s.cg_rate_nighttime || s.cg_hourly_rate || 28,
+          overnight: s.cg_rate_overnight || s.cg_hourly_rate || 28,
+          base: s.cg_hourly_rate || 28,
+        };
+        const storedSurcharge = parseFloat(s.short_notice_surcharge) || 0;
+        const shortNotice = storedSurcharge > 0;
+        const costResult = calculateSessionCost(s.scheduled_time, null, rates, {
+          scheduledDate: s.scheduled_date,
+          durationHours: parseFloat(s.duration_hours || 2),
+          shortNotice,
+        });
+        const surchargeToCaregiver = Math.round((costResult.surcharge || 0) * SURCHARGE_CAREGIVER_SHARE * 100) / 100;
+        caregiverPayout = Math.round((costResult.subtotal + surchargeToCaregiver) * 100) / 100;
+      }
+      return {
+        id: s.id,
+        date: s.scheduled_date,
+        time: s.scheduled_time,
+        serviceType: s.service_type,
+        durationHours: s.duration_hours,
+        recipientName: s.recipient_name,
+        locationCity: s.location_city,
+        visitSummary: s.care_feedback || s.visit_summary,
+        departureMood: s.departure_mood,
+        estimatedCost: s.estimated_cost,
+        caregiverPayout: caregiverPayout,
+        timezone: s.care_timezone || "America/New_York",
+      };
+    }),
+    stats: {
+      completedThisMonth: monthlyStats.completed_sessions || 0,
+      // 75/25 split: caregiver earns total minus 25% of surcharges
+      monthlyEarnings: Math.round(((monthlyStats.total_earnings || 0) - (monthlyStats.total_surcharges || 0) * SURCHARGE_PLATFORM_SHARE) * 100) / 100,
+      hoursThisMonth: Math.round((monthlyStats.total_hours || 0) * 10) / 10,
+      pendingEarnings: Math.round(((pending.pending_earnings || 0) - (pending.pending_surcharges || 0) * SURCHARGE_PLATFORM_SHARE) * 100) / 100,
+      assignedFamilies: assignments.length,
+    },
+    myProposals: myProposals.map(p => ({
+      id: p.id,
+      sessionId: p.session_id,
+      proposedDate: p.proposed_date,
+      proposedTime: p.proposed_time,
+      originalDate: p.original_date,
+      originalTime: p.original_time,
+      message: p.message,
+      status: p.status,
+      recipientName: p.recipient_name,
+      familyName: p.family_name,
+      serviceType: p.service_type,
+      durationHours: p.duration_hours,
+      createdAt: p.created_at,
+      respondedAt: p.responded_at,
+      expiresAt: p.expires_at,
+    })),
+    noShowAlerts: noShowAlerts.map(s => ({
+      id: s.id,
+      scheduledDate: s.scheduled_date,
+      scheduledTime: s.scheduled_time,
+      noShowAt: s.caregiver_no_show_at,
+      recipientName: s.recipient_name,
+      reviewRequired: !!s.review_required,
+      reviewCompleted: !!s.review_completed,
+    })),
+  });
+}
+
+// (interview data is fetched client-side via /api/interviews/* endpoints)
+
+// ─── Cared-For Dashboard (Granny's view — full-featured, same power as family) ───
+async function careForDashboard(db, userId, res) {
+  try {
+  const user = await db.prepare("SELECT first_name, last_name, stripe_customer_id FROM users WHERE id = ?").get(userId);
+
+  // Find care recipient linked to this user account
+  const recipient = await db.prepare(`
+    SELECT cr.* FROM care_recipients cr
+    WHERE cr.linked_user_id = ? AND ${TRUSTED_LINK_SQL}
+    LIMIT 1
+  `).get(userId);
+
+  if (!recipient) {
+    return res.json({ role: "care_for", userName: `${user.first_name} ${user.last_name}`, sessions: [], notes: [], upcomingSessions: [], recentActivity: [], assignedCaregivers: [], stats: {} });
+  }
+
+  // Resolve managed-by user name if present
+  let managedByName = null;
+  if (recipient.managed_by_user_id) {
+    const mgr = await db.prepare("SELECT first_name, last_name FROM users WHERE id = ?").get(recipient.managed_by_user_id);
+    if (mgr) managedByName = `${mgr.first_name} ${mgr.last_name}`;
+  }
+
+  const today = getTodayStringInZone();
+  const etNow = getNowInZone();
+  const monthStart = new Date(etNow); monthStart.setDate(1);
+  const monthStr = monthStart.getFullYear() + '-' + String(monthStart.getMonth() + 1).padStart(2, '0') + '-01';
+  const sevenDaysAgo = new Date(etNow); sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+  const sevenDaysAgoStr = sevenDaysAgo.getFullYear() + '-' + String(sevenDaysAgo.getMonth() + 1).padStart(2, '0') + '-' + String(sevenDaysAgo.getDate()).padStart(2, '0');
+
+  // Parallel batch: sessions, activity, caregivers, stats, notes — all at once
+  const [upcomingSessions, allSessions, recentActivity, unreadCount, assignedCaregivers, monthlyStats, notes, recentCompleted] = await Promise.all([
+    // Upcoming sessions (next 30 days, pending/confirmed/in_progress)
+    db.prepare(`
+      SELECT cs.*,
+        u.first_name || ' ' || u.last_name AS caregiver_name,
+        u.phone AS caregiver_phone,
+        cp.rating_avg AS caregiver_rating,
+        cp.id AS caregiver_profile_id
+      FROM care_sessions cs
+      LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+      LEFT JOIN users u ON cp.user_id = u.id
+      WHERE cs.care_recipient_id = ? AND cs.scheduled_date >= ?
+        AND cs.status IN ('requested', 'pending', 'confirmed', 'open', 'in_progress')
+      ORDER BY cs.scheduled_date ASC, cs.scheduled_time ASC
+      LIMIT 20
+    `).all(recipient.id, today),
+
+    // All future sessions for calendar
+    db.prepare(`
+      SELECT cs.id, cs.scheduled_date, cs.scheduled_time, cs.service_type, cs.status,
+        cs.duration_hours, cs.special_instructions,
+        u.first_name || ' ' || u.last_name AS caregiver_name
+      FROM care_sessions cs
+      LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+      LEFT JOIN users u ON cp.user_id = u.id
+      WHERE cs.care_recipient_id = ? AND cs.scheduled_date >= ?
+        AND cs.status NOT IN ('cancelled')
+      ORDER BY cs.scheduled_date ASC, cs.scheduled_time ASC
+    `).all(recipient.id, today),
+
+    // Recent activity feed
+    db.prepare(`
+      SELECT * FROM activity_feed
+      WHERE care_recipient_id = ? OR family_user_id = ?
+      ORDER BY created_at DESC LIMIT 10
+    `).all(recipient.id, userId),
+
+    // Unread notification count
+    db.prepare(`
+      SELECT COUNT(*) as count FROM activity_feed
+      WHERE (care_recipient_id = ? OR family_user_id = ?) AND is_read = 0
+    `).get(recipient.id, userId),
+
+    // Assigned caregivers (My Care Team)
+    db.prepare(`
+      SELECT ca.*, cp.user_id AS caregiver_user_id,
+        u.first_name, u.last_name, u.phone, u.email,
+        cp.rating_avg, cp.hourly_rate, cp.bio,
+        cp.rate_daytime, cp.rate_nighttime, cp.rate_overnight,
+        cp.specialties, cp.certifications, cp.care_preferences,
+        cp.id AS caregiver_profile_id
+      FROM caregiver_assignments ca
+      JOIN caregiver_profiles cp ON ca.caregiver_profile_id = cp.id
+      JOIN users u ON cp.user_id = u.id
+      WHERE ca.care_recipient_id = ? AND ca.is_active = 1
+    `).all(recipient.id),
+
+    // Monthly stats
+    db.prepare(`
+      SELECT
+        COUNT(*) as total_sessions,
+        SUM(duration_hours) as total_hours,
+        SUM(COALESCE(actual_cost, estimated_cost)) as total_spend
+      FROM care_sessions cs
+      WHERE cs.care_recipient_id = ?
+        AND cs.scheduled_date >= ?
+        AND cs.status IN ('confirmed', 'completed', 'in_progress')
+    `).get(recipient.id, monthStr),
+
+    // Notes
+    //
+    // v1.106.38 — two bugs in one query, both invisible from this screen.
+    //
+    // 1. `SELECT rn.*` pulled the `photo` column — a base64 data URI up to 5MB per row,
+    //    for legacy rows written before R2 — into memory for EVERY note, on every load
+    //    of this dashboard, and then dropped it in the shaper below. Nothing ever read it.
+    //
+    // 2. There was no visibility filter at all. GET /api/notes/:careRecipientId refuses
+    //    to show the linked care recipient the observations her family wrote about her;
+    //    this screen, which is HER screen, showed her all of them. Same record, same
+    //    person, two different answers, because the rule was written out in one route and
+    //    not the other. It now comes from utils/noteVisibility for both.
+    // v1.107.2 — and her managed-account settings decide whether she sees notes at all.
+    (async () => {
+      const na = await noteAccess(db, recipient.id, userId);
+      if (!na.read) return [];
+      const { sql: filterSql, params: filterParams } = na.filter;
+      return db.prepare(`
+        SELECT rn.id, rn.content, rn.note_type, rn.needs_attention,
+               (rn.photo IS NOT NULL) AS has_photo,
+               rn.created_at, rn.updated_at,
+               u.first_name AS author_first_name, u.last_name AS author_last_name, u.role AS author_role
+        FROM recipient_notes rn
+        JOIN users u ON rn.author_id = u.id
+        WHERE rn.care_recipient_id = ?${filterSql}
+        ORDER BY rn.created_at DESC
+      `).all(recipient.id, ...filterParams);
+    })(),
+
+    // Recent completed (for review/tips)
+    db.prepare(`
+      SELECT cs.id, cs.scheduled_date, cs.scheduled_time, cs.service_type, cs.duration_hours,
+        u.first_name || ' ' || u.last_name AS caregiver_name,
+        cp.rating_avg AS caregiver_rating,
+        r.rating AS review_rating
+      FROM care_sessions cs
+      LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+      LEFT JOIN users u ON cp.user_id = u.id
+      LEFT JOIN reviews r ON r.session_id = cs.id
+      WHERE cs.care_recipient_id = ?
+        AND cs.status = 'completed'
+        AND cs.scheduled_date >= ?
+      ORDER BY cs.scheduled_date DESC
+      LIMIT 5
+    `).all(recipient.id, sevenDaysAgoStr),
+  ]);
+
+  const parseJson = (str) => { try { return JSON.parse(str); } catch { return []; } };
+
+  res.json({
+    role: "care_for",
+    userName: `${user.first_name} ${user.last_name}`,
+    careRecipientId: recipient.id,
+    permissionTier: recipient.permission_tier || "full",
+    managedByName,
+    managedReason: recipient.managed_reason || null,
+    visibilitySettings: parseJson(recipient.visibility_settings) || null,
+    hasPaymentMethod: !!user.stripe_customer_id,
+    careProfile: {
+      healthConditions: parseJson(recipient.health_conditions),
+      medications: parseJson(recipient.medications),
+      preferences: recipient.preferences,
+      emergencyContactName: recipient.emergency_contact_name,
+      emergencyContactPhone: recipient.emergency_contact_phone,
+      pets: recipient.pets,
+      foodAllergies: parseJson(recipient.food_allergies),
+      medicalConditions: recipient.medical_conditions,
+      photo: recipientPhotoUrl(recipient),  // v1.106.7 — one owner for this URL shape
+      emoji: recipient.emoji,
+      locationCity: recipient.location_city,
+      locationState: recipient.location_state,
+    },
+    timezone: recipient.timezone || "America/New_York",
+    stats: {
+      sessionsThisMonth: monthlyStats?.total_sessions || 0,
+      totalHours: Math.round((monthlyStats?.total_hours || 0) * 10) / 10,
+      monthlySpend: Math.round((monthlyStats?.total_spend || 0) * 100) / 100,
+      unreadNotifications: unreadCount?.count || 0,
+      assignedCaregivers: assignedCaregivers.length,
+    },
+    upcomingSessions: upcomingSessions.map(s => ({
+      id: s.id,
+      date: s.scheduled_date,
+      time: s.scheduled_time,
+      serviceType: s.service_type,
+      status: s.status,
+      durationHours: s.duration_hours,
+      caregiverName: s.caregiver_name,
+      caregiverPhone: s.caregiver_phone,
+      caregiverRating: s.caregiver_rating,
+      caregiverProfileId: s.caregiver_profile_id,
+      specialInstructions: s.special_instructions,
+      privateOnly: s.private_only,
+    })),
+    sessions: allSessions.map(s => ({
+      id: s.id,
+      date: s.scheduled_date,
+      time: s.scheduled_time,
+      serviceType: s.service_type,
+      status: s.status,
+      durationHours: s.duration_hours,
+      caregiverName: s.caregiver_name,
+      specialInstructions: s.special_instructions,
+    })),
+    recentActivity: recentActivity.map(a => {
+      let meta = {};
+      try { meta = a.metadata ? JSON.parse(a.metadata) : {}; } catch(e) {} // expected: tolerated parse fallback
+      return {
+        id: a.id,
+        eventType: a.event_type,
+        title: a.title,
+        message: a.message,
+        isRead: a.is_read,
+        timestamp: a.created_at,
+        sessionId: meta.sessionId || null,
+      };
+    }),
+    recentCompleted: recentCompleted.map(s => ({
+      id: s.id,
+      date: s.scheduled_date,
+      time: s.scheduled_time,
+      serviceType: s.service_type,
+      durationHours: s.duration_hours,
+      caregiverName: s.caregiver_name,
+      hasReview: !!s.review_rating,
+      rating: s.review_rating,
+    })),
+    assignedCaregivers: assignedCaregivers.map(a => ({
+      assignmentId: a.id,
+      caregiverProfileId: a.caregiver_profile_id,
+      userId: a.caregiver_user_id,
+      firstName: a.first_name,
+      lastName: a.last_name,
+      phone: a.phone,
+      email: a.email,
+      rating: a.rating_avg,
+      hourlyRate: a.hourly_rate,
+      bio: a.bio,
+      specialties: parseJson(a.specialties),
+      certifications: parseJson(a.certifications),
+      isFavorite: a.is_favorite,
+    })),
+    notes: notes.map(n => ({
+      id: n.id,
+      content: n.content,
+      noteType: n.note_type,
+      authorName: `${n.author_first_name} ${n.author_last_name}`,
+      authorRole: n.author_role,
+      // v1.106.38 — the flag, never the blob. Pete: "Added a picture to a visit note today
+      // and it doesn't show up." It was saved; no screen but the family Care Profile ever
+      // drew it, because no other list was told a photo existed.
+      hasPhoto: n.has_photo === true || n.has_photo === 1,
+      createdAt: n.created_at,
+      updatedAt: n.updated_at,
+    })),
+  });
+  } catch (err) {
+    console.error('careForDashboard error:', err);
+    res.status(500).json({ error: 'Dashboard error', detail: err.message });
+  }
+}
+
+module.exports = router;

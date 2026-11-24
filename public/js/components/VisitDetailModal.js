@@ -1,0 +1,847 @@
+const VisitDetailModal = window.VisitDetailModal = ({ sessionId, role, onClose, onRefresh, onTimeChange }) => {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [cancelling, setCancelling] = useState(false);
+  // v1.124.0 — hosts without their own change sheet (Betty's page, Schedule, Care Team) get
+  // this one. Before, the button only appeared where the host passed onTimeChange: Home.
+  const [changing, setChanging] = useState(false);
+  const [showPhotos, setShowPhotos] = useState(true);
+  const [lightboxIdx, setLightboxIdx] = useState(null);
+  const [uploadingPhotos, setUploadingPhotos] = useState(false);
+  const [editingInstructions, setEditingInstructions] = useState(false);
+  const [instructionsText, setInstructionsText] = useState('');
+  const [savingInstructions, setSavingInstructions] = useState(false);
+  // v1.106.47 — "let her go, with pay". Two-step on purpose: it ends a visit and charges the
+  // whole booking, so it is not something to do with one stray tap.
+  const [releaseStep, setReleaseStep] = useState(null);
+  const [releaseReason, setReleaseReason] = useState('');
+  const [releasing, setReleasing] = useState(false);
+  const [releaseError, setReleaseError] = useState('');
+
+  const doRelease = async () => {
+    if (releasing) return;
+    setReleasing(true);
+    setReleaseError('');
+    try {
+      const res = await apiFetch(`/api/sessions/${sessionId}/release`, {
+        method: 'POST',
+        body: JSON.stringify({ reason: releaseReason.trim() || null }),
+      });
+      const d = await res?.json().catch(() => ({}));
+      if (res?.ok) {
+        setReleaseStep(null);
+        setReleaseReason('');
+        if (typeof showToast === 'function') {
+          showToast(`Visit ended \u2014 the caregiver will be paid $${Number(d.paid || 0).toFixed(2)} for the full booking`, 'success');
+        }
+        if (onRefresh) onRefresh();
+        handleClose();
+      } else {
+        // The server owns the permission decision, so its words are the ones to show.
+        setReleaseError(d?.error || 'Could not end that visit.');
+      }
+    } catch {
+      setReleaseError('Could not reach the server — check your connection.');
+    }
+    setReleasing(false);
+  };
+
+  // Push history state so back button / swipe-back closes the modal instead of navigating away
+  useEffect(() => {
+    if (!sessionId) return;
+    // Tag so we can detect our own history entry
+    window.history.pushState({ modal: 'visit-detail' }, '');
+    const handlePopState = () => { onClose(); };
+    window.addEventListener('popstate', handlePopState);
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+    };
+  }, [sessionId]);
+
+  // Wrap onClose to also pop our history entry when closed via X/overlay (not back)
+  const handleClose = () => {
+    if (window.history.state?.modal === 'visit-detail') {
+      // Pop our pushed entry — this fires popstate but our listener is about to be removed
+      window.__skipPopstate = true;
+      window.history.back();
+      setTimeout(() => { window.__skipPopstate = false; }, 50);
+    }
+    onClose();
+  };
+
+  const handlePhotoUpload = async (e) => {
+    const files = Array.from(e.target.files || []);
+    if (!files.length || !sessionId) return;
+    setUploadingPhotos(true);
+    try {
+      const formData = new FormData();
+      files.slice(0, 5).forEach(f => formData.append('photos', f));
+      const csrf = typeof getCsrfToken === 'function' ? getCsrfToken() : (window.getCsrfToken ? window.getCsrfToken() : null);
+      const headers = {};
+      if (csrf) headers['X-CSRF-Token'] = csrf;
+      const res = await fetch(`${window.API_BASE || ''}/api/photos/session/${sessionId}`, {
+        method: 'POST', credentials: 'same-origin', headers, body: formData,
+      });
+      if (res.ok) {
+        // Refresh session data to show new photos
+        const refreshRes = await apiFetch(`/api/sessions/${sessionId}`);
+        if (refreshRes?.ok) setData(await refreshRes.json());
+        if (typeof showToast === 'function') showToast('Photos uploaded!', 'success');
+      } else {
+        if (typeof showToast === 'function') showToast('Photo upload failed', 'error');
+      }
+    } catch (err) {
+      if (typeof showToast === 'function') showToast('Photo upload failed', 'error');
+    }
+    setUploadingPhotos(false);
+    e.target.value = '';
+  };
+
+  const handlePhotoDelete = async (photoId) => {
+    if (!photoId || !sessionId) return;
+    if (!confirm('Delete this photo? This cannot be undone.')) return;
+    try {
+      const res = await apiFetch(`/api/photos/${photoId}`, { method: 'DELETE' });
+      if (res?.ok) {
+        // Refresh session data to remove the deleted photo
+        const refreshRes = await apiFetch(`/api/sessions/${sessionId}`);
+        if (refreshRes?.ok) setData(await refreshRes.json());
+        setLightboxIdx(null);
+        if (typeof showToast === 'function') showToast('Photo deleted', 'success');
+      } else {
+        const err = await res?.json().catch(() => ({}));
+        if (typeof showToast === 'function') showToast(err.error || 'Could not delete photo', 'error');
+      }
+    } catch (err) {
+      if (typeof showToast === 'function') showToast('Could not delete photo', 'error');
+    }
+  };
+
+  useEffect(() => {
+    if (!sessionId) return;
+    const fetchDetail = async () => {
+      setLoading(true);
+      setError('');
+      try {
+        const res = await apiFetch(`/api/sessions/${sessionId}`);
+        if (res?.ok) {
+          setData(await res.json());
+        } else {
+          setError('Could not load session details.');
+        }
+      } catch (err) {
+        setError('Network error loading session.');
+      }
+      setLoading(false);
+    };
+    fetchDetail();
+  }, [sessionId]);
+
+  // ─── v1.124.1 — a pending change is visible wherever the visit is opened ───
+  //
+  // Pete, 10/19: asked Tina to move Nov 7 to Nov 14. The request was saved and pushed, and
+  // then neither of them could see it — this modal said nothing about a pending change unless
+  // its host (Home) passed onTimeChange, and even then only as a button, and even to the
+  // person who asked (who cannot accept their own request). Now: the change itself, every
+  // time, and the answer buttons for whoever has to answer.
+  const [pendingChange, setPendingChange] = useState(null);
+  const [answering, setAnswering] = useState(false);
+  const pendingId = data && data.session ? data.session.pending_time_change_id : null;
+  useEffect(() => {
+    if (!sessionId || !pendingId) { setPendingChange(null); return; }
+    let live = true;
+    (async () => {
+      try {
+        const r = await apiFetch(`/api/sessions/${sessionId}/time-change`);
+        if (r && r.ok) { const d = await r.json(); if (live) setPendingChange(d.proposal || null); }
+      } catch { /* the visit still shows; the change box just stays away */ }
+    })();
+    return () => { live = false; };
+  }, [sessionId, pendingId]);
+  const changeIsMine = !!(pendingChange && pendingChange.proposed_by === role);
+  const answerChange = async (action) => {
+    if (!pendingChange) return;
+    setAnswering(true);
+    try {
+      const r = await apiFetch(`/api/sessions/${sessionId}/time-change/${pendingChange.id}/respond`, {
+        method: 'PUT', body: JSON.stringify({ action }),
+      });
+      if (r && (r.ok || r.status === 409)) {
+        try { window.dispatchEvent(new Event('inplace:attention-stale')); } catch { /* nothing listening */ }
+        if (typeof showToast === 'function') showToast(action === 'accept' ? 'Accepted — the visit is updated' : 'Declined — the visit stays as it was', 'success');
+        setPendingChange(null);
+        const rr = await apiFetch(`/api/sessions/${sessionId}`);
+        if (rr && rr.ok) setData(await rr.json());
+        if (onRefresh) onRefresh();
+      } else {
+        const d = r ? await r.json().catch(() => ({})) : {};
+        if (typeof showToast === 'function') showToast((d && d.error) || 'That did not go through — nothing changed', 'error');
+      }
+    } catch {
+      if (typeof showToast === 'function') showToast('That did not go through — nothing changed', 'error');
+    }
+    setAnswering(false);
+  };
+
+  const formatTime12 = (t) => {
+    if (!t) return '';
+    const [h, m] = t.split(':').map(Number);
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    const dh = h > 12 ? h - 12 : h === 0 ? 12 : h;
+    return `${dh}:${String(m).padStart(2, '0')} ${ampm}`;
+  };
+
+  const formatDateNice = (dateStr) => {
+    if (!dateStr) return '';
+    const [y, m, d] = dateStr.split('-').map(Number);
+    const dt = new Date(y, m - 1, d);
+    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return `${days[dt.getDay()]}, ${months[dt.getMonth()]} ${d}, ${y}`;
+  };
+
+  const formatDateTime = (dt) => {
+    if (!dt) return '';
+    const d = new Date(dt);
+    return d.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true });
+  };
+
+  const statusColors = {
+    completed: { bg: 'var(--color-success-bg)', color: 'var(--color-success)', label: 'Completed' },
+    in_progress: { bg: 'var(--color-info-bg)', color: 'var(--color-info)', label: 'In Progress' },
+    confirmed: { bg: 'var(--color-success-bg)', color: 'var(--role-color)', label: 'Confirmed' },
+    open: { bg: 'var(--color-warning-bg)', color: 'var(--accent-color)', label: 'Open' },
+    requested: { bg: 'var(--color-warning-bg)', color: 'var(--color-warning)', label: 'Requested' },
+    cancelled: { bg: 'var(--color-error-bg)', color: 'var(--color-error)', label: 'Cancelled' },
+  };
+
+  if (!sessionId) return null;
+
+  return (
+    <div className="modal-overlay" onClick={handleClose}>
+      <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 560, maxHeight: '90vh', overflow: 'auto' }}>
+        <button className="modal-close" onClick={handleClose}>✕</button>
+
+        {loading && (
+          <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>Loading session details...</div>
+        )}
+
+        {error && (
+          <div style={{ padding: 20, textAlign: 'center', color: 'var(--color-error)' }}>{error}</div>
+        )}
+
+        {data && (() => {
+          const s = data.session;
+          const v = data.visitLog;
+          const photos = data.photos || [];
+          const cost = data.costBreakdown;
+          const st = statusColors[s.status] || { bg: 'var(--bg-primary)', color: 'var(--text-secondary)', label: s.status };
+
+          // Parse condition tags
+          let conditionTags = [];
+          try { conditionTags = v?.condition_tags ? JSON.parse(v.condition_tags) : []; } catch(e) {}
+
+          // Parse tasks completed
+          let tasksCompleted = [];
+          try { tasksCompleted = v?.tasks_completed ? JSON.parse(v.tasks_completed) : []; } catch(e) {}
+
+          const svcLabel = formatServiceType(s.service_type);
+
+          return (
+            <>
+              {/* Header */}
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+                  <div>
+                    <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)' }}>{svcLabel}</div>
+                    <div style={{ fontSize: 14, color: 'var(--text-secondary)', marginTop: 2 }}>
+                      for <strong>{s.recipient_name || 'Care Recipient'}</strong>
+                    </div>
+                  </div>
+                  <span style={{ background: st.bg, color: st.color, padding: '4px 12px', borderRadius: 20, fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap' }}>{st.label}</span>
+                </div>
+              </div>
+
+              {/* Session Info */}
+              <div style={{ background: 'var(--bg-primary)', padding: 14, borderRadius: 10, marginBottom: 14 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '110px 1fr', gap: '6px 12px', fontSize: 14 }}>
+                  <span style={{ color: 'var(--text-tertiary)' }}>Date</span>
+                  <span style={{ fontWeight: 500 }}>{formatDateNice(s.scheduled_date)}</span>
+                  <span style={{ color: 'var(--text-tertiary)' }}>Time</span>
+                  <span style={{ fontWeight: 500 }}>{formatTime12(s.scheduled_time)} ({s.duration_hours || 2}h)</span>
+                  <span style={{ color: 'var(--text-tertiary)' }}>Service</span>
+                  <span style={{ fontWeight: 500 }}>{svcLabel}</span>
+                  {s.caregiver_name && (
+                    <>
+                      <span style={{ color: 'var(--text-tertiary)' }}>Caregiver</span>
+                      <span style={{ fontWeight: 500 }}>{s.caregiver_name}</span>
+                    </>
+                  )}
+                  {!s.caregiver_name && ['open', 'requested'].includes(s.status) && (
+                    <>
+                      <span style={{ color: 'var(--text-tertiary)' }}>Caregiver</span>
+                      <span style={{ fontWeight: 500, color: 'var(--accent-color)' }}>Awaiting assignment</span>
+                    </>
+                  )}
+                  {s.booked_by_name && (
+                    <>
+                      <span style={{ color: 'var(--text-tertiary)' }}>Booked by</span>
+                      <span>{s.booked_by_name}</span>
+                    </>
+                  )}
+                  {(s.location_address || s.location_city) && (() => {
+                    const addrParts = [s.location_address, s.location_city, s.location_state].filter(Boolean).join(', ');
+                    const mapsUrl = `https://maps.google.com/?q=${encodeURIComponent(addrParts)}`;
+                    return (
+                      <>
+                        <span style={{ color: 'var(--text-tertiary)' }}>Location</span>
+                        <a href={mapsUrl} target="_blank" rel="noopener noreferrer"
+                          style={{ fontSize: 13, color: 'var(--role-color)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+                            <circle cx="12" cy="10" r="3"></circle>
+                          </svg>
+                          {addrParts}
+                        </a>
+                      </>
+                    );
+                  })()}
+                  {s.flex_timing && s.flex_timing !== 'strict' && (
+                    <>
+                      <span style={{ color: 'var(--text-tertiary)' }}>Overtime</span>
+                      <span style={{ fontSize: 13 }}>
+                        <span style={{ background: s.flex_timing === 'open' ? '#dbeafe' : '#fef3c7', color: s.flex_timing === 'open' ? '#1e40af' : '#92400e', padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600 }}>
+                          {s.flex_timing === 'flexible' ? 'Flexible (+30 min)' : 'Open-ended (+2 hrs)'}
+                        </span>
+                      </span>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {/* ─── v1.106.47 — release the caregiver with full pay ───
+                  Pete: "Sara arrives with Betty on Friday... she would like to let Tina take
+                  the rest of the day off with pay. Right now there's no ability for Tina to
+                  check out without her pay being [cut]."
+                  Family side only, and only while the visit is running. The server decides
+                  whether this caller may actually do it (CAP.BOOK_CARE) — this button is the
+                  offer, not the permission, so a refusal is shown rather than assumed. */}
+              {role !== 'caregiver' && s.status === 'in_progress' && (
+                <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)', borderRadius: 10, padding: 14, marginBottom: 14 }}>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>Taking over from here?</div>
+                  <div style={{ fontSize: 12.5, color: 'var(--text-secondary)', marginTop: 3, lineHeight: 1.45 }}>
+                    End the visit now and pay {s.caregiver_name ? s.caregiver_name.split(' ')[0] : 'the caregiver'} for the whole booking. They{'\u2019'}ll be told they can leave.
+                  </div>
+                  {releaseStep === 'confirm' ? (
+                    <div style={{ marginTop: 10 }}>
+                      <input value={releaseReason} onChange={(e) => setReleaseReason(e.target.value)}
+                        placeholder="Why, for your own records (optional)" maxLength={500}
+                        style={{ width: '100%', padding: '9px 11px', borderRadius: 8, border: '1px solid var(--border-color)', background: 'var(--bg-card)', color: 'var(--text-primary)', font: 'inherit', fontSize: 13, boxSizing: 'border-box' }} />
+                      <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                        <button onClick={doRelease} disabled={releasing} style={{
+                          flex: 1, minHeight: 44, borderRadius: 9, border: 'none', font: 'inherit', fontWeight: 700, fontSize: 13.5,
+                          background: 'var(--color-success)', color: 'var(--text-on-primary)', cursor: releasing ? 'default' : 'pointer', opacity: releasing ? 0.6 : 1,
+                        }}>{releasing ? 'Ending…' : `Yes — end it and pay in full`}</button>
+                        <button onClick={() => { setReleaseStep(null); setReleaseReason(''); }} disabled={releasing} style={{
+                          minHeight: 44, padding: '0 16px', borderRadius: 9, border: '1px solid var(--border-color)', font: 'inherit', fontSize: 13.5,
+                          background: 'var(--bg-card)', color: 'var(--text-secondary)', cursor: 'pointer',
+                        }}>Cancel</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button onClick={() => setReleaseStep('confirm')} style={{
+                      width: '100%', minHeight: 44, marginTop: 10, borderRadius: 9,
+                      border: '1px solid var(--border-color)', background: 'var(--bg-card)',
+                      color: 'var(--text-primary)', font: 'inherit', fontWeight: 600, fontSize: 13.5, cursor: 'pointer',
+                    }}>Release with pay</button>
+                  )}
+                  {releaseError && (
+                    <div style={{ fontSize: 12, color: 'var(--color-error)', marginTop: 8, lineHeight: 1.4 }}>{releaseError}</div>
+                  )}
+                </div>
+              )}
+
+              {/* Caregiver Instructions — editable by family/care_for, read-only for caregiver */}
+              {(() => {
+                const canEdit = (role === 'family' || role === 'care_for' || role === 'admin') && !['completed', 'cancelled'].includes(s.status);
+                const hasInstructions = !!s.special_instructions;
+                const saveInstructions = async () => {
+                  setSavingInstructions(true);
+                  try {
+                    const res = await apiFetch(`/api/sessions/${s.id}/instructions`, {
+                      method: 'PUT',
+                      headers: { 'Content-Type': 'application/json' },
+                      // v1.109.6 — the textarea holds the WHOLE text, so this is a replace. It used
+                      // to append, which doubled the instructions on every edit.
+                      body: JSON.stringify({ specialInstructions: instructionsText, mode: 'replace' })
+                    });
+                    if (res?.ok) {
+                      const result = await res.json();
+                      s.special_instructions = result.special_instructions;
+                      if (!result.unchanged) s.instructions_updated_at = new Date().toISOString();
+                      if (result.caregiverNotified && typeof window.__showToast === 'function') {
+                        const first = s.caregiver_name ? s.caregiver_name.split(' ')[0] : 'Your caregiver';
+                        window.__showToast(`Sent to ${first} — they'll be asked to confirm they've read them.`, 'success');
+                      }
+                      setEditingInstructions(false);
+                      if (onRefresh) onRefresh();
+                    } else {
+                      const err = await res?.json().catch(() => ({}));
+                      if (typeof window.__showToast === 'function') window.__showToast(err?.error || 'Failed to save instructions', 'error');
+                    }
+                  } catch (e) {
+                    console.error('Save instructions error:', e);
+                    if (typeof window.__showToast === 'function') window.__showToast('Network error saving instructions', 'error');
+                  }
+                  setSavingInstructions(false);
+                };
+
+                if (!hasInstructions && !canEdit) return null;
+
+                return (
+                  <div style={{ background: 'var(--bg-primary)', border: '1px solid #e0e0e0', borderRadius: 10, padding: 14, marginBottom: 14 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: editingInstructions || hasInstructions ? 8 : 0 }}>
+                      <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--role-color)' }}>
+                        {String.fromCodePoint(0x1F4CB)} Caregiver Instructions
+                      </div>
+                      {canEdit && !editingInstructions && (
+                        <button onClick={() => { setInstructionsText(s.special_instructions || ''); setEditingInstructions(true); }}
+                          style={{ background: 'none', border: 'none', color: 'var(--role-color)', fontSize: 13, fontWeight: 600, cursor: 'pointer', padding: '2px 8px' }}>
+                          {hasInstructions ? 'Edit' : '+ Add'}
+                        </button>
+                      )}
+                    </div>
+                    {editingInstructions ? (
+                      <div>
+                        <textarea value={instructionsText} onChange={(e) => setInstructionsText(e.target.value)}
+                          placeholder="Leave instructions for the caregiver (e.g., activities, requests, things to note)..."
+                          rows={4} maxLength={2000}
+                          style={{ width: '100%', fontSize: 13, padding: 10, borderRadius: 8, border: '1px solid #ccc', resize: 'vertical', fontFamily: 'inherit', boxSizing: 'border-box' }} />
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 6 }}>
+                          <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{instructionsText.length}/2000</span>
+                          <div style={{ display: 'flex', gap: 8 }}>
+                            <button onClick={() => setEditingInstructions(false)}
+                              style={{ background: 'none', border: '1px solid #ccc', borderRadius: 8, padding: '6px 14px', fontSize: 13, cursor: 'pointer' }}>Cancel</button>
+                            <button onClick={saveInstructions} disabled={savingInstructions}
+                              style={{ background: 'var(--role-color)', color: '#fff', border: 'none', borderRadius: 8, padding: '6px 14px', fontSize: 13, fontWeight: 600, cursor: 'pointer', opacity: savingInstructions ? 0.6 : 1 }}>
+                              {savingInstructions ? 'Saving...' : 'Save'}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ) : hasInstructions ? (
+                      <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{linkify(s.special_instructions)}</div>
+                    ) : null}
+                    {/* v1.109.6 — did she read them? Pete: "I get the sense Tina is just sort of
+                        blasting through the check in and missing notes." */}
+                    {!editingInstructions && hasInstructions && role !== 'caregiver' && s.caregiver_name && (() => {
+                      const first = s.caregiver_name.split(' ')[0];
+                      const ackAt = s.instructions_acknowledged_at;
+                      const updAt = s.instructions_updated_at;
+                      const needAck = !ackAt || (updAt && new Date(updAt) > new Date(ackAt));
+                      let text = null, color = 'var(--text-muted)';
+                      if (!needAck) { text = `\u2713 ${first} read these \u00B7 ${formatDateTime(ackAt)}`; color = 'var(--color-success)'; }
+                      else if (s.status === 'in_progress') { text = `Not yet confirmed by ${first}. They stay on screen until ${first} does.`; color = 'var(--color-warning)'; }
+                      else if (s.status === 'confirmed') { text = `${first} will be asked to confirm these at check-in.`; }
+                      if (!text) return null;
+                      return <div data-testid="instructions-ack-status" style={{ fontSize: 12, fontWeight: 600, color, marginTop: 8 }}>{text}</div>;
+                    })()}
+                  </div>
+                );
+              })()}
+
+              {/* Visit Log — check-in/out, moods, notes */}
+              {v && (
+                <div style={{ background: 'var(--bg-surface)', border: '1px solid #e0e0e0', borderRadius: 10, padding: 14, marginBottom: 14 }}>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--role-color)', marginBottom: 10 }}>Visit Details</div>
+
+                  {/* v1.108.0 — the visit report, first: it is what the family came to read */}
+                  {typeof VisitReportCard !== 'undefined' && (data.visitReport || data.visitSummaryText) && (
+                    <VisitReportCard report={data.visitReport} summaryText={data.visitSummaryText} />
+                  )}
+
+                  {/* v1.126.1 — mileage, and the leader's OK on miles past the cap */}
+                  {typeof VisitMileageReport !== 'undefined' && <VisitMileageReport sessionId={sessionId} />}
+
+                  {/* Check-in/out times */}
+                  <div style={{ display: 'flex', gap: 16, marginBottom: 10, flexWrap: 'wrap' }}>
+                    {v.check_in_time && (
+                      <div style={{ fontSize: 13 }}>
+                        <span style={{ color: 'var(--text-tertiary)' }}>Check-in: </span>
+                        <span style={{ fontWeight: 500 }}>{formatDateTime(v.check_in_time)}</span>
+                      </div>
+                    )}
+                    {v.check_out_time && (
+                      <div style={{ fontSize: 13 }}>
+                        <span style={{ color: 'var(--text-tertiary)' }}>Check-out: </span>
+                        <span style={{ fontWeight: 500 }}>{formatDateTime(v.check_out_time)}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Moods */}
+                  {(v.arrival_mood || v.departure_mood) && (() => {
+                    const parseMoods = (val) => {
+                      if (!val) return [];
+                      try { const p = JSON.parse(val); if (Array.isArray(p)) return p; } catch {}
+                      return [val];
+                    };
+                    const arrMoods = parseMoods(v.arrival_mood);
+                    const depMoods = parseMoods(v.departure_mood);
+                    return (
+                      <div style={{ display: 'flex', gap: 12, marginBottom: 10, flexWrap: 'wrap' }}>
+                        {arrMoods.length > 0 && (
+                          <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexWrap: 'wrap' }}>
+                            <span style={{ fontSize: 12, color: 'var(--text-tertiary)', marginRight: 2 }}>Arrival:</span>
+                            {arrMoods.map((m, i) => (
+                              <span key={i} style={{ background: 'var(--color-success-bg)', padding: '3px 10px', borderRadius: 12, fontSize: 12, fontWeight: 500 }}>{m}</span>
+                            ))}
+                          </div>
+                        )}
+                        {depMoods.length > 0 && (
+                          <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexWrap: 'wrap' }}>
+                            <span style={{ fontSize: 12, color: 'var(--text-tertiary)', marginRight: 2 }}>Departure:</span>
+                            {depMoods.map((m, i) => (
+                              <span key={i} style={{ background: 'var(--color-info-bg)', padding: '3px 10px', borderRadius: 12, fontSize: 12, fontWeight: 500 }}>{m}</span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
+
+                  {/* Condition tags */}
+                  {conditionTags.length > 0 && (
+                    <div style={{ marginBottom: 10 }}>
+                      <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginBottom: 4 }}>Condition Tags</div>
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                        {conditionTags.map((tag, i) => (
+                          <span key={i} style={{ background: 'var(--color-purple-bg)', color: 'var(--color-purple)', padding: '3px 10px', borderRadius: 12, fontSize: 12, fontWeight: 500 }}>{tag}</span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Caregiver Notes (deduplicated — summary and care_feedback may contain the same text) */}
+                  {(v.care_feedback || v.summary) && (
+                    <div style={{ marginBottom: 8 }}>
+                      <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginBottom: 2 }}>Caregiver Notes</div>
+                      <div style={{ fontSize: 14, color: 'var(--text-primary)', lineHeight: 1.5, background: 'var(--bg-primary)', padding: 10, borderRadius: 8 }}>{v.care_feedback || v.summary}</div>
+                    </div>
+                  )}
+                  {v.summary && v.care_feedback && v.summary !== v.care_feedback && (
+                    <div style={{ marginBottom: 8 }}>
+                      <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginBottom: 2 }}>Additional Notes</div>
+                      <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{v.summary}</div>
+                    </div>
+                  )}
+
+                  {/* Tasks completed */}
+                  {tasksCompleted.length > 0 && (
+                    <div style={{ marginBottom: 8 }}>
+                      <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginBottom: 4 }}>Tasks Completed</div>
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                        {tasksCompleted.map((task, i) => (
+                          <span key={i} style={{ background: 'var(--color-success-bg)', color: 'var(--color-success)', padding: '3px 10px', borderRadius: 12, fontSize: 12 }}>✓ {task}</span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ─── v1.106.30 — say the evidence, not the coordinate ───
+                      This printed the stored lat/lng to four decimal places. Since v1.105.23
+                      that value is deliberately ROUNDED TO TWO — a ~1.1km grid cell, chosen
+                      to sit outside the 1,750ft "precise location" line that Washington's My
+                      Health My Data Act treats as health data. So the four decimals were two
+                      real digits and two zeros, and Pete read it exactly as it looks:
+                      "(37.1800, -80.58) which isn't super accurate."
+                      It was accurate. The coordinate is not the evidence — check_in_distance_ft
+                      is, computed at FULL precision before the rounding. Show that. It answers
+                      the question the line is there to answer ("was she at the house?") and
+                      stops publishing a coordinate to say it. */}
+                  {(() => {
+                    const flag = v.check_in_geo_flag;
+                    const ft = v.check_in_distance_ft;
+                    if (flag === 'no_geo' || (!v.check_in_latitude && !v.check_in_longitude)) {
+                      return (
+                        <div style={{ fontSize: 12, color: 'var(--color-warning)', marginTop: 6 }}>
+                          {'\u26A0'} No location recorded at check-in
+                        </div>
+                      );
+                    }
+                    if (flag === 'no_home_geo' || ft === null || ft === undefined) {
+                      return (
+                        <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 6 }}>
+                          {'\uD83D\uDCCD'} Location recorded {'\u2014'} no address on file to check it against
+                        </div>
+                      );
+                    }
+                    const far = flag === 'far';
+                    const feet = Math.round(ft);
+                    const dist = feet < 1000 ? `${feet} ft` : `${(feet / 5280).toFixed(1)} miles`;
+                    return (
+                      <div style={{ fontSize: 12, color: far ? 'var(--color-warning)' : 'var(--color-success)', marginTop: 6 }}>
+                        {far ? '\u26A0' : '\u2713'} Checked in {dist} from the care address
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
+
+              {/* Upload photos prompt when none exist */}
+              {photos.length === 0 && ['completed', 'in_progress'].includes(s.status) && (
+                <div style={{ border: '1px dashed #ccc', borderRadius: 10, padding: 16, marginBottom: 14, textAlign: 'center' }}>
+                  <div style={{ fontSize: 24, marginBottom: 6 }}>{'\uD83D\uDCF7'}</div>
+                  <div style={{ fontSize: 13, color: 'var(--text-tertiary)', marginBottom: 10 }}>No visit photos yet</div>
+                  <label style={{
+                    display: 'inline-block', padding: '8px 16px', background: '#f0f7f5', color: 'var(--role-color)',
+                    border: '1px solid #1b6b5a', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                  }}>
+                    {uploadingPhotos ? 'Uploading...' : 'Upload Photos'}
+                    <input type="file" accept="image/*" multiple onChange={handlePhotoUpload} style={{ display: 'none' }} disabled={uploadingPhotos} />
+                  </label>
+                </div>
+              )}
+
+              {/* No visit log for non-completed sessions */}
+              {!v && s.status !== 'completed' && s.status !== 'in_progress' && (
+                <div style={{ background: 'var(--bg-primary)', padding: 14, borderRadius: 10, marginBottom: 14, fontSize: 13, color: 'var(--text-tertiary)', textAlign: 'center' }}>
+                  Visit details will appear here after the caregiver checks in and out.
+                </div>
+              )}
+
+              {/* Photos */}
+              {photos.length > 0 && (
+                <div style={{ border: '1px solid #e0e0e0', borderRadius: 10, padding: 14, marginBottom: 14 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--role-color)' }}>{'\uD83D\uDCF7'} Visit Photos ({photos.length})</div>
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                      <label style={{ background: 'none', border: 'none', color: 'var(--role-color)', cursor: 'pointer', fontSize: 12, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <span>+ Add</span>
+                        <input type="file" accept="image/*" multiple onChange={handlePhotoUpload} style={{ display: 'none' }} disabled={uploadingPhotos} />
+                      </label>
+                      {photos.length > 6 && (
+                        <button type="button" onClick={() => setShowPhotos(!showPhotos)}
+                          style={{ background: 'none', border: 'none', color: 'var(--role-color)', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
+                          {showPhotos ? 'Show less' : `Show all ${photos.length}`}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))', gap: 8 }}>
+                    {(showPhotos ? photos : photos.slice(0, 6)).map((p, i) => (
+                      <div key={i} onClick={() => setLightboxIdx(i)} style={{ borderRadius: 8, overflow: 'hidden', border: '1px solid #eee', cursor: 'pointer', position: 'relative' }}>
+                        <img src={p.photo_url} alt={p.caption || 'Visit photo'} style={{ width: '100%', height: 90, objectFit: 'cover', display: 'block' }} />
+                        {p.id && (
+                          <button onClick={(e) => { e.stopPropagation(); handlePhotoDelete(p.id); }}
+                            style={{ position: 'absolute', top: 4, right: 4, width: 22, height: 22, borderRadius: '50%', background: 'rgba(0,0,0,0.55)', border: 'none', color: '#fff', fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1, padding: 0 }}
+                            title="Delete photo">{'\u00D7'}</button>
+                        )}
+                        {p.caption && (
+                          <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'linear-gradient(transparent, rgba(0,0,0,0.6))', padding: '12px 6px 4px', fontSize: 10, color: 'var(--text-on-primary)', lineHeight: 1.3 }}>{p.caption}</div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Photo Lightbox */}
+              {lightboxIdx !== null && photos[lightboxIdx] && (
+                <div onClick={() => setLightboxIdx(null)} style={{
+                  position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 9999,
+                  background: 'rgba(0,0,0,0.9)', display: 'flex', flexDirection: 'column',
+                  alignItems: 'center', justifyContent: 'center', padding: 20,
+                }}>
+                  <button onClick={(e) => { e.stopPropagation(); setLightboxIdx(null); }}
+                    style={{ position: 'absolute', top: 16, right: 20, background: 'none', border: 'none', color: 'var(--text-on-primary)', fontSize: 28, cursor: 'pointer', zIndex: 10000 }}>{'\u2715'}</button>
+                  {photos.length > 1 && lightboxIdx > 0 && (
+                    <button onClick={(e) => { e.stopPropagation(); setLightboxIdx(lightboxIdx - 1); }}
+                      style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', background: 'rgba(255,255,255,0.2)', border: 'none', color: 'var(--text-on-primary)', fontSize: 28, borderRadius: '50%', width: 44, height: 44, cursor: 'pointer' }}>{'\u2039'}</button>
+                  )}
+                  {photos.length > 1 && lightboxIdx < photos.length - 1 && (
+                    <button onClick={(e) => { e.stopPropagation(); setLightboxIdx(lightboxIdx + 1); }}
+                      style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', background: 'rgba(255,255,255,0.2)', border: 'none', color: 'var(--text-on-primary)', fontSize: 28, borderRadius: '50%', width: 44, height: 44, cursor: 'pointer' }}>{'\u203A'}</button>
+                  )}
+                  <img src={photos[lightboxIdx].photo_url} alt="" onClick={(e) => e.stopPropagation()}
+                    style={{ maxWidth: '90%', maxHeight: '75vh', borderRadius: 10, objectFit: 'contain' }} />
+                  {photos[lightboxIdx].caption && (
+                    <div style={{ color: 'var(--text-on-primary)', fontSize: 14, marginTop: 12, textAlign: 'center', maxWidth: 500 }}>{photos[lightboxIdx].caption}</div>
+                  )}
+                  <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: 12, marginTop: 6 }}>{lightboxIdx + 1} of {photos.length}</div>
+                  {photos[lightboxIdx].id && (
+                    <button onClick={(e) => { e.stopPropagation(); handlePhotoDelete(photos[lightboxIdx].id); }}
+                      style={{ marginTop: 12, padding: '8px 20px', background: 'rgba(220,53,69,0.85)', border: 'none', color: '#fff', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                      Delete Photo
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {/* Cost Breakdown — role-aware */}
+              {cost && role === 'caregiver' && (
+                <div style={{ background: 'var(--bg-surface)', border: '1px solid #e0e0e0', borderRadius: 10, padding: 14, marginBottom: 14 }}>
+                  <div style={{ textAlign: 'center', marginBottom: 12, paddingBottom: 10, borderBottom: '1px solid #f0f0f0' }}>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>You Earn</div>
+                    <div style={{ fontSize: 28, fontWeight: 800, color: 'var(--role-color)', marginTop: 2 }}>${(cost.caregiverPayout || cost.total).toFixed(2)}</div>
+                  </div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6 }}>Breakdown</div>
+                  {cost.tierBreakdown?.map((t, i) => (
+                    <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: 'var(--text-secondary)', marginBottom: 3 }}>
+                      <span>{t.hours}h {t.tier} @ ${t.rate}/hr</span>
+                      <span>${t.amount.toFixed(2)}</span>
+                    </div>
+                  ))}
+                  {cost.caregiverSurchargeShare > 0 && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: 'var(--accent-color)', fontWeight: 600, marginBottom: 3 }}>
+                      <span>Short notice bonus</span>
+                      <span>+${cost.caregiverSurchargeShare.toFixed(2)}</span>
+                    </div>
+                  )}
+                  {cost.overtimeMinutes > 0 && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: 'var(--color-warning)', fontWeight: 600, marginBottom: 3 }}>
+                      <span>Overtime ({cost.overtimeMinutes} min)</span>
+                      <span>+${cost.overtimeCost.toFixed(2)}</span>
+                    </div>
+                  )}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, color: 'var(--role-color)', fontWeight: 700, borderTop: '1px solid #f0f0f0', paddingTop: 4, marginTop: 4 }}>
+                    <span>Your total</span>
+                    <span>${(cost.caregiverPayout || cost.total).toFixed(2)}</span>
+                  </div>
+                </div>
+              )}
+              {cost && role !== 'caregiver' && (
+                <div style={{ background: 'var(--bg-surface)', border: '1px solid #e0e0e0', borderRadius: 10, padding: 14, marginBottom: 14 }}>
+                  <div style={{ textAlign: 'center', marginBottom: 12, paddingBottom: 10, borderBottom: '1px solid #f0f0f0' }}>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Your Cost</div>
+                    <div style={{ fontSize: 28, fontWeight: 800, color: 'var(--role-color)', marginTop: 2 }}>${(cost.familyTotal || cost.total).toFixed(2)}</div>
+                  </div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6 }}>Breakdown</div>
+                  {cost.tierBreakdown?.map((t, i) => (
+                    <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: 'var(--text-secondary)', marginBottom: 3 }}>
+                      <span>{t.hours}h {t.tier} @ ${t.rate}/hr</span>
+                      <span>${t.amount.toFixed(2)}</span>
+                    </div>
+                  ))}
+                  {cost.surcharge > 0 && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: 'var(--accent-color)', fontWeight: 600, marginBottom: 3 }}>
+                      <span>Short-notice fee</span>
+                      <span>+${cost.surcharge.toFixed(2)}</span>
+                    </div>
+                  )}
+                  {cost.platformFee > 0 && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: 'var(--text-secondary)', marginBottom: 3 }}>
+                      <span>InPlace fee ({cost.platformFeePercent || 20}%)</span>
+                      <span>+${cost.platformFee.toFixed(2)}</span>
+                    </div>
+                  )}
+                  {cost.overtimeMinutes > 0 && (
+                    <div style={{ background: '#fef3c7', borderRadius: 6, padding: '6px 8px', marginBottom: 4, marginTop: 4 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: 'var(--color-warning)', fontWeight: 600, marginBottom: 2 }}>
+                        <span>Overtime ({cost.overtimeMinutes} min)</span>
+                        <span>+${cost.overtimeCost.toFixed(2)}</span>
+                      </div>
+                      {cost.overtimePlatformFee > 0 && (
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--color-warning)' }}>
+                          <span>Overtime fee ({cost.platformFeePercent || 20}%)</span>
+                          <span>+${cost.overtimePlatformFee.toFixed(2)}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 16, fontWeight: 800, color: 'var(--role-color)', borderTop: '1px solid #f0f0f0', paddingTop: 6, marginTop: 4 }}>
+                    <span>Total</span>
+                    <span>${(cost.familyTotal || cost.total).toFixed(2)}</span>
+                  </div>
+                </div>
+              )}
+            </>
+          );
+        })()}
+
+        {pendingChange && data && data.session && (
+          <div data-pending-change style={{ marginTop: 14, padding: '12px 14px', borderRadius: 12, border: '2px solid var(--color-purple)', background: 'var(--bg-surface)' }}>
+            <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: 0.5, textTransform: 'uppercase', color: 'var(--color-purple)', marginBottom: 8 }}>
+              {'⏰'} {changeIsMine ? 'Change you asked for' : 'Change requested'}
+            </div>
+            <TimeChangeSummary proposal={pendingChange}
+              session={{ date: data.session.scheduled_date, recipientName: data.session.recipient_name, timezone: data.session.care_timezone }}
+              proposerName={changeIsMine ? 'You' : pendingChange.proposer_name} />
+            {pendingChange.reason && (
+              <div style={{ fontSize: 12.5, fontStyle: 'italic', color: 'var(--text-primary)', margin: '-4px 0 10px' }}>“{pendingChange.reason}”</div>
+            )}
+            {changeIsMine ? (
+              <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+                Waiting for {role === 'family' ? (data.session.caregiver_name || 'the caregiver').split(' ')[0] : 'the family'} to accept. The visit stays as it is until then.
+              </div>
+            ) : (
+              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+                {onTimeChange && (
+                  <button onClick={() => { onTimeChange(data.session, true); onClose(); }}
+                    style={{ padding: '9px 14px', borderRadius: 8, border: '1px solid var(--border-color)', background: 'var(--bg-surface)', color: 'var(--text-secondary)', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                    More options
+                  </button>
+                )}
+                <button disabled={answering} onClick={() => answerChange('reject')}
+                  style={{ padding: '9px 14px', borderRadius: 8, border: '1px solid var(--color-error)', background: 'var(--bg-surface)', color: 'var(--color-error)', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                  Decline
+                </button>
+                <button disabled={answering} onClick={() => answerChange('accept')}
+                  style={{ padding: '9px 16px', borderRadius: 8, border: 'none', background: 'var(--color-purple)', color: 'var(--text-on-primary)', fontSize: 13, fontWeight: 700, cursor: answering ? 'wait' : 'pointer' }}>
+                  {answering ? 'Saving…' : 'Accept'}
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 12, flexWrap: 'wrap', gap: 6 }}>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          {data && data.session && data.session.status === 'confirmed' && data.session.caregiver_id && !data.session.pending_time_change_id && (role === 'family' || role === 'caregiver') && (
+            <button onClick={() => { if (onTimeChange) { onTimeChange(data.session); handleClose(); } else { setChanging(true); } }}
+              style={{ padding: '8px 16px', background: 'var(--color-purple-bg)', color: 'var(--color-purple)', border: '1px solid var(--color-purple)', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+              Change visit
+            </button>
+          )}
+          {/* v1.124.1 — "Review Change" moved into the change box above, with the answer buttons. */}
+          {data && data.session && ['confirmed', 'pending', 'open', 'requested'].includes(data.session.status) && (
+            // v1.125.2 — the shared cancel screen, so a visit in a series asks "just this one, or
+            // the rest too" here as well (it was a bare confirm() that could only ever cancel one,
+            // and never said so).
+            <button disabled={cancelling} onClick={() => setCancelling(true)} style={{
+              padding: '8px 16px', background: 'transparent', color: 'var(--color-error)', border: '1px solid #fca5a5',
+              borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: cancelling ? 'not-allowed' : 'pointer',
+            }}>Cancel visit</button>
+          )}
+          </div>
+          {!(data && data.session && ['confirmed', 'pending', 'open', 'requested'].includes(data.session.status)) && !onTimeChange && <div />}
+          <button className="btn btn-outline" onClick={handleClose}>Close</button>
+        </div>
+      </div>
+      {cancelling && data && data.session && (
+        <CancelSessionModal
+          role={role === 'caregiver' ? 'caregiver' : 'family'}
+          sessionId={data.session.id}
+          dateISO={(data.session.scheduled_date || '').split('T')[0]}
+          time={data.session.scheduled_time}
+          timezone={data.session.care_timezone}
+          caregiverName={data.session.caregiver_name}
+          recipientName={data.session.recipient_name || 'Care recipient'}
+          onClose={() => setCancelling(false)}
+          onCancelled={() => { setCancelling(false); if (onRefresh) onRefresh(); handleClose(); }}
+        />
+      )}
+      {changing && data && data.session && (
+        <ChangeVisitSheet role={role}
+          session={{
+            id: data.session.id, date: data.session.scheduled_date, time: data.session.scheduled_time,
+            durationHours: data.session.duration_hours, recipientName: data.session.recipient_name,
+            caregiverName: data.session.caregiver_name, timezone: data.session.care_timezone,
+          }}
+          onClose={() => setChanging(false)}
+          onDone={() => { if (onRefresh) onRefresh(); handleClose(); }} />
+      )}
+    </div>
+  );
+};

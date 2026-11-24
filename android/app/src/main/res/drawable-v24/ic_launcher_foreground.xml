@@ -1,0 +1,26 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportHeight="108"
+    android:viewportWidth="108">
+    <!-- InPlace "iP" logo — teal circle with white text -->
+    <!-- Safe zone: 21dp margin on each side (66dp usable center) -->
+
+    <!-- Teal circle -->
+    <path
+        android:fillColor="#1B6B5A"
+        android:pathData="M54,21 A33,33,0,1,1,53.99,21Z" />
+
+    <!-- Letter "i" -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M40.5,42 L44.5,42 L44.5,62 L40.5,62 Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M42.5,36 A2.5,2.5,0,1,1,42.49,36Z" />
+
+    <!-- Letter "P" -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M48,42 L48,62 L52,62 L52,54 L58,54 A6,6,0,0,0,58,42 Z M52,46 L57,46 A3,3,0,0,1,57,50 L52,50 Z" />
+</vector>

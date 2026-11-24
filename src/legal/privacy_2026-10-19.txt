@@ -1,0 +1,253 @@
+PRIVACY POLICY
+
+Cedar Rock Holdings, LLC
+
+doing business as "InPlace Care"
+
+www.yourinplace.com
+
+Last Updated: October 19, 2026
+
+This PRIVACY POLICY (the “Policy”) explains how Cedar Rock Holdings, LLC, a Virginia limited liability company doing business as “InPlace Care” (“IPC,” “we,” or “us”), may collect, use, and share your personal information when you use www.yourinplace.com and the inPlace app available on the Apple App Store and Google Play Store (the “Website and App”), in compliance with applicable U.S. privacy legislation. Your privacy is important to us, and we are committed to protecting your personal data.
+
+Throughout this Policy, you will find non-binding Plain English summaries (shown in the green boxes below) that provide a plain-language overview of select sections for your convenience. Those summaries do not alter or replace the full legal language stated in this Policy.
+
+Plain English: We collect only what we need to connect families with caregivers and help a care team organize someone’s care. Much of it is entered by family members on behalf of the person they care for. We don’t sell your data. Ever.
+
+1. Changes to This Policy
+
+We may revise this Policy at any time in our sole discretion. All changes are effective immediately upon posting. When we make material changes, we will update the effective date at the top of this page and notify you through the platform or via email. Your continued use of the Website and App following the posting of a revised Policy constitutes your acceptance of those changes.
+
+2. Data Controller
+
+The data controller is Cedar Rock Holdings, LLC, doing business as InPlace Care.
+
+3. Information We Collect
+
+Information You Provide
+
+-   Account information: Name, email address, phone number, mailing address, and password when you create an account.
+
+-   Profile information: Profile photo, biographical details, and role (Family member, Caregiver, or Care Recipient).
+
+-   Care recipient information: Name, age, address, health conditions, medications, care preferences, emergency contacts, and care notes that you choose to enter about the person receiving care.
+
+-   Documents you upload: Copies of documents you choose to store for a care recipient, such as a power of attorney, healthcare power of attorney or advance directive, guardianship or court papers, insurance cards, and medical records (for example visit summaries, medication lists, discharge papers, test results and care plans).
+
+-   Caregiver information: Professional qualifications, certifications, work experience, availability, service areas, hourly rates, and background check authorization.
+
+-   Communications: Messages sent through the inPlace messaging system between users.
+
+-   Visit information: Visit logs, care notes, and photos uploaded during or after care sessions.
+
+-   Payment information: Payment method details processed through our third-party payment processor (Stripe). We do not store full credit card numbers on our servers.
+
+-   Feedback: Any feedback, reviews, or ratings you submit through the platform.
+
+-   Account security: If you add a passkey, we store only its public key and an identifier for it. Your device keeps the private key; we never receive your fingerprint, face or device passcode.
+
+Information Collected Automatically
+
+-   Usage data: The screens of the Website and App you visit and how long you spend on them, features used, and actions taken within the platform.
+
+-   How you arrived: The website that referred you (its name only, such as "facebook.com", not the page you were on), any campaign tags on the link you followed, and, if you followed a personal or campaign link we sent or posted, which link it was.
+
+-   Device and technical data: IP address, browser type, operating system, and device identifiers.
+
+-   Location data: General location based on the address you provide, used to match caregivers with nearby families. We use OpenStreetMap for geocoding — your address is sent to OpenStreetMap’s Nominatim service to convert it to coordinates. For caregivers, we also collect device location (GPS) at visit check-in and check-out, used solely to verify visit time records and resolve billing disputes.
+
+How We Collect Data
+
+-   Direct interactions: When you create an account, submit forms, send messages, or contact us directly.
+
+-   Third parties: We may receive personal data about you from identity verification services or background check providers when you engage with the Website and App.
+
+Information You Provide About Someone Else
+
+Most information about a care recipient is entered by someone else — usually a family member or other member of the care team who is helping manage that person’s care. When you enter information about, or upload a document belonging to, another person, you confirm that you are allowed to do so: either that person has agreed, or you have the legal authority to act for them (for example as their agent under a power of attorney, their healthcare agent, or their guardian), or you are otherwise acting on their behalf and in their interest as a member of their care team. You also confirm that you will respect their known wishes about who may see it.
+
+We rely on that confirmation. We may ask the care team to show its authority (for example by uploading a power of attorney), and we may limit access to a care recipient’s information if there is a dispute about who is authorized.
+
+A care recipient with their own account may see and manage their own information, choose who on the care team can see their medical records, and decide whether iPAi may read them. A care recipient, or anyone with legal authority to act for them, may exercise the rights in Section 13 for the care recipient’s information, whoever entered it.
+
+Plain English: Families usually enter information for the person they care for. When you do, you’re telling us you have their okay or the legal authority to do it. The person themselves can always step in.
+
+4. Analytics
+
+We measure how people find and use the Website and App ourselves, on our own systems. We do not use third-party analytics or advertising tools, and we do not send information about your visits to advertising networks or social media companies.
+
+Before you create an account, your visits are associated with a random identifier stored in your browser or app, not with your name. If you create an account or sign in on that device, those earlier visits become associated with your account. If you reached us through a personal link we sent you (for example, in a text message or email), we can see that you opened it.
+
+We use this information only to understand which of our outreach is useful and to improve the Website and App. We record which screens are visited, never what you type on them. We keep visit records for up to one year.
+
+Plain English: We count which screens get used and how people find us, on our own servers. No outside analytics or ad trackers, and nothing is sold or shared.
+
+5. How We Use Your Information
+
+We will only use your personal data when the law allows us to. We use the information we collect to:
+
+-   Operate, maintain, and improve the InPlace Care platform.
+
+-   Provide the services you have requested by signing up as a user (Family, Caregiver, or Care Recipient).
+
+-   Match families with appropriate caregivers based on location, availability, and care needs.
+
+-   Facilitate communication between families and caregivers.
+
+-   Store and organize the documents you upload so the care team can find them when it needs them.
+
+-   Process payments and maintain transaction records.
+
+-   Send service-related notifications (session confirmations, schedule changes, messages).
+
+-   Conduct caregiver background checks through authorized third-party services.
+
+-   Respond to your requests, questions, and feedback.
+
+-   Provide AI-powered care assistance and insights (see “Artificial Intelligence Services” below).
+
+-   Detect, prevent, and address fraud, abuse, or security issues.
+
+-   Comply with legal obligations.
+
+6. How We Share Your Information
+
+We do not sell, rent, or trade your personal information. We share information only in these circumstances:
+
+-   Between families and caregivers: When a care session is booked, relevant information (name, care needs, address, schedule) is shared between the family and assigned caregiver to facilitate care.
+
+-   Care team members: If you invite others to a care team, those members can see the care recipient’s profile, schedule, and activity feed. Documents and medical records follow the stricter rules in Section 7A.
+
+-   Service providers: We work with trusted third-party services to operate our platform, including payment processing (Stripe), email delivery (Resend), background check providers (Checkr), geocoding (OpenStreetMap), hosting (Railway), file storage for uploaded photos and documents (Cloudflare R2), AI services (Anthropic — see “Artificial Intelligence Services” below), push notifications (Google Firebase), text messaging, voice calls and voicemail, and video calling (Twilio), speech-to-text transcription of voice notes you choose to record (ElevenLabs), error monitoring (Sentry — error reports are scrubbed of personal information before transmission), and other service providers as reasonably required to operate the platform. These providers access only the data necessary to perform their services.
+
+-   Professional advisers: Including lawyers, bankers, auditors, and insurers who provide consultancy, banking, legal, insurance, and accounting services.
+
+-   Regulators: Where we are required to do so by law, regulation, legal process, or governmental request.
+
+-   Business transfers: In the event of a merger, acquisition, or sale of assets, user information may be transferred as part of that transaction. We will notify users of any such change.
+
+Plain English: We share your info only with people who need it to provide your care, and with the services that keep the platform running. We never sell it.
+
+7. Health Information
+
+Our platform allows care team members to enter health-related information about care recipients, including health conditions, medications, care preferences, care notes, and documents such as medical records. This information is provided voluntarily, usually by a family member managing the person’s care (see “Information You Provide About Someone Else” above).
+
+We use health information only to help the care team organize, record and coordinate care, and to provide the features you choose to use. IPC does not use health information or medical records to make medical or care decisions, does not diagnose, and does not give medical advice. Decisions about a person’s care remain with that person, their care team, and their healthcare providers.
+
+We do not sell health information. We do not use it for advertising. We do not allow our AI provider to use it to train its models.
+
+IPC is not a covered entity or business associate under the Health Insurance Portability and Accountability Act (HIPAA), so HIPAA does not govern the information you store with us. We nonetheless treat all health-related information with heightened care as described in this Policy. Health information in a care recipient’s profile and care notes is visible to the care team, and to caregivers only to the extent needed for the visits they provide. Uploaded documents and medical records follow the stricter rules below.
+
+Some records may contain especially sensitive information, including reproductive or sexual health information. We collect it only when a care team member chooses to upload a record after confirming that the care recipient has agreed or that they have the authority to agree for them. We use it only to provide the features described here and do not disclose it except as described in this Policy or as required by law.
+
+7A. Documents and Medical Records
+
+Legal documents and other documents about a care recipient (for example a power of attorney, advance directive, guardianship papers or insurance card) are visible to the family members of the care team. A caregiver can see one of these documents only if the care recipient, the care team leader or the account owner shares that specific document with them, and that sharing can be withdrawn at any time. IPC administrators may review legal documents only to verify a care team’s authority.
+
+Medical records are visible only to the care recipient (if they have an account), the care team leader or account owner, and family members the leader chooses to allow one by one. Caregivers never see uploaded medical records. IPC staff do not view medical records except when you ask us for help with a specific record, or where required by law. Opening or downloading a medical record, and changing who may let iPAi read them, requires a passkey on your device. We keep a record of who uploaded, opened, downloaded, shared or deleted each medical record, and that record is visible to the care recipient and the care team leader.
+
+iPAi reads a medical record only if the person who holds the “iPAi may read these records” setting has turned it on — the care recipient if they have an account, otherwise the care team leader — and only when someone on the care team asks iPAi to review that record. iPAi is not medical care. It can only reflect what is written in the record, it can be wrong, and anything it suggests (such as an appointment to add to the calendar) takes effect only if a person on the care team accepts it. The setting can be turned off at any time; turning it off stops iPAi from reading the records and removes its pending suggestions.
+
+You can delete a document you uploaded, and the care recipient or care team leader can delete any document in the care recipient’s record. Deleted documents are removed from the platform; copies may persist in our encrypted backups for a limited period before they are overwritten.
+
+Plain English: Legal papers are for the family’s care team. A caregiver sees one only if you share it with them. Medical records are for the person, the leader, and the family members the leader picks — never caregivers. iPAi reads them only if the key holder says yes, and nothing it suggests happens unless a person accepts it.
+
+Artificial Intelligence Services
+
+Some features — such as our iPAi care assistant and automatically generated care summaries — use Anthropic’s Claude AI service. When you use these features, relevant information (which may include care notes and health-related details you have entered, and — only when the setting described in Section 7A is on and someone asks iPAi to review it — an uploaded medical record) is sent to Anthropic to generate the response. Anthropic does not use data submitted through its API to train its models. We are not selling your private personal information — not to AI providers, and not to anyone else — and we never will.
+
+7B. Text Messages
+
+We send text messages in two programs:
+
+-   Care notifications, from (540) 274-1412: visit reminders, a caregiver’s arrival and departure, schedule changes, and one-time verification codes. These go to account holders who turn on text alerts in the app, about their own visits. They go to a person receiving care only after a member of their care team adds that person’s mobile number in the app and checks the box agreeing to text reminders, and the person then replies YES to our one confirmation text. Nothing else is sent to that number unless they reply YES. Consent is recorded for that specific number.
+
+-   Caregiver opportunities, from (540) 835-5987: one-to-one messages about paid caregiving work, sent only to people who have texted that number first, for example by texting JOIN. We never start a text conversation with anyone who has not texted us. We may phone independent caregivers who have publicly listed themselves as seeking private-pay work; those are live calls placed one at a time by a person, and on them we invite you to text JOIN. A call never signs you up for texts. Calls from and to that number may be recorded and transcribed so we can keep notes of the conversation. If you do not reply to a text, we do not keep texting. A text may include a link that is personal to you, so we can tell whether it was opened. If you call that number, you may leave a voicemail, which is recorded and transcribed so we can respond.
+
+Message frequency varies. Message and data rates may apply. Reply STOP at any time to stop messages from that number, or HELP for help. Full program terms are at www.yourinplace.com/sms.
+
+We use your mobile number and your messaging consent only to send these messages. No mobile information will be shared with third parties or affiliates for marketing or promotional purposes. Text messaging originator opt-in data and consent will not be shared with any third parties. Our messaging provider (Twilio) processes messages only to deliver them on our behalf.
+
+Plain English: We text only about care or about work, STOP always works, and we never share or sell your number.
+
+8. Data Security
+
+We have put in place appropriate security measures to prevent your personal data from being accidentally lost, used, or accessed in an unauthorized way. Access to your personal data is limited to our employees, agents, contractors, and other third parties who have a business need to know. These measures include:
+
+-   Encryption of data in transit (HTTPS/TLS).
+
+-   Password hashing using industry-standard algorithms.
+
+-   Token-based authentication with configurable expiration.
+
+-   Optional two-factor authentication (TOTP).
+
+-   Role-based access controls limiting data visibility by user type.
+
+-   Uploaded files stored with a storage provider that encrypts them at rest.
+
+-   A passkey confirmation before a medical record can be opened or downloaded, and a log of who has accessed each medical record.
+
+No system is perfectly secure. While we strive to protect your data, we cannot guarantee absolute security and encourage you to use strong passwords and enable two-factor authentication.
+
+9. Data Retention
+
+We will only retain your personal data for as long as necessary to fulfill the purposes we collected it for, including for the purposes of satisfying any legal, accounting, or reporting requirements.
+
+If you request account deletion, we will delete or anonymize your personal data within thirty (30) days, except where retention is required by law or necessary for legitimate business purposes (such as maintaining financial records for tax compliance).
+
+Visit logs, care notes, and session history may be retained in anonymized form for quality assurance and platform improvement.
+
+10. Data Breach Notification
+
+In the event of a data breach that affects your personal data, we will notify you and any applicable regulatory authorities within the legally required timeframe, including any notice required by the Federal Trade Commission’s Health Breach Notification Rule where it applies. Where the affected information is about a care recipient, we will notify the care recipient if they have an account and the care team leader.
+
+11. Children’s Privacy
+
+Our services are not directed at individuals under the age of 18. We do not knowingly collect personal data from minors. If we become aware that we have inadvertently collected data from a minor without verified parental consent, we will delete it promptly.
+
+12. Cookies and Tracking Technologies
+
+The InPlace Care platform uses minimal browser storage:
+
+-   Authentication token: A session token stored in your browser to keep you signed in.
+
+-   Trusted device token: If you enable two-factor authentication and choose to trust a device, a token is stored to remember that device.
+
+-   Visit identifier: A random identifier stored in your browser or app, used to measure visits as described in Section 4 (Analytics).
+
+We do not use third-party advertising cookies, third-party analytics, or cross-site tracking.
+
+13. Your Rights
+
+Depending on your location, applicable law, and the nature of the data we process, you may have some or all of the following rights regarding your personal data:
+
+-   Access: Request a copy of the personal data we hold about you, or confirm whether we are processing it.
+
+-   Correction: Request correction of inaccurate or incomplete data.
+
+-   Deletion: Request deletion of your personal data.
+
+-   Data portability: Request a machine-readable copy of your data in a portable and readily usable format.
+
+-   Opt-in: Obtain your affirmative consent before processing your data. If applicable, you may withdraw your consent at any time by contacting us at admin@yourinplace.com.
+
+-   Opt-out: Opt out of the processing of personal data for targeted advertising, the sale of personal data, or profiling that produces legal or similarly significant effects. We do not sell personal data or use it for targeted advertising.
+
+A care recipient, or a person with legal authority to act for them, may make these requests about the care recipient’s information. We may ask for reasonable proof of that authority.
+
+To exercise your applicable rights, contact us at admin@yourinplace.com. We will respond within the applicable time frame. If we decline your request, you may appeal by contacting us at the same address.
+
+14. Third-Party Links
+
+Our platform may contain links to third-party websites or services. We are not responsible for the privacy practices of those third parties. We encourage you to review their privacy policies before providing any personal information.
+
+15. Contact Us
+
+If you wish to exercise any of the rights listed above or if you have any questions about this Policy or our privacy practices, please contact us at:
+
+InPlace Care (Cedar Rock Holdings, LLC)
+
+Contact: admin@yourinplace.com (general inquiries or privacy-specific concerns)
+
+Web: www.yourinplace.com

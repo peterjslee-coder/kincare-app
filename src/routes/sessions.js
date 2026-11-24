@@ -1,0 +1,5298 @@
+const express = require("express");
+const { consentedSql: smsConsentedSql, samePhone: smsSamePhone } = require("../utils/smsConsent"); // v1.114.5
+const { PERSONAL_DIRECT_WHERE } = require("../utils/conversations");
+const { v4: uuid } = require("uuid");
+const { getDb } = require("../models/database");
+const { authenticate, requireRole } = require("../middleware/auth");
+const { sessionAccess } = require("../utils/access"); // v1.105.35
+const { validateSession } = require("../middleware/validate");
+const { captureException } = require("../utils/sentry");
+const availabilityRouter = require("./availability");
+const { sendPushToUser, notifyAdmins, sendSessionReminders } = require("./push");
+const { calculateSessionCost, isShortNotice, SURCHARGE_CAREGIVER_SHARE } = require("../utils/rateCalculator");
+const { getNowInZone, getTodayStringInZone, buildDateTimeInZone, zonedDateTimeToInstant, formatTimeForDisplay, parseTimeToMinutes, formatDateRelative } = require("../utils/timezone");
+// v1.123.0 — the one describer for "what does this time change change" (shared with the client).
+const TimeChange = require("../../public/js/timeChange");
+// v1.106.16 — these were defined in this file and required OUT of it by dashboard.js and
+// server.js. A 4,056-line router is not a library. See each module for what was wrong.
+const { expireStaleProposals } = require("../utils/proposals");
+const { ensureAssignment } = require("../utils/assignments");
+const { caregiverGate, sessionGate, scheduleConflictGate, CLAIMABLE } = require("../utils/claimGates");
+const { applySeriesClaim } = require("../utils/seriesClaim");
+const { checkPaymentStanding } = require("../utils/paymentStanding");
+const { generateRecurringDates } = require("../utils/recurrence");
+const { getPlatformFeePercent, loadFeeTable } = require("../utils/platformFee");
+const { geofenceEvidence, coarsenCoordinate } = require("../utils/geocode");
+const { hasActiveVouch } = require("../utils/vouches");
+const { decideCancellationCharge, CANCEL_FEE_WINDOW_HOURS, FEE_CAREGIVER_PROFILE_SQL } = require("../utils/cancellationFee"); // v1.109.9 — who is owed a fee
+const { MODEL_HAIKU, getAnthropic } = require("../utils/aiModels");
+const { clampLimit, clampOffset } = require("../utils/queryLimits");
+const { storedImageUrl } = require("../utils/serveMedia"); // v1.106.46
+const { captureForSession } = require("../utils/sessionCapture"); // v1.106.47
+const { blockWhileImpersonating } = require("../middleware/noImpersonation"); // v1.107.1 — no money movement in Test Mode
+const { SETTLED_MINUTES, conditionReadDue } = require("../utils/settledCheck"); // v1.106.48
+const { summarizeBreaks, breakMinutes, breakNotice } = require("../utils/visitBreaks"); // v1.106.41
+const { normalize: normalizeInstructions, sameInstructions } = require("../utils/instructionAck"); // v1.109.6
+const { visitUpdateAudience } = require("../utils/visitAudience"); // v1.109.7
+const { TRUSTED_LINK_SQL, trustedLinkedIdSql, isTrustedLinkedUser } = require("../utils/linkedAccount"); // stale-link sweep
+
+const router = express.Router();
+router.use(authenticate);
+
+// ─── Auto-assignment: ensure caregiver ↔ care recipient link exists ───
+// When a session is confirmed, the caregiver should appear in the family's
+// "Request Care" list for that care recipient. This was previously only
+// created via POST /api/assignments, leaving caregivers who were matched
+// through Kindred or session claiming invisible in the care request modal.
+/* ensureAssignment moved to utils — see the require at the top of this file */
+
+// ─── Payment gates: check for unpaid sessions and saved payment method ───
+/* checkPaymentStanding moved to utils — see the require at the top of this file */
+
+// ─── Auto-expire stale time proposals (2-hour window) ───
+/* expireStaleProposals moved to utils — see the require at the top of this file */
+
+// ─── GET /api/sessions ───
+// List sessions for the current user (family or caregiver)
+router.get("/", async (req, res) => {
+  try {
+  const db = await getDb();
+  const { status, from, to, limit = 20 } = req.query;
+
+  let query, params;
+
+  const activeRole = req.user.activeRole || req.user.role;
+  if (activeRole === "family") {
+    // Include sessions for shared care recipients AND care team recipients
+    const sharedRecipients = await db.prepare(`
+      SELECT cr.id FROM care_recipient_shares crs
+      JOIN care_recipients cr ON crs.care_recipient_id = cr.id
+      WHERE crs.shared_with_user_id = ?
+    `).all(req.user.id);
+    const teamRecipients = await db.prepare(`
+      SELECT cr.id FROM care_team_members ctm
+      JOIN care_teams ct ON ctm.care_team_id = ct.id
+      JOIN care_recipients cr ON ct.care_recipient_id = cr.id
+      WHERE ctm.user_id = ?
+    `).all(req.user.id);
+    const extraIds = [...new Set([...sharedRecipients.map(r => r.id), ...teamRecipients.map(r => r.id)])];
+    const allIds = extraIds.length > 0 ? extraIds.map(() => '?').join(',') : "'__none__'";
+    query = `
+      SELECT cs.*,
+        cr.first_name || ' ' || cr.last_name AS recipient_name,
+        u.first_name || ' ' || u.last_name AS caregiver_name,
+        cp.rating_avg AS caregiver_rating
+      FROM care_sessions cs
+      LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
+      LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+      LEFT JOIN users u ON cp.user_id = u.id
+      WHERE (cs.family_user_id = ? OR cs.care_recipient_id IN (${allIds}))
+    `;
+    params = [req.user.id, ...extraIds];
+  } else if (activeRole === "care_for") {
+    // Care recipient view — find their care_recipient record via linked_user_id (falls back to name match)
+    const recipient = await db.prepare(`
+      SELECT cr.id FROM care_recipients cr
+      WHERE cr.linked_user_id = ? AND ${TRUSTED_LINK_SQL}
+      LIMIT 1
+    `).get(req.user.id);
+    if (!recipient) return res.status(404).json({ error: "Care recipient record not found" });
+
+    query = `
+      SELECT cs.*,
+        cr.first_name || ' ' || cr.last_name AS recipient_name,
+        u.first_name || ' ' || u.last_name AS caregiver_name
+      FROM care_sessions cs
+      LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
+      LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+      LEFT JOIN users u ON cp.user_id = u.id
+      WHERE cs.care_recipient_id = ?
+    `;
+    params = [recipient.id];
+  } else {
+    // Caregiver view — own sessions + ALL open care requests (assigned + nearby)
+    const profile = await db.prepare("SELECT * FROM caregiver_profiles WHERE user_id = ?").get(req.user.id);
+    if (!profile) return res.status(404).json({ error: "Caregiver profile not found" });
+
+    // Demo isolation: only show requests from families with matching demo status
+    const me = await db.prepare("SELECT is_demo FROM users WHERE id = ?").get(req.user.id);
+    const isDemo = me && me.is_demo ? 1 : 0;
+
+    query = `
+      SELECT cs.*,
+        cr.first_name || ' ' || cr.last_name AS recipient_name,
+        cr.preferences AS recipient_preferences,
+        cr.location_city AS recipient_city,
+        cr.location_state AS recipient_state,
+        cr.location_zip AS recipient_zip,
+        cr.latitude AS recipient_lat,
+        cr.longitude AS recipient_lng
+      FROM care_sessions cs
+      LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
+      LEFT JOIN users fu ON cs.family_user_id = fu.id
+      WHERE (
+        cs.caregiver_id = ?
+        OR (cs.status IN ('requested', 'open', 'pending') AND cs.care_recipient_id IN (
+          SELECT care_recipient_id FROM caregiver_assignments
+          WHERE caregiver_profile_id = ? AND is_active = 1
+        ))
+      )
+      AND COALESCE(fu.is_demo, 0) = ?
+    `;
+    params = [profile.id, profile.id, isDemo];
+  }
+
+  if (status) {
+    query += " AND cs.status = ?";
+    params.push(status);
+  }
+  if (from) {
+    query += " AND cs.scheduled_date >= ?";
+    params.push(from);
+  }
+  if (to) {
+    query += " AND cs.scheduled_date <= ?";
+    params.push(to);
+  }
+
+  query += " ORDER BY cs.scheduled_date ASC, cs.scheduled_time ASC LIMIT ?";
+  params.push(clampLimit(limit, 20, 200));
+
+  let sessions = await db.prepare(query).all(...params);
+
+  // Open care requests are shown in Find Work view, not in the calendar sessions list
+
+  // Add platform fee info: caregiver gets full rate, platform fee added on top for family
+  // v1.111.0 — per visit: a family with a special rate sees its own fee.
+  const feeTable = await loadFeeTable(db);
+  sessions = sessions.map(s => {
+    const feePercent = feeTable.pctFor(s);
+    const estimatedCost = parseFloat(s.estimated_cost) || 0;
+    // estimated_cost = subtotal + surcharge (total from rateCalculator)
+    // Platform fee is on the base subtotal, charged on top to family
+    const fee = Math.round(estimatedCost * (feePercent / 100) * 100) / 100;
+    return {
+      ...s,
+      platform_fee_percent: feePercent,
+      platform_fee: fee,
+      caregiver_payout: estimatedCost, // caregiver gets the full amount
+      family_total: Math.round((estimatedCost + fee) * 100) / 100,
+    };
+  });
+
+  res.json({ sessions });
+  } catch (err) {
+    console.error("GET /api/sessions error:", err.message, err.stack);
+    console.error("Sessions fetch error:", err.message); res.status(500).json({ error: "Failed to fetch sessions" });
+  }
+});
+
+// ─── Helper: generate recurring dates ───
+/* generateRecurringDates moved to utils — see the require at the top of this file */
+
+// ─── POST /api/sessions/request — Care recipient creates a "help wanted" request ───
+router.post("/request", async (req, res) => {
+  const userRoles = req.user.roles || [req.user.role];
+  if (!userRoles.includes("care_for")) {
+    return res.status(403).json({ error: "Only care recipients can create care requests" });
+  }
+
+  const { serviceType, scheduledDate, scheduledTime, durationHours = 2, note, budgetMax } = req.body;
+  if (!serviceType || !scheduledDate || !scheduledTime) {
+    return res.status(400).json({ error: "Required: serviceType, scheduledDate, scheduledTime" });
+  }
+
+  const db = await getDb();
+
+  // Find the care_recipient record linked to this user
+  const recipient = await db.prepare(`
+    SELECT cr.id, cr.family_user_id FROM care_recipients cr
+    WHERE cr.linked_user_id = ? AND ${TRUSTED_LINK_SQL}
+    LIMIT 1
+  `).get(req.user.id);
+
+  if (!recipient) return res.status(404).json({ error: "Care recipient record not found" });
+
+  // ─── Consent gate: block booking if consent not verified ───
+  const crFull = await db.prepare("SELECT consent_status, authorization_tier, permission_tier FROM care_recipients WHERE id = ?").get(recipient.id);
+  if (crFull && crFull.consent_status && crFull.consent_status !== 'verified') {
+    return res.status(403).json({
+      error: 'Care authorization must be verified before booking',
+      consentStatus: crFull.consent_status,
+      authorizationTier: crFull.authorization_tier,
+    });
+  }
+
+  // ─── Permission tier gate: block managed users, flag collaborative ───
+  const permTier = crFull?.permission_tier || 'full';
+  if (permTier === 'managed') {
+    return res.status(403).json({
+      error: 'Your account is managed by your care team. Contact them to request care.',
+      permissionTier: 'managed',
+    });
+  }
+
+  // Estimate cost using default service-type rates (no specific caregiver yet)
+  const defaultRates = { meals: 30, rides: 28, companion: 25, full_day: 22 };
+  const baseRate = defaultRates[serviceType] || 28;
+  const shortNotice = isShortNotice(`${scheduledDate}T${scheduledTime}`);
+  const costResult = calculateSessionCost(scheduledTime, null, { base: baseRate }, {
+    scheduledDate,
+    durationHours,
+    shortNotice,
+  });
+  const estimatedCost = costResult.total;
+
+  const id = uuid();
+  await db.prepare(`
+    INSERT INTO care_sessions
+    (id, care_recipient_id, family_user_id, service_type, status,
+     scheduled_date, scheduled_time, duration_hours,
+     special_instructions, estimated_cost, short_notice_surcharge, rate_tier, budget_max)
+    VALUES (?, ?, ?, ?, 'requested', ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    id, recipient.id, recipient.family_user_id, serviceType,
+    scheduledDate, scheduledTime, durationHours,
+    note || null, estimatedCost,
+    costResult.surcharge || 0,
+    JSON.stringify(costResult.tierBreakdown),
+    budgetMax || null
+  );
+
+  const session = await db.prepare("SELECT * FROM care_sessions WHERE id = ?").get(id);
+
+  // Notify assigned caregivers via WebSocket + push
+  const emitToUser = req.app.get("emitToUser");
+  const assignments = await db.prepare(
+    "SELECT ca.caregiver_profile_id, cp.user_id FROM caregiver_assignments ca JOIN caregiver_profiles cp ON ca.caregiver_profile_id = cp.id WHERE ca.care_recipient_id = ? AND ca.is_active = 1"
+  ).all(recipient.id);
+  for (const a of assignments) {
+    if (emitToUser) {
+      emitToUser(a.user_id, "session_update", { sessionId: id, status: "requested", session });
+    }
+    sendPushToUser(a.user_id, {
+      title: "New Care Request",
+      body: `${serviceType} on ${scheduledDate} — tap to view`,
+      data: { type: "care_request", sessionId: id },
+    }, "care_request").catch(() => {});
+  }
+
+  // Admin notification for new care requests
+  notifyAdmins("care_request_created", {
+    title: "New Care Request",
+    body: `${serviceType} for ${recipient.name || "a care recipient"} on ${scheduledDate}`,
+    data: { type: "care_request_created", sessionId: id },
+  });
+
+  res.status(201).json({ session });
+});
+
+// ─── PUT /api/sessions/:id/decline — Caregiver declines a request sent to her ───
+//
+// v1.105.84. Accept and "propose a different time" were the only two answers a caregiver could
+// give, so a request she simply could not take had no exit: it sat there, and the family got no
+// signal at all. Pete, after sending one to Julia: "it only allows her to accept or propose a
+// new time. not to decline."
+//
+// The request comes back to the FAMILY rather than going to the open pool. They chose this
+// person by name; broadcasting Betty's request to caregivers they did not pick is not a
+// decision a decline should make on their behalf. The session keeps its details and becomes
+// theirs to re-send, re-assign, or post openly.
+//
+// The reason is optional and free text. "Busy that day" tells a family to re-ask for a
+// different time; nothing tells them whether to bother. Requiring it would make saying no
+// harder than staying silent, which is how you end up with silence.
+router.put("/:id/decline", async (req, res) => {
+  try {
+    const db = await getDb();
+    // authz-ok: eligibility only — the row check is `isDirectedAtMe` below, which requires
+    // this caregiver's profile id on the session's caregiver_id or offered_to_caregiver_id.
+    if (!req.user.roles?.includes("caregiver") && req.user.role !== "caregiver") {
+      return res.status(403).json({ error: "Only caregivers can decline care requests" });
+    }
+    const profile = await db.prepare("SELECT id FROM caregiver_profiles WHERE user_id = ?").get(req.user.id);
+    if (!profile) return res.status(404).json({ error: "Caregiver profile not found" });
+
+    const session = await db.prepare("SELECT * FROM care_sessions WHERE id = ?").get(req.params.id);
+    // 404 rather than 403 — "not yours" and "not there" look identical to someone probing ids.
+    if (!session) return res.status(404).json({ error: "Care request not found" });
+
+    // Only the caregiver it was actually sent to may decline it. An open request nobody was
+    // named on is declined by simply not claiming it.
+    //
+    // v1.105.91 — this checked ONLY caregiver_id, and a request directed at someone does not
+    // set that column. Booking a specific caregiver writes offered_to_caregiver_id
+    // (`isExclusive ? bookCaregiverId : null`) and leaves caregiver_id NULL until the job is
+    // claimed. So every real directed request answered "Care request not found" — Julia:
+    // "When I try to decline the request, it says it's not found."
+    //
+    // My integration test built the session by hand WITH caregiver_id set, so it tested the
+    // shape I assumed rather than the shape the app creates. It passed, and the feature never
+    // worked once. The test is corrected alongside this.
+    const isDirectedAtMe = session.caregiver_id === profile.id
+      || session.offered_to_caregiver_id === profile.id;
+    if (!isDirectedAtMe) {
+      return res.status(404).json({ error: "Care request not found" });
+    }
+    if (!["requested", "open", "pending"].includes(session.status)) {
+      return res.status(400).json({ error: "That request can no longer be declined (status: " + session.status + ")" });
+    }
+
+    const reason = req.body?.reason ? String(req.body.reason).slice(0, 500) : null;
+
+    await db.prepare(`
+      UPDATE care_sessions
+         SET caregiver_id = NULL, offered_to_caregiver_id = NULL, status = 'declined',
+             declined_by = ?, declined_at = NOW(), decline_reason = ?, updated_at = NOW()
+       WHERE id = ?
+    `).run(req.user.id, reason, req.params.id);
+
+    // Tell the family, by name and with the reason if there is one. Async and non-blocking:
+    // the decline itself has already happened and must not fail on a push.
+    (async () => {
+      try {
+        const me = await db.prepare("SELECT first_name FROM users WHERE id = ?").get(req.user.id);
+        const cr = await db.prepare("SELECT first_name FROM care_recipients WHERE id = ?").get(session.care_recipient_id);
+        const when = `${session.scheduled_date} ${session.scheduled_time}`;
+        const { sendPushToUser } = require("./push");
+        await sendPushToUser(session.family_user_id, {
+          title: `${me?.first_name || "A caregiver"} can't make it`,
+          body: reason
+            ? `${cr?.first_name || "Care"} on ${when} — "${reason}"`
+            : `${cr?.first_name || "Care"} on ${when}. Tap to choose someone else.`,
+          data: { type: "request_declined", page: "dashboard", sessionId: req.params.id },
+        }, "request_declined");
+      } catch (err) {
+        console.error("Decline notify error:", err.message);
+      }
+    })();
+
+    res.json({ success: true, status: "declined" });
+  } catch (err) {
+    console.error("Decline request error:", err);
+    captureException(err, { where: "sessions: decline" });
+    res.status(500).json({ error: "Could not decline that request" });
+  }
+});
+
+// ─── PUT /api/sessions/:id/claim — Caregiver claims a care request ───
+router.put("/:id/claim", async (req, res) => {
+  const db = await getDb();
+
+  // v1.106.24 — these were inline. They moved to utils/claimGates so the recurring-series
+  // claim below enforces the SAME ones rather than a second copy that drifts.
+  const session = await db.prepare("SELECT * FROM care_sessions WHERE id = ?").get(req.params.id);
+
+  const gate = await caregiverGate(db, req, session);
+  if (gate.error) return res.status(gate.status).json({ error: gate.error });
+  const { profile } = gate;
+
+  if (!session) return res.status(404).json({ error: "Session not found" });
+
+  const sGate = await sessionGate(db, req, session, profile);
+  if (sGate) return res.status(sGate.status).json({ error: sGate.error });
+
+  const cGate = await scheduleConflictGate(db, session, profile);
+  if (cGate) return res.status(cGate.status).json({ error: cGate.error });
+
+  // If interview is required by the family, claim the job but mark as pending interview
+  const newStatus = session.interview_required ? 'confirmed' : 'confirmed';
+  const interviewStatus = session.interview_required ? 'pending' : null;
+
+  await db.prepare(`
+    UPDATE care_sessions SET caregiver_id = ?, status = 'confirmed',
+      interview_status = COALESCE(?, interview_status),
+      updated_at = NOW()
+    WHERE id = ?
+  `).run(profile.id, interviewStatus, req.params.id);
+
+  // Auto-create assignment so caregiver appears in future "Request Care" lists
+  try {
+    await ensureAssignment(db, {
+      careRecipientId: session.care_recipient_id,
+      familyUserId: session.family_user_id,
+      caregiverProfileId: profile.id,
+    });
+  } catch (assignErr) { console.error('[claim] ensureAssignment error:', assignErr.message); }
+
+  // If interview is required, auto-create the interview record + chat connection
+  if (session.interview_required) {
+    try {
+      const { v4: _uuid } = require('uuid');
+      const interviewId = _uuid();
+      // Create or find conversation
+      let conversationId;
+      const existingConv = await db.prepare(`
+        SELECT c.id FROM conversations c
+        JOIN conversation_members cm1 ON cm1.conversation_id = c.id AND cm1.user_id = ?
+        JOIN conversation_members cm2 ON cm2.conversation_id = c.id AND cm2.user_id = ?
+        WHERE ${PERSONAL_DIRECT_WHERE}
+      `).get(session.family_user_id, req.user.id);
+      if (existingConv) {
+        conversationId = existingConv.id;
+      } else {
+        conversationId = _uuid();
+        await db.prepare("INSERT INTO conversations (id, type, created_by) VALUES (?, 'direct', ?)").run(conversationId, session.family_user_id);
+        await db.prepare("INSERT INTO conversation_members (id, conversation_id, user_id, role) VALUES (?, ?, ?, 'member')").run(_uuid(), conversationId, session.family_user_id);
+        await db.prepare("INSERT INTO conversation_members (id, conversation_id, user_id, role) VALUES (?, ?, ?, 'member')").run(_uuid(), conversationId, req.user.id);
+      }
+      // Get recipient name for the system message
+      const recip = await db.prepare("SELECT first_name FROM care_recipients WHERE id = ?").get(session.care_recipient_id);
+      const recipName = recip?.first_name || 'your loved one';
+      const iType = session.interview_type || 'video';
+      await db.prepare(`
+        INSERT INTO interviews (id, session_id, requested_by, requested_of, interview_type, status, conversation_id)
+        VALUES (?, ?, ?, ?, ?, 'accepted', ?)
+      `).run(interviewId, req.params.id, session.family_user_id, req.user.id, iType, conversationId);
+      // System message
+      const cgName = `${req.user.firstName || ''} ${req.user.lastName || ''}`.trim() || 'Your caregiver';
+      const sysMsg = `📹 Interview scheduled — ${cgName} accepted the care request for ${recipName} on ${session.scheduled_date}. An interview was requested. Use this chat to coordinate a time, then tap the call button when ready. Video calls are limited to 5 minutes.`;
+      await db.prepare(`
+        INSERT INTO messages (id, sender_id, content, conversation_id, message_type, metadata)
+        VALUES (?, ?, ?, ?, 'system', ?)
+      `).run(_uuid(), session.family_user_id, sysMsg, conversationId, JSON.stringify({ type: 'interview_request', interviewId, sessionId: req.params.id }));
+    } catch (ivErr) { console.error('Auto-create interview on claim error:', ivErr); }
+  }
+
+  const updated = await db.prepare(`
+    SELECT cs.*, cr.first_name || ' ' || cr.last_name AS recipient_name
+    FROM care_sessions cs
+    LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
+    WHERE cs.id = ?
+  `).get(req.params.id);
+
+  // Notify family, care team, and care recipient via WebSocket + push
+  const emitToUser = req.app.get("emitToUser");
+  const caregiverFirst = req.user.firstName || '';
+  const caregiverName = `${caregiverFirst} ${req.user.lastName || ''}`.trim() || 'A caregiver';
+  const recipientName = updated.recipient_name || 'your loved one';
+
+  // Build a friendly push body with "today" / "tomorrow" / date
+  // Use care recipient's timezone for date comparison
+  const acceptCrTz = await db.prepare("SELECT timezone FROM care_recipients WHERE id = ?").get(session.care_recipient_id);
+  const acceptTz = acceptCrTz?.timezone || 'America/New_York';
+  const sessionDateLabel = (() => {
+    const today = getTodayStringInZone(acceptTz);
+    const tomorrow = new Date(getNowInZone(acceptTz));
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const tomStr = tomorrow.getFullYear() + '-' + String(tomorrow.getMonth() + 1).padStart(2, '0') + '-' + String(tomorrow.getDate()).padStart(2, '0');
+    if (session.scheduled_date === today) return 'today';
+    if (session.scheduled_date === tomStr) return 'tomorrow';
+    return `on ${session.scheduled_date}`;
+  })();
+  const pushTitle = 'Care Request Accepted!';
+  const pushBody = `${caregiverName} has accepted a job for ${recipientName} ${sessionDateLabel}!`;
+  const pushData = { type: 'care_request_accepted', sessionId: req.params.id, page: 'schedule' };
+
+  // Notify the requesting family member
+  if (session.family_user_id) {
+    if (emitToUser) emitToUser(session.family_user_id, "session_update", { sessionId: req.params.id, status: "confirmed" });
+    sendPushToUser(session.family_user_id, { title: pushTitle, body: pushBody, data: pushData }, "care_request_accepted").catch(() => {});
+  }
+
+  // Notify all care team members for this care recipient (siblings, etc.)
+  try {
+    // v1.105.48 — dropped `AND ctm.status = 'active'`: care_team_members has no `status`
+    // column (database.js), so this query threw on every accepted care request and the
+    // catch below turned it into a console line. Nobody on the care team — siblings, the
+    // other adult children — was ever told a caregiver had accepted. Only the person who
+    // booked it found out. Membership rows ARE the membership; there is nothing to filter.
+    const teamMembers = await db.prepare(`
+      SELECT DISTINCT ctm.user_id FROM care_team_members ctm
+      JOIN care_teams ct ON ctm.care_team_id = ct.id
+      JOIN care_recipients cr ON ct.care_recipient_id = cr.id
+      WHERE cr.id = ? AND ctm.user_id != ?
+    `).all(session.care_recipient_id, session.family_user_id || '');
+    // v1.109.7 — every member's screen refreshes (the socket), but only people allowed visit
+    // updates and opted in are PUSHED (b3c808fd). The person who booked it is told above.
+    const audience = new Set(await visitUpdateAudience(db, session.care_recipient_id));
+    for (const member of teamMembers) {
+      if (emitToUser) emitToUser(member.user_id, "session_update", { sessionId: req.params.id, status: "confirmed" });
+      if (!audience.has(member.user_id)) continue;
+      sendPushToUser(member.user_id, { title: pushTitle, body: pushBody, data: pushData }, "care_request_accepted").catch(() => {});
+    }
+  } catch (teamErr) { console.error('Error notifying care team:', teamErr); }
+
+  // Check if care recipient has a care address — if not, nudge the family to add one
+  try {
+    const careRecipient = await db.prepare(
+      "SELECT id, first_name, location_address, location_city FROM care_recipients WHERE id = ?"
+    ).get(session.care_recipient_id);
+    if (careRecipient && !careRecipient.location_address && !careRecipient.location_city) {
+      const addrMsg = `Please add a care address for ${careRecipient.first_name} so ${caregiverName} knows where to go for the visit ${sessionDateLabel}.`;
+      const addrPush = {
+        title: 'Care address needed',
+        body: addrMsg,
+        data: { type: 'missing_address', sessionId: req.params.id, page: 'recipients' },
+      };
+      // Notify requesting family member
+      if (session.family_user_id) {
+        sendPushToUser(session.family_user_id, addrPush, "missing_address").catch(() => {});
+        if (emitToUser) emitToUser(session.family_user_id, "activity_update", { title: 'Care address needed', message: addrMsg });
+      }
+      // Also write to activity feed so it persists
+      await db.prepare(`
+        INSERT INTO activity_feed (id, family_user_id, care_recipient_id, event_type, title, message, metadata)
+        VALUES (?, ?, ?, 'missing_address', 'Care address needed', ?, ?)
+      `).run(uuid(), session.family_user_id, session.care_recipient_id, addrMsg, JSON.stringify({ sessionId: req.params.id }));
+    }
+  } catch (addrErr) { console.error('Error checking care address:', addrErr); }
+
+  // Find care_for user to notify (via linked_user_id)
+  const careForUser = await db.prepare(`
+    SELECT cr.linked_user_id AS id FROM care_recipients cr
+    WHERE cr.id = ? AND cr.linked_user_id IS NOT NULL AND ${TRUSTED_LINK_SQL}
+    LIMIT 1
+  `).get(session.care_recipient_id);
+  if (careForUser) {
+    if (emitToUser) emitToUser(careForUser.id, "session_update", { sessionId: req.params.id, status: "confirmed" });
+  }
+
+  // Schedule pre-check-in reminders if session is today and within the notification window
+  // Use care recipient's timezone for timing comparison
+  if (session.scheduled_date && session.scheduled_time) {
+    const REMINDER_WINDOW = 15;
+    // Look up care recipient timezone for this session
+    const crTzRow = await db.prepare("SELECT timezone FROM care_recipients WHERE id = ?").get(session.care_recipient_id);
+    const claimTz = crTzRow?.timezone || 'America/New_York';
+    const claimNow = getNowInZone(claimTz);
+    const sessionStartCare = buildDateTimeInZone(session.scheduled_date, session.scheduled_time, claimTz);
+    const reminderTime = new Date(sessionStartCare.getTime() - REMINDER_WINDOW * 60000);
+    if (claimNow >= reminderTime && claimNow <= sessionStartCare) {
+      // Session is within the notification window right now — send immediately
+      sendSessionReminders(req.params.id, "pre_check_in").catch(() => {});
+    }
+    // Otherwise the background poller will pick it up when the time comes
+  }
+
+  res.json({ session: updated });
+});
+
+// ─── PUT /api/sessions/recurring/:groupId/claim ───
+//
+// v1.106.24 — accept a recurring series in one act, choosing which dates.
+//
+// A recurring direct offer inserts one care_sessions row per occurrence, each carrying
+// offered_to_caregiver_id, and every one of them surfaced as its own full-height "Just for
+// You" card. Twelve Tuesdays meant twelve cards and twelve taps, which is what buried Tina's
+// check-in under eleven of them. Pete: "Appointments grouped on recurring basis should not
+// require individual acceptance."
+//
+// She picks dates, because a standing arrangement is not all-or-nothing — two of the twelve
+// may clash with something. What she does NOT pick is released back to the open pool
+// immediately, in the same transaction: the family still needs those days covered, and
+// leaving them sitting under her name until the exclusive window lapses wastes the time they
+// have to find someone else.
+//
+// Atomic on purpose. The loop-the-client-through-N-calls version leaves her half-booked when
+// call seven fails, and half-booked across a recurring series is worse than not booked: the
+// family believes the month is covered.
+//
+// Registered before POST "/" and above every "/:id" pattern. "/recurring/:groupId/claim" has
+// three segments so "/:id/claim" cannot shadow it, but DELETE /recurring/:groupId already
+// established the position and tests/sessionsRouteOrder.test.js pins it.
+// ─── PUT /api/sessions/claim-batch ───
+//
+// v1.106.34 — accept a set of visits by id, atomically. Generalises
+// /recurring/:groupId/claim, which could only address a real recurrence group.
+//
+// The caregiver card now also groups offers by SHAPE — same recipient, time, duration and
+// service — because twenty one-off days booked before "Certain days" existed carry no group
+// id and buried Tina's screen as twenty tiles. Those cards have no groupId to claim by, so
+// the claim keys on the ids she is actually looking at.
+//
+// `accept` and `decline` are both explicit. The group route could infer "the rest of the
+// group" as declined; an inferred group has no such boundary, so the client says what it
+// showed. Both lists are verified against what is really hers before anything moves.
+async function claimBatch(db, req, res, { acceptIds, declineIds }) {
+  const accept = [...new Set(acceptIds || [])];
+  const decline = [...new Set(declineIds || [])].filter((id) => !accept.includes(id));
+  if (accept.length === 0) {
+    return res.status(400).json({ error: "Pick at least one date to accept." });
+  }
+
+  const all = [...accept, ...decline];
+  const placeholders = all.map(() => "?").join(",");
+  const rows = await db.prepare(
+    `SELECT * FROM care_sessions WHERE id IN (${placeholders})`
+  ).all(...all);
+  if (rows.length === 0) return res.status(404).json({ error: "Those visits no longer exist." });
+
+  // The gates read a session for the own-request check; every row here belongs to one
+  // family in practice, and if it does not, the per-session gate below catches it.
+  const gate = await caregiverGate(db, req, rows[0]);
+  if (gate.error) return res.status(gate.status).json({ error: gate.error });
+  const { profile } = gate;
+
+  const mine = new Map(
+    rows.filter((x) => x.offered_to_caregiver_id === profile.id && CLAIMABLE.includes(x.status))
+      .map((x) => [x.id, x])
+  );
+
+  // Asking for something not on offer is a mistake worth naming, not something to silently
+  // drop — a client with a stale list should be told its list is stale.
+  const unknown = all.filter((id) => !mine.has(id));
+  if (unknown.length) {
+    return res.status(409).json({
+      error: "Some of those visits are no longer available. Refresh and try again.",
+      unavailable: unknown,
+    });
+  }
+
+  // Every gate that guards a single claim, asked per session. The vouch is family-scoped and
+  // status can differ row to row, so this is not hoistable.
+  for (const id of accept) {
+    const sGate = await sessionGate(db, req, mine.get(id), profile);
+    if (sGate) return res.status(sGate.status).json({ error: sGate.error });
+  }
+
+  // v1.114.3 — and none of them may double-book her, against what she already has or
+  // against each other.
+  const picked = [];
+  for (const id of accept) {
+    const cGate = await scheduleConflictGate(db, mine.get(id), profile, picked);
+    if (cGate) return res.status(cGate.status).json({ error: cGate.error });
+    picked.push(mine.get(id));
+  }
+
+  try {
+    await applySeriesClaim(db, {
+      caregiverProfileId: profile.id,
+      confirmIds: accept,
+      releaseIds: decline,
+    });
+  } catch (e) {
+    if (e.status) return res.status(e.status).json({ error: e.userMessage });
+    throw e;
+  }
+
+  const first = mine.get(accept[0]);
+  try {
+    await ensureAssignment(db, {
+      careRecipientId: first.care_recipient_id,
+      familyUserId: first.family_user_id,
+      caregiverProfileId: profile.id,
+    });
+  } catch (e) { captureException(e, { where: "claim batch: ensureAssignment" }); }
+
+  // ONE notification for the batch. Twenty pushes saying the same thing is how a family
+  // turns push off.
+  const emitToUser = req.app.get("emitToUser");
+  const caregiverName = `${req.user.firstName || ""} ${req.user.lastName || ""}`.trim() || "A caregiver";
+  const recip = await db.prepare("SELECT first_name FROM care_recipients WHERE id = ?")
+    .get(first.care_recipient_id);
+  const recipName = recip?.first_name || "your loved one";
+  const body = decline.length
+    ? `${caregiverName} accepted ${accept.length} of ${all.length} visits for ${recipName}. ${decline.length} went back to the open pool.`
+    : `${caregiverName} accepted all ${accept.length} visit${accept.length === 1 ? "" : "s"} for ${recipName}.`;
+  const payload = {
+    title: "Care Request Accepted!",
+    body,
+    data: { type: "care_request_accepted", page: "schedule" },
+  };
+
+  const notify = new Set();
+  if (first.family_user_id) notify.add(first.family_user_id);
+  try {
+    // v1.109.7 — allowed + opted in, not the whole team (b3c808fd)
+    for (const uid of await visitUpdateAudience(db, first.care_recipient_id)) notify.add(uid);
+  } catch (e) { captureException(e, { where: "claim batch: notify team" }); }
+
+  for (const userId of notify) {
+    if (emitToUser) emitToUser(userId, "session_update", { status: "confirmed" });
+    sendPushToUser(userId, payload, "care_request_accepted").catch(() => {});
+  }
+
+  return res.json({ claimed: accept.length, released: decline.length });
+}
+
+router.put("/claim-batch", async (req, res) => {
+  const db = await getDb();
+  return claimBatch(db, req, res, {
+    acceptIds: Array.isArray(req.body?.accept) ? req.body.accept : [],
+    declineIds: Array.isArray(req.body?.decline) ? req.body.decline : [],
+  });
+});
+
+// ─── PUT /api/sessions/recurring/:groupId/claim ───
+//
+// v1.106.24's route, now a thin resolver over claimBatch: it turns a group id into the ids
+// that are hers and lets the one implementation do the work. Two claim paths with two
+// implementations is the duplication this batch keeps removing.
+router.put("/recurring/:groupId/claim", async (req, res) => {
+  const db = await getDb();
+
+  const requested = Array.isArray(req.body?.sessionIds) ? [...new Set(req.body.sessionIds)] : null;
+  if (!requested || requested.length === 0) {
+    return res.status(400).json({ error: "Pick at least one date to accept." });
+  }
+
+  const inGroup = await db.prepare(`
+    SELECT id, offered_to_caregiver_id, status FROM care_sessions
+    WHERE recurrence_group_id = ?
+    ORDER BY scheduled_date ASC
+  `).all(req.params.groupId);
+  if (inGroup.length === 0) return res.status(404).json({ error: "Series not found" });
+
+  // This route addresses ONE series, so an id from outside it is a stale or mixed list and
+  // is refused rather than quietly accepted. claimBatch cannot make that call — it only
+  // knows "is this hers", which a session in a different group can also be true of.
+  const groupIds = new Set(inGroup.map((x) => x.id));
+  const outside = requested.filter((id) => !groupIds.has(id));
+  if (outside.length) {
+    return res.status(409).json({
+      error: "Some of those visits are no longer available. Refresh and try again.",
+      unavailable: outside,
+    });
+  }
+
+  // Everything in the group she was offered and has not picked is a decline — the family
+  // still needs those days covered and their clock to find someone else starts now.
+  const claimableInGroup = inGroup
+    .filter((x) => CLAIMABLE.includes(x.status))
+    .map((x) => x.id);
+  const decline = claimableInGroup.filter((id) => !requested.includes(id));
+
+  return claimBatch(db, req, res, { acceptIds: requested, declineIds: decline });
+});
+
+// ─── POST /api/sessions ───
+// Create a new care request (single or recurring)
+router.post("/", requireRole("family", "care_for"), validateSession, async (req, res) => {
+  const {
+    careRecipientId, serviceType, scheduledDate, scheduledTime,
+    durationHours = 2, specialInstructions,
+    recurrenceRule, recurrenceWeeks,
+    status: requestedStatus,
+    proposedRate,
+    interviewRequired,
+    interviewType,
+    flexTiming: rawFlexTiming,
+  } = req.body;
+  const flexTiming = ['strict', 'flexible', 'open'].includes(rawFlexTiming) ? rawFlexTiming : 'flexible';
+
+  if (!careRecipientId || !serviceType || !scheduledDate || !scheduledTime) {
+    return res.status(400).json({
+      error: "Required: careRecipientId, serviceType, scheduledDate, scheduledTime",
+    });
+  }
+
+  // Reject sessions scheduled less than 1 hour from now (timezone-aware)
+  // Times are in the care location's timezone (default: America/New_York)
+  const sessionStartDt = buildDateTimeInZone(scheduledDate, scheduledTime);
+  const nowInZone = getNowInZone();
+  const minsUntilSession = (sessionStartDt.getTime() - nowInZone.getTime()) / (1000 * 60);
+  if (minsUntilSession < 60) {
+    return res.status(400).json({
+      error: "Sessions must be scheduled at least 1 hour from now.",
+      code: "TOO_SOON",
+    });
+  }
+
+  const db = await getDb();
+
+  // Verify the care recipient belongs to this user (direct owner, care_for linked, shared, or care team)
+  const activeRole = req.user.activeRole || req.user.role;
+  let recipient = await db.prepare(
+    "SELECT * FROM care_recipients WHERE id = ? AND family_user_id = ?"
+  ).get(careRecipientId, req.user.id);
+
+  // care_for users: check linked_user_id instead of family_user_id
+  if (!recipient && activeRole === 'care_for') {
+    recipient = await db.prepare(
+      `SELECT cr.* FROM care_recipients cr WHERE cr.id = ? AND cr.linked_user_id = ? AND ${TRUSTED_LINK_SQL}`
+    ).get(careRecipientId, req.user.id);
+  }
+
+  if (!recipient) {
+    // Check care_recipient_shares
+    const shared = await db.prepare(
+      "SELECT care_recipient_id FROM care_recipient_shares WHERE care_recipient_id = ? AND shared_with_user_id = ?"
+    ).get(careRecipientId, req.user.id);
+    if (shared) {
+      recipient = await db.prepare("SELECT * FROM care_recipients WHERE id = ?").get(careRecipientId);
+    }
+    // Check care team membership
+    if (!recipient) {
+      const teamMember = await db.prepare(`
+        SELECT cr.* FROM care_recipients cr
+        JOIN care_teams ct ON ct.care_recipient_id = cr.id
+        JOIN care_team_members ctm ON ctm.care_team_id = ct.id
+        WHERE cr.id = ? AND ctm.user_id = ?
+      `).get(careRecipientId, req.user.id);
+      if (teamMember) recipient = teamMember;
+    }
+  }
+
+  if (!recipient) {
+    return res.status(404).json({ error: "Care recipient not found" });
+  }
+
+  // ─── v1.105.165 — the wall: who may bring a caregiver into the house ───
+  //
+  // Pete: "there needs to be a wall where the team leader controls who can bring caregivers
+  // (and spend betty's money in doing so) into the home."
+  //
+  // There wasn't one. The lookup above accepts the owner, ANY care_recipient_shares row at any
+  // level, and ANY care_team_members row — and then booked. So every member of Betty's team,
+  // including a helper invited to bring dinner, could raise a request that puts a stranger in
+  // her house and charges the billing contact's card. Nothing asked whether they were allowed.
+  //
+  // The owner always may. The care recipient booking her own care always may — it is her home
+  // and her arrangement. Everyone else needs BOOK_CARE, granted per person by the person whose
+  // card it is.
+  {
+    const isOwner = recipient.family_user_id === req.user.id;
+    const isSelf = activeRole === "care_for" && (await isTrustedLinkedUser(db, recipient, req.user.id));
+    if (!isOwner && !isSelf) {
+      const { recipientCapabilities } = require("../utils/access");
+      const { can, CAP } = require("../utils/capabilities");
+      const caps = await recipientCapabilities(db, careRecipientId, req.user.id);
+      if (!can(caps, CAP.BOOK_CARE)) {
+        return res.status(403).json({
+          error: "You can view this care plan, but booking paid care is up to the care team leader. Ask them to request this visit, or to give you booking access.",
+        });
+      }
+    }
+  }
+
+  // ─── Consent gate: block booking if consent not verified ───
+  // NOTE: This is a pre-check for immediate UI feedback. The actual enforcement
+  // happens inside the transaction below (SELECT ... FOR UPDATE) to prevent
+  // race conditions where consent is revoked between check and insert.
+  if (recipient.consent_status && recipient.consent_status !== 'verified') {
+    return res.status(403).json({
+      error: 'Care authorization must be verified before booking',
+      consentStatus: recipient.consent_status,
+      authorizationTier: recipient.authorization_tier,
+      message: recipient.authorization_tier === 'tier2'
+        ? 'Please upload your POA or guardianship documents for review.'
+        : 'Please complete the consent verification process.',
+    });
+  }
+
+  // ─── Payment gate: block booking if unpaid sessions or no card on file ───
+  const standing = await checkPaymentStanding(db, req.user.id);
+  if (standing.unpaidSessions.length > 0) {
+    return res.status(402).json({
+      error: `You have ${standing.unpaidSessions.length} unpaid session${standing.unpaidSessions.length > 1 ? 's' : ''}. Please complete payment before booking new care.`,
+      code: 'UNPAID_SESSIONS',
+      unpaidCount: standing.unpaidSessions.length,
+      unpaidSessions: standing.unpaidSessions.map(s => ({ id: s.id, date: s.scheduled_date, caregiver: s.caregiver_name })),
+    });
+  }
+
+  // Verify payment method on file — check the booker first, then fall back to care team billing contact
+  let payerCustomerId = standing.stripeCustomerId;
+  let hasPayer = standing.hasStripeCustomer;
+
+  // If the booker has no Stripe customer, check the care team's billing contact
+  if (!hasPayer && careRecipientId) {
+    try {
+      const billingRow = await db.prepare(`
+        SELECT u.stripe_customer_id FROM care_teams ct
+        JOIN users u ON ct.billing_user_id = u.id
+        WHERE ct.care_recipient_id = ? AND ct.billing_user_id IS NOT NULL
+        LIMIT 1
+      `).get(careRecipientId);
+      if (billingRow?.stripe_customer_id) {
+        payerCustomerId = billingRow.stripe_customer_id;
+        hasPayer = true;
+      }
+    } catch (e) { console.warn('[payment-gate] billing contact lookup failed:', e.message); }
+  }
+
+  if (!hasPayer) {
+    return res.status(402).json({
+      error: 'A payment method is required to book care. Please set up your payment method first.',
+      code: 'NO_PAYMENT_METHOD',
+    });
+  }
+  try {
+    const { getStripe } = require("./payments");
+    const stripe = getStripe();
+    // v1.106.11 — the same resolver the hold and the charge use. This gate accepted card,
+    // link and bank; auto-pay looked for bank and card only. A family whose saved method is
+    // Link passed here at booking and could not be charged afterwards.
+    const { resolvePaymentMethod } = require("../utils/paymentMethod");
+    const hasMethod = !!(await resolvePaymentMethod(stripe, payerCustomerId));
+    if (!hasMethod) {
+      return res.status(402).json({
+        error: 'No saved payment method found. Please add a card or bank account before booking care.',
+        code: 'NO_PAYMENT_METHOD',
+      });
+    }
+  } catch (stripeErr) {
+    // Non-blocking if Stripe is misconfigured — don't prevent booking
+    console.warn('[payment-gate] Stripe check failed (non-blocking):', stripeErr.message);
+  }
+
+  // Validate caregiver availability if a caregiver is specified (via matching or direct booking)
+  const { caregiverId: bookCaregiverId, directOffer, privateOnly } = req.body;
+  if (bookCaregiverId && !directOffer) {
+    try {
+      const [sy, smo, sd] = scheduledDate.split("-").map(Number);
+      const schedDate = new Date(sy, smo - 1, sd, 12, 0, 0);
+      const dayOfWeek = schedDate.getDay();
+      const slots = await availabilityRouter.computeAvailableSlots(db, bookCaregiverId, scheduledDate, dayOfWeek);
+
+      if (slots.length > 0) {
+        // Parse scheduled time to minutes for comparison
+        const [sh, sm] = scheduledTime.split(":").map(Number);
+        const requestedStart = sh * 60 + (sm || 0);
+        const requestedEnd = requestedStart + (durationHours * 60);
+
+        // Check if the entire requested window fits within available slots
+        const coversRequest = (() => {
+          for (let m = requestedStart; m < requestedEnd; m++) {
+            const minuteCovered = slots.some(s => s.startMinutes <= m && (s.startMinutes + 60) > m);
+            if (!minuteCovered) return false;
+          }
+          return true;
+        })();
+
+        if (!coversRequest) {
+          return res.status(400).json({
+            error: "Caregiver is not available for the full requested time window",
+            availableSlots: slots.map(s => ({ start: s.start, end: s.end })),
+          });
+        }
+      }
+      // If no slots at all and availability rules exist, caregiver is not working that day
+      // But if NO availability rules exist at all, we skip validation (new/unconfigured caregiver)
+      const hasRules = await db.prepare(
+        "SELECT COUNT(*) as count FROM availability WHERE caregiver_id = ?"
+      ).get(bookCaregiverId);
+      if (parseInt(hasRules.count) > 0 && slots.length === 0) {
+        return res.status(400).json({
+          error: "Caregiver is not available on this date",
+        });
+      }
+    } catch (err) {
+      console.error("Availability validation error (non-blocking):", err);
+      // Non-blocking: if validation fails, allow the booking to proceed
+    }
+  }
+
+  // Estimate cost — proposed rate (family's offer) ALWAYS wins when set.
+  // Caregiver profile rates are only used as defaults when no offer is made.
+  let costRates = { base: 28 };
+  let overnightMinHours = 6;
+  if (proposedRate && parseFloat(proposedRate) > 0) {
+    // Family set a rate — use it for ALL tiers (the offer is the offer)
+    const rate = parseFloat(proposedRate);
+    costRates = { daytime: rate, nighttime: rate, overnight: rate, base: rate };
+  } else if (bookCaregiverId) {
+    const cgProfile = await db.prepare(
+      "SELECT hourly_rate, rate_daytime, rate_nighttime, rate_overnight, min_overnight_hours FROM caregiver_profiles WHERE id = ?"
+    ).get(bookCaregiverId);
+    if (cgProfile) {
+      costRates = {
+        daytime: cgProfile.rate_daytime || cgProfile.hourly_rate || 28,
+        nighttime: cgProfile.rate_nighttime || cgProfile.hourly_rate || 28,
+        overnight: cgProfile.rate_overnight || cgProfile.hourly_rate || 28,
+        base: cgProfile.hourly_rate || 28,
+      };
+      overnightMinHours = cgProfile.min_overnight_hours || 6;
+    }
+  } else {
+    const defaultRates = { meals: 30, rides: 28, companion: 25, full_day: 22 };
+    costRates.base = defaultRates[serviceType] || 28;
+  }
+  const shortNotice = isShortNotice(`${scheduledDate}T${scheduledTime}`);
+  const costResult = calculateSessionCost(scheduledTime, null, costRates, {
+    scheduledDate,
+    durationHours,
+    shortNotice,
+    overnightMinHours,
+  });
+  const estimatedCost = costResult.total;
+
+  // Determine dates to create
+  //
+  // v1.106.33 — "days" joins weekly/biweekly. Pete: "Would it be easier for me to make an
+  // appointment for MTWThF from 9-5 for four weeks instead of doing separate appointments
+  // for every day?" It would; it could not be done. Mon–Fri for a month was five bookings,
+  // five recurrence groups and five cards for the caregiver. It is now one of each.
+  const validRules = ["weekly", "biweekly", "days"];
+  const isRecurring = recurrenceRule && validRules.includes(recurrenceRule);
+  const weeks = Math.min(Math.max(parseInt(recurrenceWeeks) || 4, 2), 12);
+  let dates = isRecurring
+    ? generateRecurringDates(scheduledDate, recurrenceRule, weeks, req.body.recurrenceDays)
+    : [scheduledDate];
+
+  // A day-set over twelve weeks is up to 84 visits in one request. Every one of them is a
+  // row, a payment authorization and a line on somebody's screen, and the caregiver has to
+  // read the list before accepting it. Capped so a mis-tap cannot commit a family to a
+  // quarter of care in one submit.
+  const MAX_SESSIONS_PER_REQUEST = 40;
+  if (dates.length > MAX_SESSIONS_PER_REQUEST) {
+    return res.status(400).json({
+      error: `That's ${dates.length} visits in one request. Book up to ${MAX_SESSIONS_PER_REQUEST} at a time — shorten the run or pick fewer days.`,
+    });
+  }
+  if (dates.length === 0) {
+    return res.status(400).json({ error: "Pick at least one day of the week." });
+  }
+
+  // Allow 'open' status for care requests without caregiver
+  const sessionStatus = requestedStatus === "open" ? "open" : "pending";
+
+  const recurrenceGroupId = isRecurring ? uuid() : null;
+  const createdSessions = [];
+
+  // ─── v1.106.25 — ONE exclusive window for the whole series ───
+  //
+  // Computed once, here, and bound to every row. It used to be the SQL literal
+  // "NOW() + INTERVAL '1 hour'" evaluated inside the insert loop, which produced identical
+  // values only because Postgres NOW() is the TRANSACTION timestamp and the loop happens to
+  // sit inside db.transaction. That is the right answer reached by accident: move the loop
+  // out, or swap NOW() for clock_timestamp(), and the rows drift apart by however long the
+  // loop takes. Drifted rows mean poller 102 takes whichever have passed on a given tick, so
+  // a caregiver still deciding about week 1 finds week 7 already public and nobody is told —
+  // the family offered a standing Tuesday to one person and half of it quietly went to
+  // market. Pete's call: "one 1-hour window for the whole series... it opens together."
+  //
+  // Private-only offers get no timer at all; they stay hers until the date passes.
+  const isExclusive = !!(directOffer && bookCaregiverId);
+  const isPrivateOnly = isExclusive && !!privateOnly;
+  const exclusiveUntil = isExclusive && !isPrivateOnly
+    ? new Date(Date.now() + 60 * 60 * 1000)
+    : null;
+
+  // ─── Transaction: re-check consent under row lock, then insert sessions ───
+  try { await db.transaction(async (tx) => {
+    // Lock the care_recipients row to prevent concurrent consent changes
+    const lockedRecipient = await tx.prepare(
+      "SELECT consent_status, authorization_tier FROM care_recipients WHERE id = ? FOR UPDATE"
+    ).get(careRecipientId);
+
+    if (lockedRecipient?.consent_status && lockedRecipient.consent_status !== 'verified') {
+      throw Object.assign(new Error('Consent revoked during booking'), { status: 403, userMessage: 'Care authorization is no longer verified. Please re-verify consent.' });
+    }
+
+    for (const sessionDate of dates) {
+      const id = uuid();
+      // costResult already uses proposedRate when set (see rate logic above)
+      const finalCost = estimatedCost;
+
+      await tx.prepare(`
+        INSERT INTO care_sessions
+        (id, care_recipient_id, family_user_id, service_type, status,
+         scheduled_date, scheduled_time, duration_hours,
+         special_instructions, estimated_cost, recurrence_rule, recurrence_group_id,
+         short_notice_surcharge, rate_tier, proposed_rate, offered_to_caregiver_id,
+         exclusive_until, private_only, interview_required, interview_type, flex_timing)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        id, careRecipientId, req.user.id, serviceType, sessionStatus,
+        sessionDate, scheduledTime, durationHours,
+        specialInstructions || null, finalCost,
+        isRecurring ? recurrenceRule : null,
+        recurrenceGroupId,
+        costResult.surcharge || 0,
+        JSON.stringify(costResult.tierBreakdown),
+        proposedRate ? parseFloat(proposedRate) : null,
+        isExclusive ? bookCaregiverId : null,
+        exclusiveUntil,
+        isPrivateOnly ? 1 : 0,
+        interviewRequired ? 1 : 0,
+        interviewRequired ? (interviewType || 'video') : null,
+        flexTiming
+      );
+      createdSessions.push(id);
+    }
+  }); } catch (txErr) {
+    if (txErr.status === 403) {
+      return res.status(403).json({ error: txErr.userMessage || txErr.message });
+    }
+    throw txErr; // re-throw unexpected errors
+  }
+
+  // Create activity feed entry
+  const serviceLabels = {
+    meals: "Meals & Groceries",
+    rides: "Rides & Errands",
+    companion: "Companionship",
+    companionship: "Companionship",
+    personal_care: "Personal Care",
+    housekeeping: "Light Housekeeping",
+    meal_prep: "Meal Preparation",
+    transportation: "Transportation",
+    health_wellness: "Health & Wellness",
+    full_day: "Full Day Care",
+  };
+
+  const recurrenceLabel = isRecurring ? ` (${recurrenceRule}, ${dates.length} sessions)` : "";
+  const booker = await db.prepare("SELECT first_name, last_name FROM users WHERE id = ?").get(req.user.id);
+  const bookerName = booker ? `${booker.first_name} ${booker.last_name}` : "Someone";
+  await db.prepare(`
+    INSERT INTO activity_feed (id, family_user_id, care_recipient_id, event_type, title, message)
+    VALUES (?, ?, ?, 'session_requested', ?, ?)
+  `).run(
+    uuid(), req.user.id, careRecipientId,
+    `${serviceLabels[serviceType] || serviceType} requested by ${bookerName}${recurrenceLabel}`,
+    isRecurring
+      ? `${bookerName} requested recurring ${recurrenceRule} sessions starting ${scheduledDate} at ${scheduledTime} (${dates.length} sessions)`
+      : `${bookerName} requested a session for ${scheduledDate} at ${scheduledTime}`
+  );
+
+  // ─── v1.106.34 — tell the person the job is actually FOR ───
+  //
+  // Pete: "I'm not sure she even realizes they're there." She didn't, and this is why.
+  //
+  // This block notified `caregiver_assignments WHERE family_user_id = ?` — caregivers who
+  // have ALREADY worked for this family. Every ensureAssignment call site runs after a
+  // caregiver is confirmed onto a session, so that table contains nobody until they have
+  // accepted something. A direct offer to a caregiver who has never accepted one therefore
+  // notified NOBODY, while showing up silently as a tile on her home screen.
+  //
+  // Tina's case was worse still: ensureAssignment had been throwing `uuid is not defined`
+  // since v1.106.16 (fixed this morning in v1.106.23), so the table had no row for her at
+  // all. Twenty offers, zero notifications.
+  //
+  // The offered-to caregiver is now always notified, and gets a message about HER offer
+  // rather than the generic broadcast.
+  // v1.106.34 — this whole block used to sit inside `if (emitToUser)`, so every PUSH
+  // notification about a new job depended on the websocket layer having registered. A push
+  // is not a socket emit; they fail independently and one must not silence the other. Only
+  // the emits are conditional now.
+  const emitToUser = req.app.get("emitToUser");
+  {
+    try {
+      // Get all caregivers assigned to this family
+      const assignedCgs = await db.prepare(`
+        SELECT cp.user_id FROM caregiver_assignments ca
+        JOIN caregiver_profiles cp ON ca.caregiver_profile_id = cp.id
+        WHERE ca.family_user_id = ? AND ca.is_active = 1
+      `).all(req.user.id);
+
+      // The caregiver this was offered to directly, whether or not she has worked here before.
+      const offeredTo = (isExclusive && bookCaregiverId)
+        ? await db.prepare("SELECT user_id FROM caregiver_profiles WHERE id = ?").get(bookCaregiverId)
+        : null;
+
+      const rateLabel = proposedRate ? `$${proposedRate}/hr` : '';
+      const surchargeLabel = costResult.surcharge > 0 ? ' (includes short-notice bonus)' : '';
+      const jobInfo = {
+        sessionId: createdSessions[0],
+        serviceType,
+        scheduledDate,
+        scheduledTime,
+        durationHours,
+        proposedRate: proposedRate ? parseFloat(proposedRate) : null,
+        hasBonus: costResult.surcharge > 0,
+      };
+
+      const timeLabel = formatTimeForDisplay(scheduledTime);
+
+      // ─── The caregiver it was offered to ───
+      //
+      // ONE notification for the whole request, saying its real shape. Twenty separate
+      // bookings this morning meant twenty identical pings, which is how someone learns to
+      // ignore them; a twenty-visit series must never become twenty.
+      if (offeredTo?.user_id) {
+        if (emitToUser) emitToUser(offeredTo.user_id, "new_job", { ...jobInfo, offeredToYou: true, count: dates.length });
+        const recip = await db.prepare("SELECT first_name FROM care_recipients WHERE id = ?")
+          .get(careRecipientId);
+        const who = recip?.first_name || "a client";
+        const body = dates.length > 1
+          ? `${dates.length} visits for ${who}, starting ${scheduledDate} at ${timeLabel}. Tap to accept or pick dates.`
+          : `${who} on ${scheduledDate} at ${timeLabel} (${durationHours}hr). Tap to accept.`;
+        sendPushToUser(offeredTo.user_id, {
+          title: `Work offered to you${rateLabel ? ' — ' + rateLabel + surchargeLabel : ''}`,
+          body,
+          data: { url: '/#caretaker', type: 'new_job', page: 'find-work' },
+        }, 'new_job').catch(err => console.error('Push to offered caregiver error:', err));
+      }
+
+      // ─── Everyone else on this family's roster ───
+      //
+      // Skipped entirely when the request was directed at one person: a job that is
+      // exclusively Tina's for the next hour is not news anybody else can act on, and
+      // telling them is how an "exclusive" offer stops meaning anything.
+      if (!offeredTo?.user_id) {
+        for (const cg of assignedCgs) {
+          if (emitToUser) emitToUser(cg.user_id, "new_job", jobInfo);
+          sendPushToUser(cg.user_id, {
+            title: `New care request${rateLabel ? ' — ' + rateLabel + surchargeLabel : ''}`,
+            body: dates.length > 1
+              ? `${dates.length} visits, starting ${scheduledDate} at ${timeLabel} (${durationHours}hr each)`
+              : `${serviceType.replace(/_/g, ' ')} on ${scheduledDate} at ${timeLabel} (${durationHours}hr)`,
+            data: { url: '/#caretaker', type: 'new_job' },
+          }, 'new_job').catch(err => console.error('Push to caregiver error:', err));
+        }
+      }
+    } catch (err) {
+      console.error("Job notification error (non-blocking):", err);
+    }
+  }
+
+  // Return first session for single bookings, all for recurring
+  if (isRecurring) {
+    const sessions = [];
+    for (const sid of createdSessions) {
+      const s = await db.prepare("SELECT * FROM care_sessions WHERE id = ?").get(sid);
+      sessions.push(s);
+    }
+    res.status(201).json({ sessions, recurrenceGroupId, count: sessions.length });
+  } else {
+    const session = await db.prepare("SELECT * FROM care_sessions WHERE id = ?").get(createdSessions[0]);
+    res.status(201).json({ session });
+  }
+});
+
+// v1.125.4 — DELETE /api/sessions/recurring/:groupId is gone (Pete, 10/28: "Remove the 'cancel
+// whole series' route"). It cancelled confirmed visits with no notice to the caregiver, no fee
+// decision and no hold release, and skipped open ones. Cancelling a series is
+// PUT /:id/cancel { scope: "series" } — see cancelOneSession() below.
+
+// ─── POST /api/sessions/:id/match ───
+// Match a caregiver to a pending session
+router.post("/:id/match", requireRole("family", "admin"), async (req, res) => {
+  const db = await getDb();
+  const session = await db.prepare(
+    "SELECT * FROM care_sessions WHERE id = ? AND family_user_id = ?"
+  ).get(req.params.id, req.user.id);
+
+  if (!session) return res.status(404).json({ error: "Session not found" });
+  if (session.status !== "pending") {
+    return res.status(400).json({ error: "Session is not in pending status" });
+  }
+
+  // Find available caregivers
+  // In production: use location, specialties, ratings, availability windows
+  const recipient = await db.prepare("SELECT * FROM care_recipients WHERE id = ?").get(session.care_recipient_id);
+
+  const caregivers = await db.prepare(`
+    SELECT cp.*, u.first_name, u.last_name
+    FROM caregiver_profiles cp
+    JOIN users u ON cp.user_id = u.id
+    WHERE cp.is_available = 1
+      AND (cp.is_background_checked = 1 OR EXISTS (
+        SELECT 1 FROM bg_admin_vouches v
+        WHERE v.caregiver_user_id = cp.user_id AND v.family_user_id = ? AND v.revoked_at IS NULL
+      ))
+    ORDER BY cp.rating_avg DESC, cp.years_experience DESC
+    LIMIT 5
+  `).all(req.user.id);
+
+  if (caregivers.length === 0) {
+    return res.status(404).json({ error: "No available caregivers found" });
+  }
+
+  // Auto-match to top caregiver (in production: smarter matching algorithm)
+  const { caregiverId } = req.body;
+  const matched = caregiverId
+    ? caregivers.find((c) => c.id === caregiverId) || caregivers[0]
+    : caregivers[0];
+
+  await db.prepare(`
+    UPDATE care_sessions
+    SET caregiver_id = ?, status = 'confirmed', updated_at = NOW()
+    WHERE id = ?
+  `).run(matched.id, req.params.id);
+
+  // Auto-create assignment so caregiver appears in future "Request Care" lists
+  try {
+    await ensureAssignment(db, {
+      careRecipientId: session.care_recipient_id,
+      familyUserId: req.user.id,
+      caregiverProfileId: matched.id,
+    });
+  } catch (assignErr) { console.error('[match] ensureAssignment error:', assignErr.message); }
+
+  // Activity feed
+  await db.prepare(`
+    INSERT INTO activity_feed (id, family_user_id, care_recipient_id, event_type, title, message)
+    VALUES (?, ?, ?, 'session_confirmed', ?, ?)
+  `).run(
+    uuid(), req.user.id, session.care_recipient_id,
+    `Caregiver matched: ${matched.first_name} ${matched.last_name}`,
+    `${matched.first_name} will arrive on ${session.scheduled_date} at ${session.scheduled_time}`
+  );
+
+  const updatedSession = await db.prepare("SELECT * FROM care_sessions WHERE id = ?").get(req.params.id);
+  res.json({
+    session: updatedSession,
+    caregiver: {
+      id: matched.id,
+      name: `${matched.first_name} ${matched.last_name}`,
+      rating: matched.rating_avg,
+      specialties: JSON.parse(matched.specialties || "[]"),
+      hourlyRate: matched.hourly_rate,
+    },
+    availableCaregivers: caregivers.map((c) => ({
+      id: c.id,
+      name: `${c.first_name} ${c.last_name}`,
+      rating: c.rating_avg,
+      specialties: JSON.parse(c.specialties || "[]"),
+      hourlyRate: c.hourly_rate,
+    })),
+  });
+});
+
+// ─── Helper: get platform fee percent from DB (default 20) ───
+/* getPlatformFeePercent moved to utils — see the require at the top of this file */
+
+// ─── GET /api/sessions/cost-preview ───
+// Calculate cost breakdown without creating a session (for live preview in booking UI)
+// Returns caregiver payout + family total (with platform markup)
+router.get("/cost-preview", async (req, res) => {
+  const { caregiverId, scheduledDate, scheduledTime, durationHours = 2, proposedRate } = req.query;
+
+  if (!scheduledDate || !scheduledTime) {
+    return res.status(400).json({ error: "scheduledDate and scheduledTime are required" });
+  }
+
+  const db = await getDb();
+  let costRates = { base: 28 };
+  let overnightMinHours = 6;
+
+  // Proposed rate (family's offer) ALWAYS wins — same rule everywhere
+  const offeredRate = parseFloat(proposedRate) || 0;
+  if (offeredRate > 0) {
+    costRates = { daytime: offeredRate, nighttime: offeredRate, overnight: offeredRate, base: offeredRate };
+  } else if (caregiverId) {
+    const cgProfile = await db.prepare(
+      "SELECT hourly_rate, rate_daytime, rate_nighttime, rate_overnight, min_overnight_hours FROM caregiver_profiles WHERE id = ?"
+    ).get(caregiverId);
+    if (cgProfile) {
+      costRates = {
+        daytime: cgProfile.rate_daytime || cgProfile.hourly_rate || 28,
+        nighttime: cgProfile.rate_nighttime || cgProfile.hourly_rate || 28,
+        overnight: cgProfile.rate_overnight || cgProfile.hourly_rate || 28,
+        base: cgProfile.hourly_rate || 28,
+      };
+      overnightMinHours = cgProfile.min_overnight_hours || 6;
+    }
+  }
+
+  const shortNotice = isShortNotice(`${scheduledDate}T${scheduledTime}`);
+  const costResult = calculateSessionCost(scheduledTime, null, costRates, {
+    scheduledDate,
+    durationHours: parseFloat(durationHours),
+    shortNotice,
+    overnightMinHours,
+  });
+
+  // Rush surcharge split: 75% to caregiver (incentive for short-notice), 25% to platform.
+  // Platform fee = base percentage + platform's share of rush surcharge.
+  // Family pays: caregiver payout + platform fee.
+  // v1.111.0 — the fee of the family that owns the recipient (special rate), else the default.
+  const feePercent = await getPlatformFeePercent(db, {
+    careRecipientId: typeof req.query.careRecipientId === "string" ? req.query.careRecipientId : null,
+    familyUserId: req.user.id,
+  });
+  const surchargeToCaregiver = costResult.surchargeBreakdown?.caregiver || 0;
+  const surchargeToPlatform = costResult.surchargeBreakdown?.platform || 0;
+  const caregiverPayout = Math.round((costResult.subtotal + surchargeToCaregiver) * 100) / 100;
+  const platformFee = Math.round((costResult.subtotal * (feePercent / 100) + surchargeToPlatform) * 100) / 100;
+  const familyTotal = Math.round((caregiverPayout + platformFee) * 100) / 100;
+
+  res.json({
+    ...costResult,
+    shortNotice,
+    rates: costRates,
+    overnightMinHours,
+    // Platform fee breakdown
+    platformFeePercent: feePercent,
+    platformFee,
+    caregiverPayout,
+    familyTotal,
+  });
+});
+
+// ─── PUT /api/sessions/:id/status ───
+// Update session status (caregiver check-in, complete, cancel)
+// v1.105.35 — was authenticate-only, so any logged-in user could cancel a stranger's
+// confirmed visit or drive it to `completed` (which fires milestone + payout logic and the
+// family's session_update socket event). Managing a session means being the booking family,
+// the assigned caregiver, an owner/editor on the recipient, or an admin.
+router.put("/:id/status", async (req, res) => {
+  const { status } = req.body;
+  const validTransitions = {
+    open: ["pending", "confirmed", "cancelled", "negotiating"],
+    requested: ["confirmed", "cancelled", "negotiating"],
+    confirmed: ["in_progress", "cancelled"],
+    in_progress: ["completed", "cancelled"],
+    pending: ["confirmed", "cancelled", "negotiating"],
+    matching: ["confirmed", "cancelled"],
+    negotiating: ["confirmed", "cancelled", "open", "requested", "pending"],
+  };
+
+  const db = await getDb();
+  const access = await sessionAccess(db, req.params.id, req.user.id);
+  if (!access) return res.status(404).json({ error: "Session not found" });
+  if (!access.canManage) return res.status(403).json({ error: "Not authorized to change this session" });
+  const session = access.session;
+
+  const allowed = validTransitions[session.status];
+  if (!allowed || !allowed.includes(status)) {
+    return res.status(400).json({
+      error: `Cannot transition from '${session.status}' to '${status}'`,
+    });
+  }
+
+  await db.prepare(
+    "UPDATE care_sessions SET status = ?, updated_at = NOW() WHERE id = ?"
+  ).run(status, req.params.id);
+
+  const updated = await db.prepare("SELECT * FROM care_sessions WHERE id = ?").get(req.params.id);
+
+  // Check milestones on session completion
+  if (status === "completed" && session.caregiver_id) {
+    try {
+      const { checkSessionMilestones } = require("./referrals");
+      await checkSessionMilestones(db, session.caregiver_id);
+    } catch (e) { console.error("Milestone check error:", e); }
+  }
+
+  // Real-time: notify family user of session status change
+  const emitToUser = req.app.get("emitToUser");
+  if (emitToUser) {
+    emitToUser(session.family_user_id, "session_update", {
+      sessionId: req.params.id,
+      status,
+    });
+  }
+
+  res.json({ session: updated });
+});
+
+// ─── GET /api/sessions/:id/care-briefing ───
+// Returns a care briefing for the caregiver, tailored by experience level.
+// Experienced caregivers get a short, focused reminder. New caregivers get the full briefing.
+router.get("/:id/care-briefing", async (req, res) => {
+  try {
+    const db = await getDb();
+    const session = await db.prepare(`
+      SELECT cs.*, cp.user_id AS caregiver_user_id,
+        cr.first_name AS recipient_first_name, cr.last_name AS recipient_last_name,
+        cr.age, cr.health_conditions, cr.observed_concerns, cr.medications, cr.preferences,
+        cr.caregiver_briefing, cr.food_allergies, cr.pets,
+        cr.care_preferences, cr.care_preference_details
+      FROM care_sessions cs
+      LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+      LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
+      WHERE cs.id = ?
+    `).get(req.params.id);
+
+    if (!session) return res.status(404).json({ error: "Session not found" });
+    // Only the assigned caregiver can see the briefing
+    if (session.caregiver_user_id !== req.user.id) {
+      return res.status(403).json({ error: "Not authorized" });
+    }
+
+    const recipientName = session.recipient_first_name || "the care recipient";
+
+    // Count completed visits this caregiver has done with this care recipient
+    const visitHistory = await db.prepare(`
+      SELECT COUNT(*) as visit_count,
+        MAX(cs.scheduled_date) as last_visit_date
+      FROM care_sessions cs
+      JOIN visit_logs vl ON vl.session_id = cs.id
+      WHERE cs.caregiver_id = ? AND cs.care_recipient_id = ? AND cs.status = 'completed'
+    `).get(session.caregiver_id, session.care_recipient_id);
+
+    const visitCount = visitHistory?.visit_count || 0;
+    const isExperienced = visitCount >= 3;
+
+    // Gather ALL recent notes (including visit summaries) — iPAi reads everything
+    const recentNotes = await db.prepare(`
+      SELECT content, created_at, note_type, author_id FROM recipient_notes
+      WHERE care_recipient_id = ?
+      ORDER BY created_at DESC LIMIT 15
+    `).all(session.care_recipient_id);
+
+    // Recent visit moods (last 5 visits by any caregiver) — pattern data
+    const recentMoods = await db.prepare(`
+      SELECT vl.arrival_mood, vl.departure_mood, vl.summary, cs.scheduled_date,
+        cs.scheduled_time, cs.service_type,
+        u.first_name AS caregiver_first_name
+      FROM visit_logs vl
+      JOIN care_sessions cs ON vl.session_id = cs.id
+      LEFT JOIN caregiver_profiles cp2 ON cs.caregiver_id = cp2.id
+      LEFT JOIN users u ON cp2.user_id = u.id
+      WHERE cs.care_recipient_id = ? AND cs.status = 'completed'
+      ORDER BY cs.scheduled_date DESC LIMIT 5
+    `).all(session.care_recipient_id);
+
+    // Parse health conditions
+    let healthConditions = [];
+    try { healthConditions = JSON.parse(session.health_conditions || '[]'); } catch { healthConditions = []; }
+    let observedConcerns = [];
+    try { observedConcerns = JSON.parse(session.observed_concerns || '[]'); } catch { observedConcerns = []; }
+    let medications = [];
+    try { medications = JSON.parse(session.medications || '[]'); } catch { medications = []; }
+
+    // Service type label
+    const serviceLabels = {
+      meals: "Meals & Groceries", rides: "Rides & Errands", companion: "Companionship",
+      companionship: "Companionship", personal_care: "Personal Care",
+      housekeeping: "Housekeeping", full_day: "Full Day Care",
+    };
+    const serviceLabel = serviceLabels[session.service_type] || session.service_type;
+
+    // ─── iPAi synthesis: condense notes + moods into a short actionable briefing ───
+    let notesSynthesis = null;
+    const hasContext = recentNotes.length > 0 || recentMoods.length > 0;
+    if (hasContext) {
+      try {
+        const apiKey = process.env.ANTHROPIC_API_KEY;
+        if (apiKey) {
+          const client = getAnthropic(apiKey);
+
+          // Build context for iPAi
+          const notesText = recentNotes.map(n => {
+            const dateStr = n.created_at ? new Date(n.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '?';
+            const typeLabel = n.note_type === 'visit_summary' ? '[Visit note]' : '[Care team note]';
+            return `${dateStr} ${typeLabel}: ${n.content}`;
+          }).join('\n');
+
+          const moodText = recentMoods.map(m => {
+            const dateStr = m.scheduled_date || '?';
+            const arrival = m.arrival_mood || '?';
+            const departure = m.departure_mood || '?';
+            const who = m.caregiver_first_name || 'Caregiver';
+            const summary = m.summary ? ` — "${m.summary}"` : '';
+            return `${dateStr}: ${who} visited. Mood: ${arrival} → ${departure}.${summary}`;
+          }).join('\n');
+
+          // Determine time-of-day context
+          const sessionHour = parseInt((session.scheduled_time || '12:00').split(':')[0]);
+          const timeContext = sessionHour < 12 ? 'morning' : sessionHour < 17 ? 'afternoon' : 'evening';
+
+          const prompt = `You are iPAi, the AI care assistant for InPlace. A caregiver is about to check in for a ${timeContext} ${serviceLabel} visit with ${recipientName}${session.age ? ` (age ${session.age})` : ''}.
+
+${isExperienced ? `This caregiver has visited ${recipientName} ${visitCount} times before — keep it brief and focus only on what's new or different.` : `This is a newer caregiver — give a warm, helpful overview.`}
+
+Here is the recent context:
+
+${notesText ? `CARE NOTES:\n${notesText}\n` : ''}${moodText ? `RECENT VISIT MOODS:\n${moodText}\n` : ''}${session.caregiver_briefing ? `FAMILY'S CARE BRIEFING:\n${session.caregiver_briefing}\n` : ''}${healthConditions.length ? `DIAGNOSED CONDITIONS: ${healthConditions.join(', ')}\n` : ''}${observedConcerns.length ? `OBSERVED CONCERNS (family observations, not diagnoses): ${observedConcerns.join(', ')}\n` : ''}${medications.length ? `MEDICATIONS: ${medications.join(', ')}\n` : ''}${session.food_allergies ? `FOOD ALLERGIES: ${session.food_allergies}\n` : ''}${session.pets ? `PETS: ${session.pets}\n` : ''}${session.special_instructions ? `TODAY'S SPECIAL INSTRUCTIONS: ${session.special_instructions}\n` : ''}
+Write a SHORT, warm, actionable briefing (3-5 sentences max). Focus on:
+- What the caregiver should know RIGHT NOW for this visit
+- Any recent mood patterns or behavioral changes worth noting
+- Practical tips based on recent observations
+- Any special instructions for today
+
+Do NOT list every note. Synthesize. Write in second person ("Betty may be..."). Be warm but concise. No headers, no bullets — just natural sentences.
+SAFETY: this goes to the caregiver. Never mention financial or security vulnerabilities — trouble with money, cash or valuables in the home, who pays, entry codes. If such a note is care-relevant, state the behavior neutrally ("may misplace belongings") without exploitable detail. Never state events or facts not present in the context above.`;
+
+          const result = await client.messages.create({
+            model: MODEL_HAIKU,
+            max_tokens: 300,
+            messages: [{ role: "user", content: prompt }],
+          });
+          notesSynthesis = result.content?.[0]?.text || null;
+          if (notesSynthesis) {
+            console.log(`[care-briefing] iPAi synthesized briefing for session ${req.params.id.slice(0,8)} (${recentNotes.length} notes, ${recentMoods.length} moods)`);
+          }
+        }
+      } catch (aiErr) {
+        console.warn("[care-briefing] iPAi synthesis failed (non-blocking):", aiErr.message);
+        // Fallback: no synthesis, raw notes will still be available as fallback
+      }
+    }
+
+    // Build the briefing
+    const briefing = {
+      recipientName,
+      recipientAge: session.age,
+      sessionServiceType: serviceLabel,
+      sessionTime: session.scheduled_time,
+      sessionDate: session.scheduled_date,
+      specialInstructions: session.special_instructions,
+      isExperienced,
+      visitCount,
+      lastVisitDate: visitHistory?.last_visit_date,
+      caregiverBriefing: session.caregiver_briefing || null,
+      healthConditions,
+      observedConcerns,
+      medications,
+      foodAllergies: session.food_allergies || null,
+      pets: session.pets || null,
+      preferences: session.preferences || null,
+      // Only send raw notes if iPAi synthesis failed (fallback)
+      recentNotes: notesSynthesis ? [] : recentNotes.slice(0, 5).map(n => ({ content: n.content, createdAt: n.created_at, noteType: n.note_type })),
+      notesSynthesis,
+      recentMoods: recentMoods.map(m => ({
+        arrivalMood: m.arrival_mood,
+        departureMood: m.departure_mood,
+        time: m.scheduled_time,
+        serviceType: m.service_type,
+        caregiverName: m.caregiver_first_name,
+      })),
+    };
+
+    res.json(briefing);
+  } catch (err) {
+    console.error("Care briefing error:", err);
+    res.status(500).json({ error: "Failed to load care briefing" });
+  }
+});
+
+// ─── POST /api/sessions/:id/check-in ───
+// Caregiver checks in — creates visit_log, sets session to in_progress
+// Timing gate: can only check in within 15 min of session start (or after start if late)
+router.post("/:id/check-in", async (req, res) => {
+  try {
+    const db = await getDb();
+    const { arrivalMood, checkInLatitude, checkInLongitude, briefingAcknowledged, acknowledgedInstructions, offlineTimestamp, offlineSync } = req.body;
+
+    const session = await db.prepare(`
+      SELECT cs.*, cp.user_id AS caregiver_user_id, cp.early_check_in_allowed,
+        cr.first_name AS recipient_first_name, cr.last_name AS recipient_last_name,
+        cr.timezone AS care_timezone, cr.latitude AS recipient_lat, cr.longitude AS recipient_lng
+      FROM care_sessions cs
+      LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+      LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
+      WHERE cs.id = ?
+    `).get(req.params.id);
+
+    if (!session) return res.status(404).json({ error: "Session not found" });
+    if (session.caregiver_user_id !== req.user.id) {
+      return res.status(403).json({ error: "Only the assigned caregiver can check in" });
+    }
+    // If this is an offline sync and session already in_progress, treat as success (duplicate)
+    if (offlineSync && session.status === "in_progress") {
+      return res.json({ duplicate: true, message: "Check-in already recorded" });
+    }
+    if (session.status !== "confirmed") {
+      return res.status(400).json({ error: `Cannot check in — session status is '${session.status}'` });
+    }
+
+    // Use offline timestamp if provided (caregiver was offline and recorded locally).
+    // Bound it: reject invalid/future/>18h-stale client times and fall back to server time,
+    // so a caregiver controlling the client can't claim an arbitrary arrival moment.
+    let effectiveCheckInTime = new Date();
+    if (offlineTimestamp) {
+      const t = new Date(offlineTimestamp);
+      const nowMs = Date.now();
+      if (!isNaN(t.getTime()) && t.getTime() <= nowMs + 5 * 60000 && t.getTime() >= nowMs - 18 * 3600 * 1000) {
+        effectiveCheckInTime = t;
+      } else {
+        console.warn(`[check-in] Implausible offline timestamp ${offlineTimestamp} — using server time. session ${req.params.id.slice(0, 8)}`);
+      }
+    }
+    const isOfflineSync = !!offlineSync;
+    if (isOfflineSync) {
+      console.log(`[check-in] Offline sync — original time: ${offlineTimestamp}, session ${req.params.id.slice(0, 8)}`);
+    }
+
+    // ─── Payment gate: block check-in if family has unpaid sessions ───
+    // Skip when admin is impersonating (test mode) — don't block test check-ins
+    if (session.family_user_id && !req.user.impersonatedBy) {
+      const standing = await checkPaymentStanding(db, session.family_user_id);
+      if (standing.unpaidSessions.length > 0) {
+        // Notify the family that their session is blocked
+        try {
+          sendPushToUser(session.family_user_id, {
+            title: 'Session on hold — payment needed',
+            body: `Your caregiver tried to check in but you have ${standing.unpaidSessions.length} unpaid session${standing.unpaidSessions.length > 1 ? 's' : ''}. Please pay to resume care.`,
+            data: { type: 'payment_hold', page: 'home' },
+          }, 'payment_hold').catch(() => {});
+        } catch (e) { captureException(e, { where: "sessions: notify family payment_hold on blocked check-in" }); }
+        return res.status(402).json({
+          error: `This session is on hold. The family has ${standing.unpaidSessions.length} unpaid session${standing.unpaidSessions.length > 1 ? 's' : ''}. They have been notified.`,
+          code: 'FAMILY_UNPAID',
+          unpaidCount: standing.unpaidSessions.length,
+        });
+      }
+    }
+
+    // ─── v1.114.2 — no card hold, no check-in ───
+    //
+    // Pete, 10/13: "check in requires a valid hold. 24 hours prior, there should be a hold."
+    // Only visits booked AND paid through InPlace get check-in, the visit log and the caregiver's
+    // tools (utils/careTools.js). The pre-shift poller places the hold ~24h ahead; a visit booked
+    // inside that window gets it on the next tick. If it still isn't there when she arrives, try
+    // once more now — then refuse, and tell the family, rather than start an unpaid visit.
+    // Demo visits never touch Stripe (Dev Rule 7) and are let through.
+    if (!req.user.impersonatedBy) {
+      const holdOk = async (id) => {
+        const s = await db.prepare(`
+          SELECT cs.payment_status, cs.payment_captured_at, cs.stripe_payment_intent_id, cs.estimated_cost,
+                 EXISTS (SELECT 1 FROM payments p WHERE p.session_id = cs.id AND p.status = 'completed') AS prepaid
+            FROM care_sessions cs WHERE cs.id = ?
+        `).get(id);
+        if (!s) return false;
+        if (!(parseFloat(s.estimated_cost) > 0)) return true; // nothing to pay
+        if (s.payment_captured_at || s.prepaid) return true;
+        return ["authorized", "paid", "waived"].includes(s.payment_status) && (s.payment_status !== "authorized" || !!s.stripe_payment_intent_id);
+      };
+      const acct = require("./accountability");
+      if (!(await holdOk(session.id)) && !(await acct.isDemoSession(db, session.id))) {
+        let reason = null;
+        try {
+          // v1.117.0 — manual: she is at the door, so this is a real attempt, not a replay.
+          const r = await acct.authorizeSessionPayment(session.id, { manual: true });
+          reason = r && r.error ? r.error : null;
+        } catch (e) { reason = e.message; captureException(e, { where: "check-in: hold retry" }); }
+        if (!(await holdOk(session.id))) {
+          try {
+            // v1.117.0 — the PAYER too (it went to whoever booked, and Sara pays for Betty), and
+            // the tap opens the card sheet with "Try the card again", not the home page.
+            const billing = await db.prepare(
+              "SELECT billing_user_id FROM care_teams WHERE care_recipient_id = ? AND billing_user_id IS NOT NULL LIMIT 1"
+            ).get(session.care_recipient_id).catch(() => null);
+            const told = [...new Set([billing && billing.billing_user_id, session.family_user_id].filter(Boolean))];
+            for (const uid of told) {
+              sendPushToUser(uid, {
+                title: 'Visit on hold — card needed',
+                body: 'Your caregiver is ready to start, but the card for this visit hasn’t gone through. Tap to try it again or use another card.',
+                data: { type: 'hold_declined', page: 'dashboard', sessionId: session.id, focus: `holdDeclined:${session.id}` },
+              }, 'payment_hold').catch(() => {});
+            }
+          } catch (e) { captureException(e, { where: "check-in: notify family of missing hold" }); }
+          console.warn(`[check-in] Refused — no card hold for session ${req.params.id.slice(0, 8)} (${reason || 'unknown'})`);
+          return res.status(402).json({
+            error: "This visit can’t start yet — the family’s card hold for it isn’t in place. They’ve been notified. Try again once they’ve updated their card.",
+            code: 'HOLD_REQUIRED',
+          });
+        }
+      }
+    }
+
+    // ─── Timing gate: 15 min before session start ───
+    // Allow check-in after start time (late is fine), but block too-early check-ins
+    // All times are care-location times — use care recipient's timezone
+    const careTz = session.care_timezone || 'America/New_York';
+    const CHECK_IN_WINDOW_MINUTES = 15;
+    if (session.scheduled_date && session.scheduled_time) {
+      const dateStr = session.scheduled_date.split('T')[0];
+      const nowCare = getNowInZone(careTz);
+      const sessionStartLocal = buildDateTimeInZone(dateStr, session.scheduled_time, careTz);
+      const earliestCheckIn = new Date(sessionStartLocal.getTime() - CHECK_IN_WINDOW_MINUTES * 60000);
+
+      if (nowCare < earliestCheckIn && !session.early_check_in_allowed) {
+        return res.status(400).json({
+          error: "Check-in window not open yet",
+          message: `You can check in starting ${CHECK_IN_WINDOW_MINUTES} minutes before your session at ${session.scheduled_time}`,
+          checkInOpensAt: earliestCheckIn.toISOString(),
+          sessionStartsAt: sessionStartLocal.toISOString(),
+        });
+      }
+    }
+
+    // ─── Detect late check-in (10+ minutes after scheduled start) ───
+    // Use care recipient's timezone — not server or device timezone
+    // For offline syncs, use the offline timestamp for late detection
+    let lateCheckIn = false;
+    let lateMinutes = 0;
+    if (session.scheduled_date && session.scheduled_time) {
+      try {
+        // v1.105.124 — BOTH SIDES MUST BE TRUE INSTANTS.
+        //
+        // This subtraction used to mix two frames. `buildDateTimeInZone` returns a
+        // SHIFTED Date (its getHours() read as the care timezone, stamped onto the
+        // server's clock); `getNowInZone` returns one too, so the live branch was
+        // self-consistent and right. But `effectiveCheckInTime` is a real instant
+        // sent by the device, so the OFFLINE branch subtracted a real instant from a
+        // shifted one and picked up the whole UTC offset.
+        //
+        // Julia checked in 4 minutes EARLY on Aug 22 and was recorded 236 minutes
+        // late — 240 minus 4, the exact EDT offset. It reads correctly on a machine
+        // whose own clock is America/New_York, which is why it survived: it is only
+        // wrong on Railway, which runs UTC. See tests/lateCheckInFrames.test.js,
+        // which pins TZ=UTC for that reason.
+        const checkInMoment = isOfflineSync ? effectiveCheckInTime : new Date();
+        const scheduledStart = zonedDateTimeToInstant(session.scheduled_date.split('T')[0], session.scheduled_time, careTz);
+        lateMinutes = Math.floor((checkInMoment - scheduledStart) / 60000);
+        if (lateMinutes >= 10) {
+          lateCheckIn = true;
+          console.log(`[check-in] Late by ${lateMinutes} min (tz: ${careTz}) — session ${req.params.id.slice(0, 8)}`);
+        }
+      } catch (e) { captureException(e, { where: "sessions: late check-in computation failed (late flag lost)" }); }
+    }
+
+    // Transition to in_progress (with late check-in flag if applicable)
+    await db.prepare(
+      "UPDATE care_sessions SET status = 'in_progress', late_check_in = ?, late_minutes = ?, updated_at = NOW() WHERE id = ?"
+    ).run(lateCheckIn ? 1 : 0, lateCheckIn ? lateMinutes : null, req.params.id);
+
+    // Create visit_log with check-in data + location
+    // Use effective check-in time (offline timestamp if syncing, NOW() otherwise)
+    const visitId = require("uuid").v4();
+    const checkInTimeSQL = isOfflineSync ? `'${effectiveCheckInTime.toISOString()}'` : 'NOW()';
+    const isTestMode = !!req.user.impersonatedBy;
+    if (isTestMode) console.log(`[check-in] TEST MODE — admin ${req.user.impersonatedBy.slice(0,8)} impersonating ${req.user.id.slice(0,8)}`);
+    // Proof-of-presence: distance from the caregiver's check-in point to the recipient's home + geofence flag
+    const ciGeo = geofenceEvidence(checkInLatitude, checkInLongitude, session.recipient_lat, session.recipient_lng);
+    if (ciGeo.flag === 'far') console.warn(`[check-in] Geofence FAR: ${ciGeo.distanceFt} ft from home — session ${req.params.id.slice(0, 8)}`);
+    // v1.105.124 — a check-in with NO location must not read as a normal check-in.
+    //
+    // Proof-of-presence is the app's whole safety proposition, and until now its absence
+    // was the quietest state in the system: `no_geo` was written to the row and nothing
+    // else happened. Julia's first real paid visit on Aug 22 recorded no coordinates at
+    // all — she checked in through the offline queue, where the body was captured before
+    // any position was, so there was nothing to send. It looked exactly like every
+    // successful check-in.
+    //
+    // `no_home_geo` is a DIFFERENT failure — the caregiver's phone worked and we simply
+    // never geocoded the recipient's address — so it is reported separately rather than
+    // blamed on her device.
+    if (ciGeo.flag === 'no_geo' || ciGeo.flag === 'no_home_geo') {
+      const why = ciGeo.flag === 'no_geo'
+        ? "caregiver device sent no coordinates"
+        : "care recipient has no geocoded home";
+      console.warn(`[check-in] NO PROOF OF PRESENCE (${ciGeo.flag}, offlineSync=${isOfflineSync}) — session ${req.params.id.slice(0, 8)}`);
+      captureException(new Error(`Check-in recorded without location: ${why}`), {
+        where: "sessions: check-in proof-of-presence missing",
+        sessionId: req.params.id,
+        geoFlag: ciGeo.flag,
+        offlineSync: isOfflineSync,
+      });
+    }
+    await db.prepare(`
+      INSERT INTO visit_logs (id, session_id, caregiver_id, check_in_time, arrival_mood, check_in_latitude, check_in_longitude, check_in_distance_ft, check_in_geo_flag, briefing_acknowledged_at, offline_sync, is_test, created_at)
+      VALUES (?, ?, ?, ${checkInTimeSQL}, ?, ?, ?, ?, ?, ${briefingAcknowledged ? 'NOW()' : 'NULL'}, ?, ?, NOW())
+    `).run(visitId, req.params.id, session.caregiver_id, arrivalMood ? (Array.isArray(arrivalMood) ? JSON.stringify(arrivalMood) : arrivalMood) : null, coarsenCoordinate(checkInLatitude), coarsenCoordinate(checkInLongitude), ciGeo.distanceFt, ciGeo.flag, isOfflineSync ? 1 : 0, isTestMode ? 1 : 0);
+
+    // v1.109.6 — the family's instructions are acknowledged on their own, and only for the words
+    // she was shown. If the family edited them while this check-in sat in the offline queue, the
+    // text will not match, nothing is stamped, and her active-visit card asks again.
+    if (typeof acknowledgedInstructions === "string"
+        && normalizeInstructions(session.special_instructions)
+        && sameInstructions(acknowledgedInstructions, session.special_instructions)) {
+      await db.prepare(
+        `UPDATE care_sessions SET instructions_acknowledged_at = ${checkInTimeSQL} WHERE id = ?`
+      ).run(req.params.id);
+    }
+
+    // Get special instructions and recent notes for the caregiver
+    // v1.76.0 — caregivers get family observations via the AI-digested briefing,
+    // not raw (Pete's decision: candor for family, care-relevant digest for caregivers)
+    const notes = await db.prepare(
+      "SELECT content, created_at FROM recipient_notes WHERE care_recipient_id = ? AND note_type != 'observation' ORDER BY created_at DESC LIMIT 5"
+    ).all(session.care_recipient_id);
+
+    // Notify family that session has started (skip in test mode — admin impersonation)
+    const caregiverUser = await db.prepare("SELECT first_name, last_name FROM users WHERE id = ?").get(req.user.id);
+    const caregiverName = caregiverUser ? `${caregiverUser.first_name} ${caregiverUser.last_name}` : "Your caregiver";
+
+    if (!isTestMode) {
+      const emitToUser = req.app.get("emitToUser");
+
+      // Activity feed entry
+      await db.prepare(
+        "INSERT INTO activity_feed (id, family_user_id, care_recipient_id, event_type, title, message, metadata) VALUES (?, ?, ?, 'session_checkin', ?, ?, ?)"
+      ).run(
+        require("uuid").v4(),
+        session.family_user_id,
+        session.care_recipient_id,
+        `${caregiverName} has checked in`,
+        `Care session with ${session.recipient_first_name} has started. ${arrivalMood ? `Mood on arrival: ${arrivalMood}` : ""}`,
+        JSON.stringify({ sessionId: req.params.id })
+      );
+
+      if (emitToUser) {
+        emitToUser(session.family_user_id, "session_update", {
+          sessionId: req.params.id,
+          status: "in_progress",
+          checkIn: true,
+          arrivalMood,
+          lateCheckIn,
+          lateMinutes: lateCheckIn ? lateMinutes : undefined,
+        });
+        emitToUser(session.family_user_id, "activity_update", {});
+
+        // If late, send a separate event so the family can choose extend/truncate
+        if (lateCheckIn) {
+          emitToUser(session.family_user_id, "late_check_in", {
+            sessionId: req.params.id,
+            lateMinutes,
+            caregiverName,
+            message: `${caregiverName} checked in ${lateMinutes} minutes late. Would you like to extend the session or keep the original end time?`,
+          });
+        }
+      }
+
+      // ─── Push notifications to care team: "Session In Progress" ───
+      // Uses same tag as pre_check_in reminder → replaces "Caregiver Arriving Soon"
+      const famTag = `session-${req.params.id.slice(0,8)}-family`;
+      const cgTag = `session-${req.params.id.slice(0,8)}-cg`;
+
+      // Compute remaining time for the notification body (timezone-neutral)
+      let remainStr = "";
+      try {
+        if (session.scheduled_time && session.duration_hours) {
+          const [h, m] = session.scheduled_time.split(":").map(Number);
+          const durationMin = Math.round(parseFloat(session.duration_hours) * 60);
+          // Calculate how many minutes remain from now until scheduled end
+          const now = new Date();
+          const nowInTz = new Date(now.toLocaleString("en-US", { timeZone: careTz }));
+          const startMin = h * 60 + m;
+          const endMin = startMin + durationMin;
+          const nowMin = nowInTz.getHours() * 60 + nowInTz.getMinutes();
+          const leftMin = endMin - nowMin;
+          if (leftMin > 0) {
+            const hrs = Math.floor(leftMin / 60);
+            const mins = leftMin % 60;
+            remainStr = hrs > 0 ? ` — ${hrs}h ${mins}m remaining` : ` — ${mins}m remaining`;
+          }
+        }
+      } catch (e) { captureException(e, { where: "sessions: remaining-time display computation" }); }
+
+      // Format check-in time in the care recipient's timezone
+      let checkInTimeStr = "";
+      try {
+        const cit = effectiveCheckInTime || new Date();
+        const tzAbbr = cit.toLocaleString("en-US", { timeZone: careTz, timeZoneName: "short" }).split(" ").pop();
+        const formatted = cit.toLocaleTimeString("en-US", { timeZone: careTz, hour: "numeric", minute: "2-digit" });
+        checkInTimeStr = `${formatted} ${tzAbbr}`;
+      } catch (e) { captureException(e, { where: "sessions: check-in time formatting" }); }
+
+      // To entire care team: session is now in progress (supersedes "arriving soon")
+      try {
+        // v1.109.7 — allowed + opted in, not the whole team (b3c808fd)
+        const teamUserIds = await visitUpdateAudience(db, session.care_recipient_id, { exclude: [req.user.id] });
+
+        for (const userId of teamUserIds) {
+          if (userId === req.user.id) continue; // don't notify the caregiver themselves
+          await sendPushToUser(userId, {
+            title: "Session In Progress",
+            body: `${caregiverName} checked in${checkInTimeStr ? ` at ${checkInTimeStr}` : ""}${remainStr}${lateCheckIn ? ` (${lateMinutes} min late)` : ""}`,
+            tag: famTag,
+            data: { type: "session_in_progress", sessionId: req.params.id, page: "dashboard" },
+          }, "session_in_progress");
+        }
+      } catch (pushErr) {
+        console.warn("[check-in] Family push notification failed (non-blocking):", pushErr.message);
+      }
+    } else {
+      console.log(`[check-in] TEST MODE — skipping notifications for session ${req.params.id.slice(0,8)}`);
+    }
+
+    res.json({
+      visitLog: {
+        id: visitId,
+        checkInTime: effectiveCheckInTime.toISOString(),
+        arrivalMood,
+        // Echo what was STORED, not what was received. Returning five decimals for a row
+        // that holds two would have the client display a precision the record does not have.
+        checkInLatitude: coarsenCoordinate(checkInLatitude),
+        checkInLongitude: coarsenCoordinate(checkInLongitude),
+        offlineSync: isOfflineSync,
+      },
+      specialInstructions: session.special_instructions,
+      recentNotes: notes,
+      lateCheckIn,
+      lateMinutes: lateCheckIn ? lateMinutes : undefined,
+      offlineSync: isOfflineSync,
+      testMode: isTestMode || undefined,
+    });
+  } catch (err) {
+    console.error("Check-in error:", err);
+    res.status(500).json({ error: "Failed to check in" });
+  }
+});
+
+// ─── POST /api/sessions/:id/check-out ───
+// Caregiver checks out — updates visit_log, sets session to completed
+// ─── POST /:id/arrival-condition — how she found her, once she has looked ───
+//
+// v1.106.48. Pete: "We're asking them to declare how the patient is doing before they've had
+// a chance to interact when they start their day."
+//
+// Check-in no longer asks. This is where the answer arrives, from the prompt fifteen minutes
+// in — and it writes the SAME column check-in used to, `visit_logs.arrival_mood`, because it
+// is the same fact recorded at a moment when the caregiver can actually know it. A second
+// column would split one question in two and leave every reader deciding which to trust.
+router.post("/:id/arrival-condition", async (req, res) => {
+  try {
+    const db = await getDb();
+    const { mood } = req.body || {};
+    const list = Array.isArray(mood) ? mood.filter((m) => typeof m === "string").slice(0, 8) : [];
+    if (list.length === 0) return res.status(400).json({ error: "Pick at least one." });
+
+    const session = await db.prepare(`
+      SELECT cs.id, cs.status, cp.user_id AS caregiver_user_id
+        FROM care_sessions cs
+        LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+       WHERE cs.id = ?
+    `).get(req.params.id);
+    if (!session) return res.status(404).json({ error: "Session not found" });
+    if (session.caregiver_user_id !== req.user.id) {
+      return res.status(403).json({ error: "Only the caregiver on this visit can record how the visit is going" });
+    }
+    if (session.status !== "in_progress") {
+      return res.status(400).json({ error: "That visit isn't in progress" });
+    }
+
+    // Conditional on arrival_mood still being empty: this is a first impression, and a second
+    // one recorded over it would quietly rewrite what the family already read. Changing her
+    // mind about how the day is going is what the check-out summary is for.
+    const done = await db.prepare(`
+      UPDATE visit_logs SET arrival_mood = ?
+       WHERE session_id = ? AND check_out_time IS NULL AND arrival_mood IS NULL
+    `).run(JSON.stringify(list), req.params.id);
+
+    if (!done || done.changes === 0) {
+      return res.status(409).json({ error: "That's already recorded for this visit." });
+    }
+
+    // The family hears about it in the feed, not as a push: she is fine, someone is with her,
+    // and a buzz for "Betty seems sleepy" is the noise that makes real alerts ignorable.
+    try {
+      const cr = await db.prepare(
+        "SELECT care_recipient_id, family_user_id FROM care_sessions WHERE id = ?"
+      ).get(req.params.id);
+      const cg = await db.prepare("SELECT first_name FROM users WHERE id = ?").get(req.user.id);
+      if (cr && cr.family_user_id) {
+        await db.prepare(
+          "INSERT INTO activity_feed (id, family_user_id, care_recipient_id, event_type, title, message, metadata) VALUES (?, ?, ?, 'condition_read', ?, ?, ?)"
+        ).run(
+          require("uuid").v4(), cr.family_user_id, cr.care_recipient_id,
+          `${cg ? cg.first_name : "Your caregiver"} settled in`,
+          `Recorded how things were about ${SETTLED_MINUTES} minutes into the visit.`,
+          JSON.stringify({ sessionId: req.params.id })
+        );
+      }
+      const emitToUser = req.app.get("emitToUser");
+      if (emitToUser && cr) emitToUser(cr.family_user_id, "activity_update", {});
+    } catch (e) { captureException(e, { where: "sessions: condition read activity" }); }
+
+    return res.json({ recorded: true, mood: list });
+  } catch (err) {
+    captureException(err, { where: "sessions: arrival condition", sessionId: req.params.id });
+    return res.status(500).json({ error: "Could not record that" });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ─── POST /:id/release — "go home, you're paid for the day" ───
+//
+// v1.106.47. Pete: "Sara arrives with Betty on Friday. When she gets there, she would like to
+// let Tina take the rest of the day off with pay. Right now there's no ability for Tina to
+// check out without her pay being [cut]. Care team should be able to end session that would
+// send Tina a message, letting her know she can leave with pay."
+//
+// Deliberately NOT a check-out performed by somebody else. Check-out is the caregiver's own
+// account of her visit — her departure mood, her summary, her geofence point — and the
+// early-departure branch exists to dock pay when she leaves before the end. Running that on
+// her behalf would put Sara's decision on Tina's record and then charge Tina for it.
+//
+// So this is its own ending: the session completes at the FULL booked amount, the visit log
+// closes with no early-departure penalty and no break deduction, and the row records who
+// decided it. Tina is told, in those words.
+//
+// ── Who may do it ──
+//
+// CAP.BOOK_CARE, which Pete chose when he said "care-team members with edit rights" — `edit`
+// maps to every capability, so that is exactly the set. It is also the right capability by
+// this codebase's own reasoning rather than by coincidence: BOOK_CARE exists because "booking
+// a caregiver spends the billing contact's money and puts a stranger in Betty's house"
+// (capabilities.js, v1.105.165), and paying for four hours nobody worked is the same kind of
+// trust. A viewer who can read the care plan cannot spend on it.
+//
+// ── What it does NOT forgive ──
+//
+// Nothing about the break rule is re-litigated here; it is simply not applied, because Pete
+// answered that directly: full day, no deductions at all. A caregiver released at 2pm having
+// taken a 45-minute lunch is paid the whole booking. The breaks stay on the record — the
+// family can see she stepped out — they just do not reach the bill.
+// ═══════════════════════════════════════════════════════════════════════════
+router.post("/:id/release", blockWhileImpersonating("release a caregiver with pay"), async (req, res) => {
+  try {
+    const db = await getDb();
+    const reason = typeof req.body?.reason === "string" ? req.body.reason.trim().slice(0, 500) : null;
+
+    const session = await db.prepare(`
+      SELECT cs.*, cp.user_id AS caregiver_user_id,
+             cr.first_name AS recipient_first_name, cr.timezone AS care_timezone
+        FROM care_sessions cs
+        LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+        LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
+       WHERE cs.id = ?
+    `).get(req.params.id);
+    if (!session) return res.status(404).json({ error: "Session not found" });
+
+    // ── A caregiver cannot release herself ──
+    //
+    // That is an early check-out with the penalty removed, which is the one thing this must
+    // not become. The guard is load-bearing rather than theoretical because of the Julia shape
+    // this codebase has hit before — "Julia IS on Betty's care team AND she's a caregiver".
+    // Give a caregiver an 'edit' share and she holds BOOK_CARE, so the capability gate below
+    // lets her through and only this stops her sending herself home on full pay.
+    //
+    // It is checked FIRST for a smaller reason, and I first wrote a larger one that was wrong:
+    // the order does not decide who is refused (Julia is refused either way, and the revert
+    // test proves it). It decides what an ORDINARY caregiver is told. Below the gate, Tina is
+    // refused for lacking booking access and advised to ask for some — advice that would never
+    // help her, because no amount of booking access lets her release herself.
+    if (session.caregiver_user_id === req.user.id) {
+      return res.status(403).json({ error: "A caregiver can't release themselves. Check out as normal, or ask the family to release you." });
+    }
+
+    // Asked of the row, never of a role string (lint:authz).
+    const { recipientCapabilities } = require("../utils/access");
+    const { can, CAP } = require("../utils/capabilities");
+    const caps = await recipientCapabilities(db, session.care_recipient_id, req.user.id);
+    if (!can(caps, CAP.BOOK_CARE)) {
+      return res.status(403).json({
+        error: "Letting a caregiver go early with full pay is a booking decision, so it needs booking access. Ask the care team leader to release the caregiver, or to give you booking access.",
+      });
+    }
+
+    if (session.status !== "in_progress") {
+      return res.status(400).json({
+        error: session.status === "completed"
+          ? "That visit has already ended."
+          : `That visit isn't in progress — its status is '${session.status}'.`,
+      });
+    }
+
+    const visitLog = await db.prepare(
+      "SELECT id FROM visit_logs WHERE session_id = ? ORDER BY created_at DESC LIMIT 1"
+    ).get(req.params.id);
+
+    // The full booked amount, whatever it currently is. `estimated_cost` and `duration_hours`
+    // are deliberately NOT recalculated: they already hold what was agreed, including any
+    // accepted time change, and the whole point of a release is that the clock stops mattering.
+    const fullCost = parseFloat(session.estimated_cost) || 0;
+
+    let released;
+    try { await db.transaction(async (tx) => {
+      released = await tx.prepare(`
+        UPDATE care_sessions SET
+          status = 'completed',
+          released_by_user_id = ?,
+          released_at = NOW(),
+          release_reason = ?,
+          overtime_minutes = 0,
+          overtime_cost = 0,
+          review_required = 1,
+          completed_at = NOW(),
+          payment_due_at = NOW() + INTERVAL '1 hour',
+          updated_at = NOW()
+        WHERE id = ? AND status = 'in_progress'
+      `).run(req.user.id, reason, req.params.id);
+      // v1.107.1 — the guard above was written and its result never read, so two releases (or
+      // a release racing a check-out) both went on to capture.
+      if (!released || released.changes !== 1) {
+        throw Object.assign(new Error("visit already ended"), { alreadyEnded: true });
+      }
+
+      if (visitLog) {
+        // No early_departure_reason and no early_departure_minutes: she did not leave early,
+        // she was sent home. Writing those would dock her in every report that reads them.
+        await tx.prepare(
+          "UPDATE visit_logs SET check_out_time = NOW() WHERE id = ? AND check_out_time IS NULL"
+        ).run(visitLog.id);
+      }
+
+      // An open break is closed so nothing is left running, and it changes no money here.
+      await tx.prepare(
+        "UPDATE visit_breaks SET ended_at = NOW(), ended_by = 'released' WHERE session_id = ? AND ended_at IS NULL"
+      ).run(req.params.id);
+    }); } catch (e) {
+      if (e && e.alreadyEnded) return res.status(400).json({ error: "That visit has already ended." });
+      throw e;
+    }
+
+    // Same capture, same retry path, same alerting as a check-out — one implementation.
+    await captureForSession(db, req.params.id, fullCost * 100, {
+      where: "release", testMode: false, // impersonation is refused at the route (v1.107.1)
+      settlement: { billedHours: parseFloat(session.duration_hours) || null,
+        breakdown: { quotedCents: Math.round(fullCost * 100), releasedEarly: true,
+          scheduledHours: parseFloat(session.duration_hours) || null,
+          hourlyCents: session.duration_hours ? Math.round(fullCost * 100 / parseFloat(session.duration_hours)) : null,
+          settledAt: "released with full pay" } },
+    });
+
+    // ── Tell her, in Pete's words ──
+    const releaser = await db.prepare("SELECT first_name FROM users WHERE id = ?").get(req.user.id);
+    const who = releaser ? releaser.first_name : "The family";
+    if (session.caregiver_user_id && !req.user.impersonatedBy) {
+      try {
+        await sendPushToUser(session.caregiver_user_id, {
+          title: `You're free to go — with pay`,
+          // First name and the fact of it. No condition, no reason text: the reason is the
+          // family's note to itself and may say anything at all.
+          body: `${who} has taken over with ${session.recipient_first_name}. You're checked out and you'll be paid for the full visit.`,
+          data: { type: "session_released", sessionId: req.params.id, page: "dashboard" },
+        }, "session_complete");
+      } catch (e) { captureException(e, { where: "sessions: notify caregiver of release" }); }
+    }
+
+    const emitToUser = req.app.get("emitToUser");
+    if (emitToUser) {
+      if (session.caregiver_user_id) {
+        emitToUser(session.caregiver_user_id, "session_update", {
+          sessionId: req.params.id, status: "completed", released: true,
+        });
+      }
+      emitToUser(session.family_user_id, "session_update", { sessionId: req.params.id, status: "completed" });
+      emitToUser(session.family_user_id, "activity_update", {});
+    }
+
+    try {
+      await db.prepare(
+        "INSERT INTO activity_feed (id, family_user_id, care_recipient_id, event_type, title, message, metadata) VALUES (?, ?, ?, 'session_released', ?, ?, ?)"
+      ).run(
+        require("uuid").v4(), session.family_user_id, session.care_recipient_id,
+        `Visit ended early with full pay`,
+        `${who} released the caregiver for the rest of the visit with ${session.recipient_first_name}. The full booking is still being paid.`,
+        JSON.stringify({ sessionId: req.params.id, releasedBy: req.user.id, fullCost })
+      );
+    } catch (e) { captureException(e, { where: "sessions: activity for release" }); }
+
+    return res.json({ released: true, paid: fullCost, caregiverNotified: !!session.caregiver_user_id });
+  } catch (err) {
+    captureException(err, { where: "sessions: release", sessionId: req.params.id });
+    return res.status(500).json({ error: "Could not end that visit" });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ─── Stepping out mid-visit — POST /:id/break/start and /:id/break/end ───
+//
+// v1.106.41. Pete: "It's possible that Tina will take a job, need to leave for a couple
+// hours, maybe come back... As long as it's inside of the time of the original appointment.
+// Remember that part of the intent here is that caregivers have a little bit more flexibility
+// in their own schedule."
+//
+// Deliberately NOT a second check-out. A check-out ends the visit, closes the visit log,
+// captures the payment and asks for the summary; none of that should happen because she went
+// to pick up a prescription. This pauses the clock and leaves the session in_progress, which
+// is also what keeps the family's live view honest — the visit has not ended, she is out.
+//
+// What it costs is decided entirely in utils/visitBreaks (see that file for Pete's rule:
+// 30 cumulative paid minutes, but only on a visit longer than four scheduled hours).
+// ═══════════════════════════════════════════════════════════════════════════
+
+/** The session plus the fields both break routes need, or null. */
+async function loadSessionForBreak(db, sessionId) {
+  return db.prepare(`
+    SELECT cs.id, cs.status, cs.duration_hours, cs.family_user_id, cs.care_recipient_id,
+           cs.caregiver_id,
+           cp.user_id AS caregiver_user_id,
+           cr.first_name AS recipient_first_name, cr.timezone AS care_timezone
+      FROM care_sessions cs
+      LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+      LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
+     WHERE cs.id = ?
+  `).get(sessionId);
+}
+
+async function breaksFor(db, sessionId) {
+  return db.prepare(
+    "SELECT id, started_at, ended_at FROM visit_breaks WHERE session_id = ? ORDER BY started_at ASC"
+  ).all(sessionId);
+}
+
+/**
+ * Tell the family, both ways. Pete asked for a push on the way out AND on the way back:
+ * Betty is on her own in between, and that is the thing the family would want to know in the
+ * moment rather than discover on a timeline afterwards.
+ *
+ * First name and a time only — no mood, no note, no reason. tests/pushPhi.test.js is the
+ * standing check on that, and it has caught me putting an appointment title in a push body
+ * once already.
+ */
+async function notifyFamilyOfBreak(req, db, session, { back, awayMinutes }) {
+  if (req.user.impersonatedBy) return;   // test mode — same rule as check-in/check-out
+  const cg = await db.prepare("SELECT first_name FROM users WHERE id = ?").get(req.user.id);
+  const who = cg ? cg.first_name : "Your caregiver";
+  const title = back ? `${who} is back with ${session.recipient_first_name}` : `${who} stepped out`;
+  const body = back
+    ? (awayMinutes >= 1 ? `Away about ${Math.round(awayMinutes)} min. The visit is continuing.` : "The visit is continuing.")
+    : `${who} has paused the visit with ${session.recipient_first_name} and will be back.`;
+
+  try {
+    await sendPushToUser(session.family_user_id, {
+      title, body,
+      data: { type: back ? "visit_break_end" : "visit_break_start", sessionId: session.id, page: "home" },
+      // sendPushToUser prepends `push_` to build the preference key, so this is
+      // `push_session_in_progress` — the same opt-out that governs the check-in push, because
+      // a family that muted "the visit started" has said what they want about this class of
+      // update. Passing "push_session_status" here, as the first cut did, would have looked
+      // up `push_push_session_status`: a key nobody can ever have set, so an opt-out that can
+      // never be honoured.
+    }, "session_in_progress");
+  } catch (e) { captureException(e, { where: "sessions: notify family of break" }); }
+
+  try {
+    await db.prepare(
+      "INSERT INTO activity_feed (id, family_user_id, care_recipient_id, event_type, title, message, metadata) VALUES (?, ?, ?, ?, ?, ?, ?)"
+    ).run(
+      require("uuid").v4(), session.family_user_id, session.care_recipient_id,
+      back ? "visit_break_end" : "visit_break_start", title, body,
+      JSON.stringify({ sessionId: session.id, awayMinutes: back ? Math.round(awayMinutes) : undefined })
+    );
+  } catch (e) { captureException(e, { where: "sessions: activity for break" }); }
+
+  const emitToUser = req.app.get("emitToUser");
+  if (emitToUser) {
+    emitToUser(session.family_user_id, "session_update", {
+      sessionId: session.id, status: "in_progress", onBreak: !back,
+    });
+    emitToUser(session.family_user_id, "activity_update", {});
+  }
+}
+
+router.post("/:id/break/start", async (req, res) => {
+  try {
+    const db = await getDb();
+    const { latitude, longitude } = req.body || {};
+    const session = await loadSessionForBreak(db, req.params.id);
+    if (!session) return res.status(404).json({ error: "Session not found" });
+    if (session.caregiver_user_id !== req.user.id) {
+      return res.status(403).json({ error: "Only the assigned caregiver can pause this visit" });
+    }
+    // "Inside of the time of the original appointment" is exactly what in_progress means:
+    // she has checked in and not checked out.
+    if (session.status !== "in_progress") {
+      return res.status(400).json({ error: "You can only step out during a visit you're checked into" });
+    }
+
+    const id = require("uuid").v4();
+    const visitLog = await db.prepare(
+      "SELECT id FROM visit_logs WHERE session_id = ? ORDER BY created_at DESC LIMIT 1"
+    ).get(req.params.id);
+
+    try {
+      await db.prepare(`
+        INSERT INTO visit_breaks (id, session_id, visit_log_id, caregiver_user_id,
+                                  started_at, start_latitude, start_longitude, created_at)
+        VALUES (?, ?, ?, ?, NOW(), ?, ?, NOW())
+      `).run(id, req.params.id, visitLog ? visitLog.id : null, req.user.id,
+             coarsenCoordinate(latitude), coarsenCoordinate(longitude));
+    } catch (e) {
+      // idx_visit_breaks_one_open. The DB, not a read-then-write in here, is what makes "she
+      // is out right now" a single fact — a double tap races itself otherwise.
+      if (String(e.message || "").includes("idx_visit_breaks_one_open") || e.code === "23505") {
+        return res.status(409).json({ error: "You're already on a break — tap \"I'm back\" to resume." });
+      }
+      throw e;
+    }
+
+    const rows = await breaksFor(db, req.params.id);
+    const summary = summarizeBreaks(rows, session.duration_hours);
+    await notifyFamilyOfBreak(req, db, session, { back: false });
+
+    return res.json({
+      onBreak: true,
+      breakId: id,
+      notice: breakNotice(summary),
+      ...summary,
+      openBreak: undefined,
+    });
+  } catch (err) {
+    captureException(err, { where: "sessions: break start", sessionId: req.params.id });
+    return res.status(500).json({ error: "Could not pause the visit" });
+  }
+});
+
+router.post("/:id/break/end", async (req, res) => {
+  try {
+    const db = await getDb();
+    const { latitude, longitude } = req.body || {};
+    const session = await loadSessionForBreak(db, req.params.id);
+    if (!session) return res.status(404).json({ error: "Session not found" });
+    if (session.caregiver_user_id !== req.user.id) {
+      return res.status(403).json({ error: "Only the assigned caregiver can resume this visit" });
+    }
+
+    // Conditional UPDATE rather than read-then-write: the row is chosen and closed in one
+    // statement, so two taps cannot both believe they closed it.
+    const closed = await db.prepare(`
+      UPDATE visit_breaks SET ended_at = NOW(), ended_by = 'caregiver',
+             end_latitude = ?, end_longitude = ?
+       WHERE session_id = ? AND ended_at IS NULL
+    `).run(coarsenCoordinate(latitude), coarsenCoordinate(longitude), req.params.id);
+
+    if (!closed || closed.changes === 0) {
+      return res.status(409).json({ error: "You're not on a break right now." });
+    }
+
+    const rows = await breaksFor(db, req.params.id);
+    const summary = summarizeBreaks(rows, session.duration_hours);
+    const justEnded = rows.filter((r) => r.ended_at).slice(-1)[0];
+    await notifyFamilyOfBreak(req, db, session, { back: true, awayMinutes: breakMinutes(justEnded) });
+
+    return res.json({ onBreak: false, ...summary, openBreak: undefined });
+  } catch (err) {
+    captureException(err, { where: "sessions: break end", sessionId: req.params.id });
+    return res.status(500).json({ error: "Could not resume the visit" });
+  }
+});
+
+// ─── GET /api/sessions/:id/visit-report/form — v1.108.0 ───
+// The questions for THIS visit, with follow-ups from the last report. The assigned caregiver
+// only, while the visit is running.
+router.get("/:id/visit-report/form", async (req, res) => {
+  try {
+    const db = await getDb();
+    const s = await db.prepare(`
+      SELECT cs.status, cp.user_id AS caregiver_user_id
+        FROM care_sessions cs LEFT JOIN caregiver_profiles cp ON cp.id = cs.caregiver_id
+       WHERE cs.id = ?
+    `).get(req.params.id);
+    if (!s || s.caregiver_user_id !== req.user.id) return res.status(404).json({ error: "Session not found" });
+    if (s.status !== "in_progress") return res.status(400).json({ error: "The report is filled in during the visit" });
+    const form = await require("../utils/visitReport").buildReportForm(db, req.params.id);
+    res.json({ form });
+  } catch (err) {
+    captureException(err, { where: "sessions: visit report form" });
+    res.status(500).json({ error: "Couldn't load the visit report" });
+  }
+});
+
+router.post("/:id/check-out", blockWhileImpersonating("end a real visit and settle its pay"), async (req, res) => {
+  try {
+    const db = await getDb();
+    const { departureMood, conditionTags, careFeedback, serviceFeedback, summary, earlyDepartureReason, checkOutLatitude, checkOutLongitude, offlineTimestamp, offlineSync, visitReport } = req.body;
+
+    const session = await db.prepare(`
+      SELECT cs.*, cp.user_id AS caregiver_user_id,
+        cr.first_name AS recipient_first_name, cr.last_name AS recipient_last_name,
+        cr.timezone AS care_timezone, cr.latitude AS recipient_lat, cr.longitude AS recipient_lng
+      FROM care_sessions cs
+      LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+      LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
+      WHERE cs.id = ?
+    `).get(req.params.id);
+
+    if (!session) return res.status(404).json({ error: "Session not found" });
+    if (session.caregiver_user_id !== req.user.id) {
+      return res.status(403).json({ error: "Only the assigned caregiver can check out" });
+    }
+    // If this is an offline sync and session already completed, treat as success (duplicate)
+    const isOfflineSync = !!offlineSync;
+    if (isOfflineSync && session.status === "completed") {
+      return res.json({ duplicate: true, message: "Check-out already recorded" });
+    }
+    if (session.status !== "in_progress") {
+      return res.status(400).json({ error: `Cannot check out — session status is '${session.status}'` });
+    }
+
+    // Use offline timestamp if provided; bound it the same way as check-in.
+    let effectiveCheckOutTime = new Date();
+    if (offlineTimestamp) {
+      const t = new Date(offlineTimestamp);
+      const nowMs = Date.now();
+      if (!isNaN(t.getTime()) && t.getTime() <= nowMs + 5 * 60000 && t.getTime() >= nowMs - 18 * 3600 * 1000) {
+        effectiveCheckOutTime = t;
+      } else {
+        console.warn(`[check-out] Implausible offline timestamp ${offlineTimestamp} — using server time. session ${req.params.id.slice(0, 8)}`);
+      }
+    }
+    if (isOfflineSync) {
+      console.log(`[check-out] Offline sync — original time: ${offlineTimestamp}, session ${req.params.id.slice(0, 8)}`);
+    }
+
+    // ─── v1.108.0 — the visit report ───
+    // Sent by current clients only; an older app (or a queued offline check-out) that sends
+    // none still checks out. When it IS sent, every row must be answered — "Didn't come up"
+    // counts — except on an offline replay, where the form may have moved on since she tapped.
+    let reportClean = null;
+    if (Array.isArray(visitReport)) {
+      const vr = require("../utils/visitReport");
+      const form = await vr.buildReportForm(db, req.params.id, { phrase: false });
+      const checked = vr.checkAnswers(form, visitReport);
+      if (!checked.ok && !isOfflineSync) {
+        return res.status(400).json({
+          error: `Please answer every row (or tap "Didn't come up"): ${checked.missing.join(", ")}`,
+          code: "VISIT_REPORT_INCOMPLETE",
+          missing: checked.missing,
+        });
+      }
+      reportClean = checked.clean;
+    }
+
+    // All timing uses care recipient's timezone
+    const careTz = session.care_timezone || 'America/New_York';
+
+    // Calculate actual duration, overtime, and adjust pay
+    const visitLog = await db.prepare(
+      "SELECT * FROM visit_logs WHERE session_id = ? ORDER BY created_at DESC LIMIT 1"
+    ).get(req.params.id);
+
+    let actualDurationHours = parseFloat(session.duration_hours) || 2;
+    let adjustedCost = parseFloat(session.estimated_cost) || 0;
+    const scheduledDuration = parseFloat(session.duration_hours) || 2;
+    let overtimeMinutes = 0;
+    let overtimeCost = 0;
+
+    // Flex timing caps: strict = 0 min, flexible = 30 min, open = 120 min
+    const flexPolicy = session.flex_timing || 'strict';
+    const flexCapMinutes = flexPolicy === 'open' ? 120 : flexPolicy === 'flexible' ? 30 : 0;
+
+    // ─── v1.106.41 — time she stepped out comes off the clock before anything else ───
+    //
+    // Pete: "if she needs to run somewhere for a personal reason for an hour, she can, but
+    // won't be paid... has to be cumulative...so no more than 30 minutes break before we stop
+    // pay", and "for sessions longer than 4 hours, they get a 30 min break."
+    //
+    // The deduction is applied AFTER the scheduled / overtime / early branches below, not
+    // before them, and the first cut of this had it the other way round. Those branches carry
+    // a ±15-minute grace around the scheduled end, which exists to forgive arrival and
+    // departure timing — so subtracting break minutes first let the grace absorb them too,
+    // and Pete's "no more than 30 minutes break before we stop pay" quietly became 45. The
+    // integration test for four ten-minute breaks is what showed it.
+    //
+    // Applied afterwards, the grace still forgives when she arrived and left, the break
+    // deduction is exact to the minute, and both keep the visit's own effective rate —
+    // including an overtime rate, if she earned one.
+    //
+    // An unfinished break is measured to the check-out moment: stepping out and never coming
+    // back is being away until she leaves, not being away for nothing.
+    const breakRows = await db.prepare(
+      "SELECT id, started_at, ended_at FROM visit_breaks WHERE session_id = ? ORDER BY started_at ASC"
+    ).all(req.params.id);
+    const breakSummary = summarizeBreaks(breakRows, scheduledDuration, effectiveCheckOutTime);
+    if (breakSummary.openBreak) {
+      await db.prepare(
+        "UPDATE visit_breaks SET ended_at = ?, ended_by = 'checkout' WHERE id = ? AND ended_at IS NULL"
+      ).run(effectiveCheckOutTime.toISOString(), breakSummary.openBreak.id);
+    }
+    const unpaidBreakMinutes = breakSummary.unpaidMinutes;
+
+    if (visitLog && visitLog.check_in_time) {
+      const checkInTime = new Date(visitLog.check_in_time);
+      const checkOutTime = effectiveCheckOutTime; // use offline timestamp if syncing
+      const actualMinutes = Math.max(0, (checkOutTime - checkInTime) / 60000);
+      const scheduledMinutes = scheduledDuration * 60;
+
+      if (actualMinutes >= (scheduledMinutes - 15) && actualMinutes <= (scheduledMinutes + 15)) {
+        // Within 15 min of scheduled end → full scheduled pay, no overtime
+        actualDurationHours = scheduledDuration;
+        adjustedCost = parseFloat(session.estimated_cost) || 0;
+      } else if (actualMinutes > (scheduledMinutes + 15)) {
+        // ─── Overtime ───
+        // Minutes past scheduled end (subtract the 15-min grace)
+        const rawOvertimeMinutes = actualMinutes - scheduledMinutes;
+        // Cap overtime at flex policy limit
+        const cappedOvertimeMinutes = Math.min(rawOvertimeMinutes, flexCapMinutes);
+        // Round overtime UP to nearest 5-min increment
+        overtimeMinutes = Math.ceil(cappedOvertimeMinutes / 5) * 5;
+
+        // Calculate overtime cost at the same hourly rate
+        const hourlyRate = scheduledDuration > 0
+          ? (parseFloat(session.estimated_cost) || 0) / scheduledDuration
+          : 0;
+        overtimeCost = Math.round((overtimeMinutes / 60) * hourlyRate * 100) / 100;
+
+        // Total = scheduled pay + overtime
+        actualDurationHours = scheduledDuration + (overtimeMinutes / 60);
+        adjustedCost = (parseFloat(session.estimated_cost) || 0) + overtimeCost;
+
+        if (cappedOvertimeMinutes < rawOvertimeMinutes) {
+          console.log(`[check-out] Overtime capped by ${flexPolicy} policy: ${Math.round(rawOvertimeMinutes)} raw → ${overtimeMinutes} billed (cap ${flexCapMinutes} min)`);
+        }
+      } else {
+        // Checked out early — round UP to nearest 5-min increment
+        const roundedMinutes = Math.ceil(actualMinutes / 5) * 5;
+        actualDurationHours = Math.round(roundedMinutes / 60 * 100) / 100;
+        // Pro-rate the pay: (actual hours / scheduled hours) × estimated_cost
+        if (scheduledDuration > 0) {
+          adjustedCost = Math.round((actualDurationHours / scheduledDuration) * parseFloat(session.estimated_cost || 0) * 100) / 100;
+        }
+      }
+    }
+
+    // ─── v1.106.41 — and now the break comes off ───
+    // Exact minutes at the visit's own per-minute rate, so the deduction matches the rule
+    // rather than the grace, and clamped at zero: a break can never bill negative time.
+    if (unpaidBreakMinutes > 0 && actualDurationHours > 0) {
+      const billedBefore = actualDurationHours * 60;
+      const perMinute = adjustedCost / billedBefore;
+      const billedMinutes = Math.max(0, billedBefore - unpaidBreakMinutes);
+      actualDurationHours = Math.round((billedMinutes / 60) * 100) / 100;
+      adjustedCost = Math.round(billedMinutes * perMinute * 100) / 100;
+    }
+
+    // ─── v1.106.10 — the session and its visit log close together, or not at all ───
+    //
+    // These were two UPDATEs with a Stripe capture between them. The half-state that leaves is
+    // the bad one: `care_sessions` says completed with payment due, and `visit_logs` has no
+    // check_out_time — so the amount owed was computed from a check-out that is not recorded
+    // anywhere. The caregiver's own record of the visit is the thing missing, and it is the
+    // record that would settle a dispute about the money.
+    //
+    // Both writes now commit as one, BEFORE the capture. The Stripe call stays outside the
+    // transaction: holding one open across a third-party network call is what exhausted the
+    // pool in v1.105.50, and a capture cannot be rolled back by us anyway.
+
+    // Computed here rather than after the capture, because the transaction below needs them.
+    let earlyMinutes = 0;
+    if (visitLog && visitLog.check_in_time && session.scheduled_time && session.duration_hours) {
+      const dateStr = (session.scheduled_date || '').split('T')[0];
+      const sessionStart = buildDateTimeInZone(dateStr, session.scheduled_time, careTz);
+      const schedEnd = new Date(sessionStart.getTime() + parseFloat(session.duration_hours) * 60 * 60000);
+      const nowCare = getNowInZone(careTz);
+      earlyMinutes = Math.max(0, (schedEnd - nowCare) / 60000);
+    }
+    const coGeo = geofenceEvidence(checkOutLatitude, checkOutLongitude, session.recipient_lat, session.recipient_lng);
+
+    // ─── v1.109.0 — freeze the arithmetic before the row is overwritten ───
+    // The UPDATE below replaces estimated_cost and duration_hours with the adjusted values, so
+    // this is the last moment the quote, the overtime, the unpaid breaks and the early
+    // departure can be told apart. It goes on the ledger row with the charge.
+    const quotedCents = Math.round((parseFloat(session.estimated_cost) || 0) * 100);
+    const adjustedCents = Math.round(adjustedCost * 100);
+    const overtimeCents = Math.round(overtimeCost * 100);
+    const perMinuteCents = scheduledDuration > 0 ? (quotedCents / (scheduledDuration * 60)) : 0;
+    const settlementBreakdown = {
+      quotedCents,
+      scheduledHours: scheduledDuration,
+      billedHours: actualDurationHours,
+      hourlyCents: scheduledDuration > 0 ? Math.round(quotedCents / scheduledDuration) : null,
+      overtimeMinutes,
+      overtimeCents,
+      breakMinutes: unpaidBreakMinutes,
+      breakDeductionCents: Math.round(unpaidBreakMinutes * perMinuteCents),
+      earlyMinutes: earlyMinutes > 15 ? Math.round(earlyMinutes) : 0,
+      earlyDepartureCents: Math.max(0, quotedCents + overtimeCents - adjustedCents - Math.round(unpaidBreakMinutes * perMinuteCents)),
+      settledAt: "check-out",
+    };
+
+    let ended;
+    try { await db.transaction(async (tx) => {
+      // Transition to completed with adjusted cost, actual duration, overtime, and mark review
+      // required. payment_due_at = 1 hour from now — the family has that long to review + tip
+      // before auto-pay.
+      ended = await tx.prepare(`
+        UPDATE care_sessions SET
+          status = 'completed',
+          estimated_cost = ?,
+          duration_hours = ?,
+          overtime_minutes = ?,
+          overtime_cost = ?,
+          review_required = 1,
+          completed_at = NOW(),
+          payment_due_at = NOW() + INTERVAL '1 hour',
+          updated_at = NOW()
+        WHERE id = ? AND status = 'in_progress'
+      `).run(adjustedCost, actualDurationHours, overtimeMinutes, overtimeCost, req.params.id);
+      // v1.107.1 — only the request that actually ended the visit may settle it. A second
+      // check-out, or one racing a release, used to fall through to a second capture.
+      if (!ended || ended.changes !== 1) {
+        throw Object.assign(new Error("visit already ended"), { alreadyEnded: true });
+      }
+
+      if (visitLog) {
+        await tx.prepare(`
+          UPDATE visit_logs SET
+            check_out_time = NOW(),
+            departure_mood = ?,
+            condition_tags = ?,
+            care_feedback = ?,
+            service_feedback = ?,
+            summary = ?,
+            mood_rating = ?,
+            early_departure_reason = ?,
+            early_departure_minutes = ?,
+            check_out_lat = ?,
+            check_out_lng = ?,
+            check_out_distance_ft = ?,
+            check_out_geo_flag = ?
+          WHERE id = ?
+        `).run(
+          departureMood ? (Array.isArray(departureMood) ? JSON.stringify(departureMood) : departureMood) : null,
+          conditionTags ? JSON.stringify(conditionTags) : null,
+          careFeedback || null,
+          serviceFeedback || null,
+          summary || null,
+          departureMood ? (Array.isArray(departureMood) ? JSON.stringify(departureMood) : departureMood) : null,
+          earlyMinutes > 15 ? (earlyDepartureReason || null) : null,
+          earlyMinutes > 15 ? Math.round(earlyMinutes) : null,
+          coarsenCoordinate(checkOutLatitude),
+          coarsenCoordinate(checkOutLongitude),
+          coGeo.distanceFt,
+          coGeo.flag,
+          visitLog.id
+        );
+      }
+      if (reportClean && reportClean.length) {
+        await require("../utils/visitReport").saveAnswers(tx, {
+          sessionId: req.params.id, careRecipientId: session.care_recipient_id,
+          userId: req.user.id, clean: reportClean,
+        });
+      }
+    }); } catch (e) {
+      if (e && e.alreadyEnded) return res.status(409).json({ error: "This visit has already ended." });
+      throw e;
+    }
+
+    // ─── Capture payment (Stripe auth → charge) ───
+    // Skip when admin is impersonating (test mode) — don't charge real money
+    // v1.106.47 — the capture, its retry path and its alerting moved to
+    // utils/sessionCapture so the new release-with-pay route runs the same one. The v1.105.48
+    // reasoning that makes it careful is preserved in that file.
+    // v1.107.1 — impersonation is refused at the route, so this is always a real settlement.
+    const isTestCheckout = false;
+    await captureForSession(db, req.params.id, adjustedCost * 100, {
+      where: "checkout", testMode: isTestCheckout,
+      settlement: { billedHours: actualDurationHours, breakdown: settlementBreakdown },
+    });
+
+    // (the visit log closed inside the transaction above — v1.106.10)
+
+    // ─── v1.108.0 — what the report sets in motion (doses closed, falls raised) ───
+    if (reportClean && reportClean.length) {
+      try {
+        const me = await db.prepare("SELECT first_name FROM users WHERE id = ?").get(req.user.id);
+        await require("../utils/visitReport").applySideEffects(db, {
+          sessionId: req.params.id, careRecipientId: session.care_recipient_id, userId: req.user.id,
+          clean: reportClean, caregiverName: (me && me.first_name) || "Your caregiver",
+          recipientFirstName: session.recipient_first_name || "your person",
+        });
+      } catch (e) { captureException(e, { where: "checkout: visit report side effects" }); }
+    }
+
+    // ─── Auto-create care note from checkout summary ───
+    // Bridge visit_logs → recipient_notes so checkout observations appear in Care Profile
+    if (summary && summary.trim() && session.care_recipient_id) {
+      try {
+        await db.prepare(`
+          INSERT INTO recipient_notes (id, care_recipient_id, author_id, content, note_type)
+          VALUES (?, ?, ?, ?, 'visit_summary')
+        `).run(require("uuid").v4(), session.care_recipient_id, req.user.id, summary.trim());
+      } catch (noteErr) {
+        console.warn("[checkout] Auto-note creation failed (non-blocking):", noteErr.message);
+      }
+    }
+
+    // Notify family
+    const emitToUser = req.app.get("emitToUser");
+    const caregiverUser = await db.prepare("SELECT first_name, last_name FROM users WHERE id = ?").get(req.user.id);
+    const caregiverName = caregiverUser ? `${caregiverUser.first_name} ${caregiverUser.last_name}` : "Your caregiver";
+
+    // Build condition summary
+    const tagSummary = conditionTags && conditionTags.length > 0
+      ? ` Noted: ${conditionTags.join(", ")}.`
+      : "";
+
+    const earlyNote = earlyMinutes > 15
+      ? ` Left ${Math.round(earlyMinutes)} min early.${earlyDepartureReason ? ` Reason: ${earlyDepartureReason}` : ""}`
+      : "";
+    const overtimeNote = overtimeMinutes > 0
+      ? ` Overtime: ${overtimeMinutes} min (+$${overtimeCost.toFixed(2)}).`
+      : "";
+
+    await db.prepare(
+      "INSERT INTO activity_feed (id, family_user_id, care_recipient_id, event_type, title, message, metadata) VALUES (?, ?, ?, 'session_checkout', ?, ?, ?)"
+    ).run(
+      require("uuid").v4(),
+      session.family_user_id,
+      session.care_recipient_id,
+      `${caregiverName} has checked out${earlyMinutes > 15 ? " early" : ""}${overtimeMinutes > 0 ? " (overtime)" : ""}`,
+      `Care session with ${session.recipient_first_name} is complete.${earlyNote}${overtimeNote} ${departureMood ? `Mood at departure: ${departureMood}.` : ""}${tagSummary}`,
+      JSON.stringify({ sessionId: req.params.id, earlyDeparture: earlyMinutes > 15, earlyMinutes: earlyMinutes > 15 ? Math.round(earlyMinutes) : 0, overtimeMinutes, overtimeCost })
+    );
+
+    if (emitToUser) {
+      emitToUser(session.family_user_id, "session_update", {
+        sessionId: req.params.id,
+        status: "completed",
+        checkOut: true,
+        departureMood,
+        conditionTags,
+        overtimeMinutes,
+        overtimeCost,
+      });
+      emitToUser(session.family_user_id, "activity_update", {});
+    }
+
+    // ─── Push notification to care team: "Session Complete" ───
+    // Uses same tag → replaces "In Progress" / "Wrapping Up" notifications
+    if (!isTestCheckout) {
+      const famTag = `session-${req.params.id.slice(0,8)}-family`;
+      const durationStr = actualDurationHours
+        ? `${Math.floor(actualDurationHours)}h ${Math.round((actualDurationHours % 1) * 60)}m`
+        : "";
+      try {
+        // v1.109.7 — allowed + opted in, not the whole team (b3c808fd)
+        const teamUserIds = await visitUpdateAudience(db, session.care_recipient_id, { exclude: [req.user.id] });
+
+        for (const userId of teamUserIds) {
+          if (userId === req.user.id) continue;
+          await sendPushToUser(userId, {
+            title: "Session Complete",
+            body: `${caregiverName} has checked out from ${session.recipient_first_name}'s session${durationStr ? ` (${durationStr})` : ""}${overtimeNote}`,
+            tag: famTag,
+            data: { type: "session_complete", sessionId: req.params.id, page: "dashboard" },
+          }, "session_complete");
+        }
+      } catch (pushErr) {
+        console.warn("[checkout] Family push notification failed (non-blocking):", pushErr.message);
+      }
+    }
+
+    // ─── iPAi: Generate AI session summary (non-blocking) ───
+    try {
+      const { generateSessionSummary } = require("../utils/careIntelligence");
+      generateSessionSummary(req.params.id).then(async (aiSummary) => {
+        if (aiSummary && aiSummary.summary) {
+          // Store the AI summary on the visit log
+          try {
+            await db.prepare("UPDATE visit_logs SET ai_summary = ? WHERE session_id = ?").run(
+              JSON.stringify(aiSummary), req.params.id
+            );
+            // Send to family via websocket
+            if (emitToUser) {
+              emitToUser(session.family_user_id, "ipai_session_summary", {
+                sessionId: req.params.id,
+                recipientName: session.recipient_first_name,
+                caregiverName,
+                summary: aiSummary.summary,
+                suggestions: aiSummary.suggestions,
+                moodChange: aiSummary.moodChange,
+              });
+            }
+          } catch (storeErr) {
+            console.warn("[iPAi] Failed to store session summary:", storeErr.message);
+          }
+        }
+      }).catch(err => console.warn("[iPAi] Session summary generation failed (non-blocking):", err.message));
+    } catch (e) { captureException(e, { where: "sessions: iPAi session summary kickoff" }); }
+
+    // ─── iPAi: Generate caregiver coaching tips (non-blocking) ───
+    try {
+      const { generateCaregiverCoaching } = require("../utils/careIntelligence");
+      generateCaregiverCoaching(req.params.id).then(async (coaching) => {
+        if (coaching) {
+          try {
+            await db.prepare("UPDATE visit_logs SET ai_coaching = ? WHERE session_id = ?").run(
+              JSON.stringify(coaching), req.params.id
+            );
+            if (emitToUser) {
+              emitToUser(req.user.id, "ipai_coaching", {
+                sessionId: req.params.id,
+                recipientName: session.recipient_first_name,
+                coaching,
+              });
+            }
+          } catch (storeErr) {
+            console.warn("[iPAi] Failed to store coaching:", storeErr.message);
+          }
+        }
+      }).catch(err => console.warn("[iPAi] Coaching generation failed (non-blocking):", err.message));
+    } catch (e) { captureException(e, { where: "sessions: iPAi coaching kickoff" }); }
+
+    res.json({
+      session: {
+        id: req.params.id, status: "completed",
+        actualDurationHours, adjustedCost,
+        overtimeMinutes, overtimeCost,
+        flexPolicy,
+      },
+      visitLog: visitLog ? { id: visitLog.id } : null,
+    });
+  } catch (err) {
+    console.error("Check-out error:", err);
+    res.status(500).json({ error: "Failed to check out" });
+  }
+});
+
+// ─── POST /api/sessions/:id/pending-tip ───
+// Family sets a tip during the auto-pay grace period (before payment_due_at)
+// Stored on the session; included when auto-pay fires
+router.post("/:id/pending-tip", requireRole("family"), async (req, res) => {
+  try {
+    const db = await getDb();
+    const { tipCents, tipReason } = req.body;
+    const safeTipCents = Math.max(0, Math.min(50000, Math.round(tipCents || 0)));
+
+    // Allow both the booker and the billing contact to set a tip
+    const session = await db.prepare(`
+      SELECT cs.id, cs.family_user_id, cs.status, cs.payment_status
+      FROM care_sessions cs
+      LEFT JOIN care_teams ct ON ct.care_recipient_id = cs.care_recipient_id
+      WHERE cs.id = ? AND (cs.family_user_id = ? OR ct.billing_user_id = ?)
+    `).get(req.params.id, req.user.id, req.user.id);
+
+    if (!session) return res.status(404).json({ error: "Session not found" });
+    if (session.payment_status === 'paid') return res.status(400).json({ error: "Session already paid" });
+
+    await db.prepare(
+      "UPDATE care_sessions SET pending_tip_cents = ?, pending_tip_reason = ?, updated_at = NOW() WHERE id = ?"
+    ).run(safeTipCents, tipReason || null, req.params.id);
+
+    console.log(`💛 Pending tip set: $${(safeTipCents/100).toFixed(2)} for session ${req.params.id}`);
+    res.json({ success: true, tipCents: safeTipCents });
+  } catch (err) {
+    console.error("Pending tip error:", err);
+    res.status(500).json({ error: "Failed to save tip" });
+  }
+});
+
+// ─── POST /api/sessions/:id/propose-time-change ───
+// Caregiver or family proposes new start/end time for a confirmed session
+router.post("/:id/propose-time-change", async (req, res) => {
+  try {
+    const db = await getDb();
+    const { proposedTime, proposedDuration, reason, proposedDate } = req.body;
+    const userId = req.user.id;
+    const activeRole = req.user.activeRole || req.user.role;
+
+    if (!proposedTime || !proposedDuration) {
+      return res.status(400).json({ error: "proposedTime and proposedDuration are required" });
+    }
+    // v1.124.0 — optional new DAY. A calendar date where the care happens, "YYYY-MM-DD".
+    if (proposedDate != null && proposedDate !== "" && !/^\d{4}-\d{2}-\d{2}$/.test(String(proposedDate))) {
+      return res.status(400).json({ error: "proposedDate must be YYYY-MM-DD" });
+    }
+    if (!/^\d{1,2}:\d{2}$/.test(String(proposedTime))) {
+      return res.status(400).json({ error: "proposedTime must be HH:MM" });
+    }
+    const hrs = parseFloat(proposedDuration);
+    if (!Number.isFinite(hrs) || hrs <= 0 || hrs > 24) {
+      return res.status(400).json({ error: "proposedDuration must be between 0 and 24 hours" });
+    }
+
+    const session = await db.prepare(`
+      SELECT cs.*, cp.user_id AS caregiver_user_id,
+        cr.timezone AS care_timezone,
+        cu.first_name || ' ' || cu.last_name AS caregiver_name,
+        fu.first_name || ' ' || fu.last_name AS family_name,
+        cr.first_name || ' ' || cr.last_name AS recipient_name
+      FROM care_sessions cs
+      LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+      LEFT JOIN users cu ON cp.user_id = cu.id
+      LEFT JOIN users fu ON cs.family_user_id = fu.id
+      LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
+      WHERE cs.id = ?
+    `).get(req.params.id);
+
+    if (!session) return res.status(404).json({ error: "Session not found" });
+    if (session.status !== "confirmed") {
+      return res.status(400).json({ error: "Can only change time on confirmed sessions" });
+    }
+    if (session.pending_time_change_id) {
+      return res.status(400).json({ error: "A time change is already pending for this session" });
+    }
+
+    // v1.106.2 — authorization, not just authentication.
+    //
+    // This read `activeRole === "caregiver"`, and `activeRole` is whatever role sits in the
+    // caller's own JWT. The caregiver role is free: anyone can register with it, or add it to an
+    // existing account via POST /api/auth/add-role, with no vetting and no background check. So
+    // "is a caregiver" was standing in for "is THE caregiver on THIS session", and any account on
+    // the platform could act on any session by id.
+    //
+    // sessionAccess() answers the question that was actually being asked, and answers 404 rather
+    // than 403 so probing ids tells you nothing.
+    const access = await sessionAccess(db, req.params.id, userId);
+    if (!access) return res.status(404).json({ error: "Session not found" });
+
+    // Determine who is proposing
+    let proposedBy;
+    if (access.isCaregiver) {
+      proposedBy = "caregiver";
+    } else if (access.isFamily || access.isAdmin) {
+      proposedBy = "family";
+    } else {
+      return res.status(404).json({ error: "Session not found" });
+    }
+
+    // Check if within 24 hours
+    const careTz = session.care_timezone || "America/New_York";
+    const sessionDateTime = buildDateTimeInZone(
+      session.scheduled_date.split("T")[0],
+      session.scheduled_time || "00:00",
+      careTz
+    );
+    const hoursUntil = (sessionDateTime - getNowInZone(careTz)) / (1000 * 60 * 60);
+    const isWithin24h = hoursUntil < 24;
+
+    // v1.124.0 — the day. Same day unless a different one was asked for.
+    const originalDate = String(session.scheduled_date).split("T")[0];
+    const newDate = proposedDate ? String(proposedDate) : originalDate;
+    const dateChanged = newDate !== originalDate;
+    const newStart = buildDateTimeInZone(newDate, proposedTime, careTz);
+    if (dateChanged && newStart <= getNowInZone(careTz)) {
+      return res.status(400).json({ error: "The new day and time have already passed — pick a time in the future." });
+    }
+    if (!dateChanged && String(proposedTime) === String(session.scheduled_time)
+        && Math.round(hrs * 60) === Math.round((parseFloat(session.duration_hours) || 0) * 60)) {
+      return res.status(400).json({ error: "That's the same day, time and length as now — nothing to change." });
+    }
+
+    // Calculate overlap for cancellation fee reference
+    const origStartMin = parseTimeToMinutes(session.scheduled_time);
+    const origEndMin = origStartMin + session.duration_hours * 60;
+    const propStartMin = parseTimeToMinutes(proposedTime);
+    const propEndMin = propStartMin + proposedDuration * 60;
+    const overlapStart = Math.max(origStartMin, propStartMin);
+    const overlapEnd = Math.min(origEndMin, propEndMin);
+    // A different day overlaps the original window by nothing.
+    const overlapMinutes = dateChanged ? 0 : Math.max(0, overlapEnd - overlapStart);
+    const feeHours = session.duration_hours - (overlapMinutes / 60);
+
+    const proposalId = uuid();
+
+    // v1.106.13 — a deadline, because before this there was none and the request outlived
+    // the visit. 24 hours to answer, or the moment the visit starts, whichever comes first:
+    // there is no answering "can we move it to 3pm" at 3:30pm. expireStaleProposals sweeps
+    // it and clears pending_time_change_id, which is what unblocks the session.
+    //
+    // v1.124.0 — compare like with like. sessionDateTime is a shifted-frame Date, so the "time
+    // until it starts" is measured against getNowInZone and only then added to Date.now();
+    // the old Math.min(Date.now()+24h, sessionDateTime.getTime()) mixed the two frames and was
+    // off by the server's UTC offset. And a move to an EARLIER day ends the window at the
+    // earlier of the two starts.
+    const nowZ = getNowInZone(careTz);
+    const msToEarliestStart = Math.min(sessionDateTime - nowZ, newStart - nowZ);
+    const expiresAtMs = Date.now() + Math.max(0, Math.min(24 * 60 * 60 * 1000, msToEarliestStart));
+    const expiresAt = new Date(expiresAtMs).toISOString();
+
+    // v1.106.13 — one transaction. The INSERT and the pointer that makes it findable are one
+    // fact: a proposal with no pointer is invisible to the dashboard and the Needs You feed
+    // (both join through pending_time_change_id), and a pointer with no proposal blocks every
+    // future time change on a row that does not exist. Neither half is safe alone.
+    await db.transaction(async (tx) => {
+      await tx.prepare(`
+        INSERT INTO time_change_proposals (id, session_id, proposed_by, proposed_by_user_id,
+          original_time, original_duration, proposed_time, proposed_duration,
+          status, is_within_24h, cancel_fee_hours, reason, created_at, expires_at,
+          original_date, proposed_date)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, NOW(), ?, ?, ?)
+      `).run(
+        proposalId, req.params.id, proposedBy, userId,
+        session.scheduled_time, session.duration_hours,
+        proposedTime, hrs,
+        isWithin24h ? 1 : 0, feeHours > 0 ? feeHours : 0, reason || null, expiresAt,
+        originalDate, newDate
+      );
+
+      await tx.prepare(
+        "UPDATE care_sessions SET pending_time_change_id = ?, updated_at = NOW() WHERE id = ?"
+      ).run(proposalId, req.params.id);
+    });
+
+    // Notify the other party
+    const emitToUser = req.app.get("emitToUser");
+    const notifyUserId = proposedBy === "caregiver" ? session.family_user_id : session.caregiver_user_id;
+    const proposerName = proposedBy === "caregiver" ? session.caregiver_name : session.family_name;
+    // v1.123.0 — Pete (10/19): "a change for '9am to 9am' makes no sense." This body printed
+    // the start time before and after; Tina had kept the start and shortened the visit. It now
+    // says which day (today's visit was running when the push landed — it read as today's) and
+    // the part that moves: "Thu, Oct 22 visit: end at 3:00 PM instead of 5:00 PM (6 hr instead
+    // of 8 hr)". Names, a day and clock times — no health information (pushPhi rule).
+    const change = TimeChange.describe({
+      fromTime: session.scheduled_time, fromHours: session.duration_hours,
+      toTime: proposedTime, toHours: hrs,
+      fromDate: originalDate, toDate: newDate,
+    });
+    const visitDay = session.scheduled_date
+      ? formatDateRelative(String(session.scheduled_date).split("T")[0], careTz)
+      : "";
+
+    if (emitToUser) {
+      emitToUser(notifyUserId, "time_change_proposed", {
+        sessionId: req.params.id,
+        proposalId,
+        proposedBy,
+        proposerName,
+        proposedTime,
+        proposedDuration: hrs,
+        proposedDate: newDate,
+        originalDate,
+        originalTime: session.scheduled_time,
+        originalDuration: session.duration_hours,
+        isWithin24h,
+        feeHours,
+        recipientName: session.recipient_name,
+      });
+    }
+
+    // Push notification
+    if (sendPushToUser) {
+      await sendPushToUser(notifyUserId, {
+        title: "⏰ Time Change Request",
+        body: (() => {
+          const tail = change.sub ? ` (${change.sub.charAt(0).toLowerCase() + change.sub.slice(1)})` : "";
+          // v1.124.0 — a different day reads "move … visit on Sat, Nov 7 to Sat, Nov 14".
+          if (change.dateChanged) {
+            return `${proposerName} wants to move ${session.recipient_name}'s visit ${TimeChange.onDay(visitDay || change.fromDate)} to ${change.toDate}${tail}. Tap to review.`;
+          }
+          return `${proposerName} wants ${session.recipient_name}'s visit${visitDay ? ` ${TimeChange.onDay(visitDay)}` : ""} to ${change.phrase || "change"}${tail}. Tap to review.`;
+        })(),
+        data: { type: "time_change", sessionId: req.params.id, proposalId },
+      }, "time_change");
+    }
+
+    res.json({
+      proposal: { id: proposalId, proposedBy, proposedTime, proposedDuration: hrs, proposedDate: newDate, originalDate, isWithin24h, feeHours, status: "pending" },
+    });
+  } catch (err) {
+    console.error("Time change proposal error:", err);
+    res.status(500).json({ error: "Failed to propose time change" });
+  }
+});
+
+// ─── PUT /api/sessions/:id/time-change/:proposalId/respond ───
+// Accept, reject, or cancel-with-fee a time change proposal
+router.put("/:id/time-change/:proposalId/respond", async (req, res) => {
+  try {
+    const db = await getDb();
+    const { action, cancelReason } = req.body; // action: 'accept', 'reject', 'cancel_with_review'
+    const userId = req.user.id;
+    const activeRole = req.user.activeRole || req.user.role;
+
+    if (!["accept", "reject", "cancel_with_review"].includes(action)) {
+      return res.status(400).json({ error: "Invalid action. Use accept, reject, or cancel_with_review." });
+    }
+
+    const proposal = await db.prepare("SELECT * FROM time_change_proposals WHERE id = ? AND session_id = ?")
+      .get(req.params.proposalId, req.params.id);
+    if (!proposal) return res.status(404).json({ error: "Proposal not found" });
+    // v1.109.8 — already answered is 409 when it is already in the state you asked for. The
+    // Needs-you card treats 409 as "done" (v1.105.142); a 400 here handed Pete an error for a
+    // change he had just accepted from the visit details (50f59a7b).
+    if (proposal.status !== "pending") {
+      const wanted = action === "accept" ? "accepted" : action === "reject" ? "rejected" : null;
+      if (wanted && proposal.status === wanted) {
+        return res.status(409).json({ error: "Already " + wanted, code: "ALREADY_RESPONDED", status: proposal.status });
+      }
+      return res.status(400).json({ error: `This change was already ${proposal.status}`, code: "ALREADY_RESPONDED", status: proposal.status });
+    }
+
+    const session = await db.prepare(`
+      SELECT cs.*, cp.user_id AS caregiver_user_id, cp.hourly_rate,
+        cr.timezone AS care_timezone,
+        cu.first_name || ' ' || cu.last_name AS caregiver_name,
+        fu.first_name || ' ' || fu.last_name AS family_name,
+        cr.first_name || ' ' || cr.last_name AS recipient_name
+      FROM care_sessions cs
+      LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+      LEFT JOIN users cu ON cp.user_id = cu.id
+      LEFT JOIN users fu ON cs.family_user_id = fu.id
+      LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
+      WHERE cs.id = ?
+    `).get(req.params.id);
+
+    if (!session) return res.status(404).json({ error: "Session not found" });
+
+    // v1.106.2 — this handler had NO ownership check at all, and derived the responder's side
+    // from their own JWT role. Two requests (propose, then accept) rewrote the time of any
+    // confirmed visit on the platform.
+    const access = await sessionAccess(db, req.params.id, userId);
+    if (!access) return res.status(404).json({ error: "Session not found" });
+    if (!access.isCaregiver && !access.isFamily && !access.isAdmin) {
+      return res.status(404).json({ error: "Session not found" });
+    }
+    // A proposal is an offer to the OTHER party. Accepting your own was how one account moved a
+    // visit on its own, and it is meaningless even when done by the legitimate proposer.
+    if (proposal.proposed_by_user_id === userId) {
+      return res.status(400).json({ error: "You proposed this change — the other person responds to it." });
+    }
+
+    const emitToUser = req.app.get("emitToUser");
+    const isResponderCaregiver = access.isCaregiver;
+    const isResponderFamily = access.isFamily;
+    const notifyUserId = isResponderCaregiver ? session.family_user_id : session.caregiver_user_id;
+    const responderName = isResponderCaregiver ? session.caregiver_name : session.family_name;
+
+    if (action === "accept") {
+      // v1.124.0 — a move to another day. NULL proposed_date (every proposal before 073) is
+      // the same day.
+      const fromDay = String(proposal.original_date || session.scheduled_date || "").split("T")[0];
+      const toDay = String(proposal.proposed_date || fromDay).split("T")[0];
+      const dayMoved = !!toDay && toDay !== String(session.scheduled_date || "").split("T")[0];
+
+      // v1.106.13 — one transaction, and this is the branch where splitting it hurt most.
+      //
+      // The proposal was marked 'accepted' first and the session moved second. If the second
+      // write did not land, the record said the change was accepted, the push below told the
+      // proposer their new time was agreed, and care_sessions still held the OLD time. A
+      // caregiver arrives at 2pm for a visit the schedule, the check-in geofence and the
+      // payment hold all still think starts at 10am.
+      await db.transaction(async (tx) => {
+        await tx.prepare(
+          "UPDATE time_change_proposals SET status = 'accepted', acknowledged_by_user_id = ?, acknowledged_at = NOW() WHERE id = ?"
+        ).run(userId, proposal.id);
+
+        // v1.107.7 — a longer or shorter visit is a different price. duration_hours moved and
+        // estimated_cost did not, so the hold, the capture and her pay card kept the old
+        // length. Same hourly (the agreed rate, else the booking's own), new hours; any
+        // short-notice amount stays as it was. Right-hand sides read the row as it WAS.
+        await tx.prepare(`
+          UPDATE care_sessions SET
+            scheduled_time = ?,
+            duration_hours = ?,
+            estimated_cost = COALESCE(ROUND(
+              COALESCE(NULLIF(agreed_rate, 0)::numeric,
+                       (estimated_cost::numeric - COALESCE(short_notice_surcharge, 0)::numeric)
+                         / NULLIF(duration_hours, 0)::numeric)
+              * ?::numeric + COALESCE(short_notice_surcharge, 0)::numeric, 2), estimated_cost),
+            pending_time_change_id = NULL, updated_at = NOW()
+          WHERE id = ?
+        `).run(proposal.proposed_time, proposal.proposed_duration, parseFloat(proposal.proposed_duration) || 0, req.params.id);
+
+        // v1.124.0 — the day, and the reminders that belong to it. notifications_sent holds
+        // only pre-visit flags (the 24-h/1-h reminders, check-in nudge, unfunded warning,
+        // hold-declined notice); on a new day every one of them is owed again.
+        if (dayMoved) {
+          await tx.prepare(
+            "UPDATE care_sessions SET scheduled_date = ?, notifications_sent = NULL WHERE id = ?"
+          ).run(toDay, req.params.id);
+        }
+      });
+
+      // v1.124.0 — a card hold placed for the OLD day. Holds go on 23–25 h before the visit
+      // and Stripe lets an uncaptured one lapse after ~7 days, so a hold for Nov 7 cannot
+      // carry a Nov 14 visit. Release it and clear the fields the hold poller keys on
+      // (stripe_payment_intent_id IS NULL AND payment_status IS NULL) so it places a fresh
+      // one the day before the new date. Outside the transaction: Stripe is not rollback-able.
+      if (dayMoved && session.stripe_payment_intent_id && session.payment_status === "authorized" && !session.payment_captured_at) {
+        const { voidSessionPayment } = require("./accountability"); // lazy: circular, same as the cancel path
+        const v = await voidSessionPayment(req.params.id);
+        if (v && v.success) {
+          await db.prepare(`
+            UPDATE care_sessions SET stripe_payment_intent_id = NULL, payment_status = NULL,
+              payment_voided_at = NULL, authorized_amount = NULL
+            WHERE id = ? AND payment_status = 'voided'
+          `).run(req.params.id);
+        } else {
+          captureException(new Error("time-change day move: hold void failed"), {
+            where: "sessions: accept time change (day moved)", sessionId: req.params.id, error: v && v.error,
+          });
+        }
+      }
+
+      // Notify proposer
+      if (emitToUser) {
+        emitToUser(proposal.proposed_by_user_id === session.caregiver_user_id ? session.caregiver_user_id : session.family_user_id, "time_change_accepted", {
+          sessionId: req.params.id, proposalId: proposal.id, acceptedBy: responderName,
+          newTime: proposal.proposed_time, newDuration: proposal.proposed_duration, newDate: toDay,
+        });
+      }
+      if (sendPushToUser) {
+        const pushTarget = proposal.proposed_by === "caregiver" ? session.caregiver_user_id : session.family_user_id;
+        await sendPushToUser(pushTarget, {
+          title: "✅ Time Change Accepted",
+          // v1.123.0 — the whole window, not "9:00 AM for 6hr".
+          body: (() => {
+            // v1.124.0 — the NEW day when it moved.
+            const day = toDay ? formatDateRelative(toDay, session.care_timezone || "America/New_York") : "";
+            const c = TimeChange.describe({
+              fromTime: proposal.original_time, fromHours: proposal.original_duration,
+              toTime: proposal.proposed_time, toHours: proposal.proposed_duration,
+            });
+            return `${responderName} accepted. ${day ? `${day}'s` : "The"} visit is now ${c.to} (${c.toHours}).`;
+          })(),
+          data: { type: "time_change_accepted", sessionId: req.params.id },
+        }, "time_change");
+      }
+
+      res.json({ ok: true, action: "accepted", newTime: proposal.proposed_time, newDuration: proposal.proposed_duration, newDate: toDay });
+
+    } else if (action === "reject") {
+      // Reject — keep the original time. Both writes together: a rejected proposal whose
+      // pointer survives leaves the session unable to take another time change.
+      await db.transaction(async (tx) => {
+        await tx.prepare(
+          "UPDATE time_change_proposals SET status = 'rejected', acknowledged_by_user_id = ?, acknowledged_at = NOW() WHERE id = ?"
+        ).run(userId, proposal.id);
+        await tx.prepare(
+          "UPDATE care_sessions SET pending_time_change_id = NULL, updated_at = NOW() WHERE id = ?"
+        ).run(req.params.id);
+      });
+
+      if (emitToUser) {
+        emitToUser(proposal.proposed_by_user_id === session.caregiver_user_id ? session.caregiver_user_id : session.family_user_id, "time_change_rejected", {
+          sessionId: req.params.id, proposalId: proposal.id, rejectedBy: responderName,
+        });
+      }
+
+      res.json({ ok: true, action: "rejected" });
+
+    } else if (action === "cancel_with_review") {
+      // Cancel the session due to time change + fee logic
+      const isWithin24h = proposal.is_within_24h === 1;
+
+      if (proposal.proposed_by === "caregiver" && isResponderFamily) {
+        // Caregiver proposed, family cancels → no charge + can review caregiver
+        // v1.106.13 — cancelling a visit and closing the proposal that caused it are one act.
+        await db.transaction(async (tx) => {
+          await tx.prepare(
+            "UPDATE time_change_proposals SET status = 'cancelled_no_fee', acknowledged_by_user_id = ?, acknowledged_at = NOW() WHERE id = ?"
+          ).run(userId, proposal.id);
+          await tx.prepare(`
+            UPDATE care_sessions SET status = 'cancelled', pending_time_change_id = NULL,
+              cancellation_reason = ?, cancelled_by = 'family', cancelled_at = NOW(),
+              late_cancel = ?, cancelled_caregiver_id = caregiver_id,
+              updated_at = NOW()
+            WHERE id = ?
+          `).run(cancelReason || "Cancelled due to caregiver time change", isWithin24h ? 1 : 0, req.params.id);
+        });
+
+        if (emitToUser) {
+          emitToUser(session.caregiver_user_id, "session_update", {
+            sessionId: req.params.id, status: "cancelled", cancelledBy: "family",
+            reason: "Family cancelled after your time change proposal",
+          });
+        }
+
+        res.json({
+          ok: true, action: "cancelled", cancelledBy: "family",
+          chargeApplies: false, canReview: true,
+          cancelledCaregiverId: session.caregiver_id,
+        });
+
+      } else if (proposal.proposed_by === "family" && isResponderCaregiver) {
+        // ─── v1.105.19 — one cancellation policy, not two ───
+        //
+        // This branch used to compute its OWN fee — cancel_fee_hours x hourly_rate — show it
+        // to the caregiver as "you'll be compensated $X", label the button "Cancel + Collect
+        // Fee", and then never call Stripe. Not once, on any path. Since v1.57.11 (March)
+        // caregivers have been shown a dollar figure and paid nothing.
+        //
+        // Pete's intent (7/31): there is no separate cancellation fee. A family moving a
+        // visit inside 24 hours, which the caregiver then declines, IS a late client
+        // cancellation. So it goes through the same decision and the same 24-hour reconcile
+        // window as every other one, and the money actually moves.
+        const feeHours = proposal.cancel_fee_hours || 0;
+
+        // v1.106.13 — as above. Note this one also releases the caregiver (caregiver_id = NULL)
+        // and puts the job back in the open pool, so a half-applied version could leave a
+        // session open with a caregiver still attached to it.
+        await db.transaction(async (tx) => {
+          await tx.prepare(
+            "UPDATE time_change_proposals SET status = 'cancelled_with_fee', acknowledged_by_user_id = ?, acknowledged_at = NOW() WHERE id = ?"
+          ).run(userId, proposal.id);
+          await tx.prepare(`
+            UPDATE care_sessions SET status = 'open', pending_time_change_id = NULL,
+              cancellation_reason = ?, cancelled_by = 'caregiver', cancelled_at = NOW(),
+              cancelled_caregiver_id = caregiver_id, caregiver_id = NULL,
+              late_cancel = ?, updated_at = NOW()
+            WHERE id = ?
+          `).run(cancelReason || "Cancelled due to family time change", isWithin24h ? 1 : 0, req.params.id);
+        });
+
+        // Record the standard fee under the standard rules. isLateCancel is the family's
+        // late time-change, and cancelledBy is 'family' because the family is the party
+        // that moved it — the caregiver only declined a change they did not ask for.
+        let tcCharge = { action: "none", feePercent: 0 };
+        try {
+          tcCharge = await decideCancellationCharge(db, {
+            cancelledBy: "family",
+            isLateCancel: !!isWithin24h,
+            paymentIntentId: session.stripe_payment_intent_id,
+            paymentStatus: session.payment_status,
+            authorizedAmountCents: session.authorized_amount,
+          });
+          if (tcCharge.action === "capture") {
+            await db.prepare(`
+              UPDATE care_sessions SET cancel_fee_status = 'pending', cancel_fee_cents = ?,
+                cancel_fee_deadline = NOW() + INTERVAL '${CANCEL_FEE_WINDOW_HOURS} hours'
+              WHERE id = ?
+            `).run(tcCharge.amountCents, req.params.id);
+          } else if (tcCharge.action === "void") {
+            const { voidSessionPayment } = require("./accountability");
+            await voidSessionPayment(req.params.id);
+          }
+        } catch (e) {
+          console.error("[sessions] time-change cancellation charge failed:", e.message);
+          captureException(e, { where: "sessions: time-change cancel fee", sessionId: req.params.id });
+        }
+
+        if (emitToUser) {
+          emitToUser(session.family_user_id, "session_update", {
+            sessionId: req.params.id, status: "open", cancelledBy: "caregiver",
+            reason: "Caregiver declined your time change",
+            feeHours, feeCents: tcCharge.action === 'capture' ? tcCharge.amountCents : 0,
+          });
+        }
+
+        res.json({
+          ok: true, action: "cancelled", cancelledBy: "caregiver",
+          // v1.106.23 — `hourlyRate` was still listed here after v1.105.19 deleted the
+          // local fee calculation that defined it. Building this response threw
+          // ReferenceError, so a caregiver who declined a late family time change got a 500
+          // — AFTER the session had been cancelled and the fee captured. Nothing on the
+          // client ever read the field.
+          feeHours, feeCents: tcCharge.action === 'capture' ? tcCharge.amountCents : 0,
+          chargeApplies: feeHours > 0,
+        });
+
+      } else {
+        return res.status(400).json({ error: "Invalid cancel scenario" });
+      }
+    }
+  } catch (err) {
+    console.error("Time change response error:", err);
+    res.status(500).json({ error: "Failed to respond to time change" });
+  }
+});
+
+// ─── GET /api/sessions/:id/time-change ───
+// Get pending time change proposal for a session
+router.get("/:id/time-change", async (req, res) => {
+  try {
+    const db = await getDb();
+    // v1.106.2 — this leaked the proposer's name and reason for any session id.
+    const access = await sessionAccess(db, req.params.id, req.user.id);
+    if (!access || !access.canView) return res.status(404).json({ error: "Session not found" });
+    const proposal = await db.prepare(`
+      SELECT tcp.*, u.first_name || ' ' || u.last_name AS proposer_name
+      FROM time_change_proposals tcp
+      JOIN users u ON tcp.proposed_by_user_id = u.id
+      WHERE tcp.session_id = ? AND tcp.status = 'pending'
+      ORDER BY tcp.created_at DESC LIMIT 1
+    `).get(req.params.id);
+    res.json({ proposal: proposal || null });
+  } catch (err) {
+    console.error("Time change fetch error:", err);
+    res.status(500).json({ error: "Failed to fetch time change" });
+  }
+});
+
+// Helper: parse "HH:MM" to minutes since midnight
+/* parseTimeToMinutes moved to utils — see the require at the top of this file */
+
+// v1.106.13 — was a sixth copy of the same formatter. The name stays because call sites
+// read better with it; the implementation is now utils/timezone's single owner.
+const formatTime12h = formatTimeForDisplay;
+
+// ─── PUT /api/sessions/:id/instructions ───
+// Update special_instructions on a session (family/care_for only, before completion)
+router.put("/:id/instructions", async (req, res) => {
+  try {
+    const db = await getDb();
+    const userId = req.user.id;
+    const activeRole = req.user.activeRole || req.user.role;
+    const { specialInstructions } = req.body;
+    // v1.109.6 — "replace" is what the Edit box means. It pre-fills the textarea with the current
+    // text and sends the whole thing back, so appending doubled the instructions on every edit.
+    // Append stays the default: the Messages "add to instructions" suggestion relies on it.
+    const mode = req.body.mode === "replace" ? "replace" : "append";
+
+    if (typeof specialInstructions !== "string") {
+      return res.status(400).json({ error: "specialInstructions must be a string" });
+    }
+
+    // Sanitize input
+    const sanitize = (str) => str.replace(/<[^>]*>/g, "").trim();
+    const cleaned = sanitize(specialInstructions).slice(0, 2000);
+
+    const session = await db.prepare(`
+      SELECT cs.*, cr.family_user_id AS owner_id, ${trustedLinkedIdSql("cr")} AS recipient_user_id,
+        cp.user_id AS caregiver_user_id
+      FROM care_sessions cs
+      LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
+      LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+      WHERE cs.id = ?
+    `).get(req.params.id);
+
+    if (!session) return res.status(404).json({ error: "Session not found" });
+
+    // v1.106.2 — `activeRole === "care_for"` meant ANY account holding the (self-assignable)
+    // care_for role could append to ANY session's instructions. The caregiver reads this text at
+    // check-in, so that is a physical-safety hole, not a data one: "give her the second dose too"
+    // arriving on a stranger's visit.
+    //
+    // The care recipient may of course edit their own instructions — but only their own, which is
+    // what care_recipients.linked_user_id records.
+    const isOwner = userId === session.owner_id || userId === session.family_user_id;
+    const isCareFor = activeRole === "care_for" && session.recipient_user_id === userId;
+    const isAdmin = activeRole === "admin" && !!(await db.prepare(
+      "SELECT is_admin FROM users WHERE id = ?"
+    ).get(userId))?.is_admin;
+    if (!isOwner && !isCareFor && !isAdmin) {
+      return res.status(404).json({ error: "Session not found" });
+    }
+
+    // Cannot edit completed or cancelled sessions
+    if (["completed", "cancelled"].includes(session.status)) {
+      return res.status(400).json({ error: "Cannot edit instructions on a completed or cancelled session" });
+    }
+
+    const existing = (session.special_instructions || "").trim();
+    let merged;
+    if (mode === "replace") merged = cleaned;
+    else if (!cleaned) merged = existing; // appending nothing is not a change
+    else merged = existing ? existing + "\n\n" + cleaned : cleaned;
+    const finalInstructions = merged.slice(0, 2000) || null;
+
+    // Saving the same words is not new instructions — do not ask her to re-read them.
+    if (sameInstructions(finalInstructions, existing)) {
+      return res.json({ ok: true, unchanged: true, special_instructions: session.special_instructions || null });
+    }
+
+    await db.prepare(`
+      UPDATE care_sessions SET special_instructions = ?, instructions_updated_at = NOW(), updated_at = NOW()
+      WHERE id = ?
+    `).run(finalInstructions, req.params.id);
+
+    // v1.109.6 — instructions that change DURING a visit have to reach her. Before this, nothing
+    // put them in front of a caregiver who had already checked in. The push says who and what
+    // kind, never what (v1.105.39 — no PHI on lock screens); the words are one tap away.
+    let caregiverNotified = false;
+    if (session.status === "in_progress" && session.caregiver_user_id && finalInstructions) {
+      try {
+        const author = await db.prepare("SELECT first_name FROM users WHERE id = ?").get(userId);
+        const who = (author && author.first_name) || "The family";
+        await sendPushToUser(session.caregiver_user_id, {
+          title: "New instructions for this visit",
+          body: `${who} updated today's instructions. Open InPlace to read them.`,
+          tag: `session-${req.params.id.slice(0, 8)}-instructions`,
+          data: { type: "instructions_updated", sessionId: req.params.id, page: "dashboard" },
+        }, "instructions_updated");
+        const emitToUser = req.app.get("emitToUser");
+        if (emitToUser) emitToUser(session.caregiver_user_id, "instructions_updated", { sessionId: req.params.id });
+        caregiverNotified = true;
+      } catch (e) {
+        captureException(e, { where: "sessions: mid-visit instructions notify failed", sessionId: req.params.id });
+      }
+    }
+
+    res.json({ ok: true, special_instructions: finalInstructions, caregiverNotified });
+  } catch (err) {
+    console.error("PUT /sessions/:id/instructions error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// ─── POST /api/sessions/:id/instructions/acknowledge ───
+// v1.109.6 — the assigned caregiver confirms she has read the family's instructions. The body
+// carries the text on her screen; if the family has changed it since, nothing is stamped and the
+// current text comes back so she can read that instead.
+router.post("/:id/instructions/acknowledge", async (req, res) => {
+  try {
+    const db = await getDb();
+    const { text } = req.body || {};
+    if (typeof text !== "string") return res.status(400).json({ error: "text must be a string" });
+
+    const session = await db.prepare(`
+      SELECT cs.id, cs.status, cs.special_instructions, cp.user_id AS caregiver_user_id
+      FROM care_sessions cs
+      LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+      WHERE cs.id = ?
+    `).get(req.params.id);
+    if (!session || session.caregiver_user_id !== req.user.id) {
+      return res.status(404).json({ error: "Session not found" });
+    }
+    if (!["confirmed", "in_progress"].includes(session.status)) {
+      return res.status(400).json({ error: "This visit is not active" });
+    }
+    if (!normalizeInstructions(session.special_instructions)) {
+      return res.json({ ok: true, acknowledged: false, special_instructions: null });
+    }
+    if (!sameInstructions(text, session.special_instructions)) {
+      return res.status(409).json({
+        error: "The instructions changed while you were reading. Please read the new version.",
+        code: "INSTRUCTIONS_CHANGED",
+        special_instructions: session.special_instructions,
+      });
+    }
+    await db.prepare("UPDATE care_sessions SET instructions_acknowledged_at = NOW() WHERE id = ?").run(req.params.id);
+    const row = await db.prepare(
+      "SELECT family_user_id, instructions_acknowledged_at FROM care_sessions WHERE id = ?"
+    ).get(req.params.id);
+    const emitToUser = req.app.get("emitToUser");
+    if (emitToUser && row && row.family_user_id) {
+      emitToUser(row.family_user_id, "session_update", { sessionId: req.params.id, instructionsAcknowledged: true });
+    }
+    res.json({ ok: true, acknowledged: true, instructions_acknowledged_at: row && row.instructions_acknowledged_at });
+  } catch (err) {
+    console.error("POST /sessions/:id/instructions/acknowledge error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// ─── PUT /api/sessions/:id/on-my-way ───
+// Caregiver signals they're en route — notifies care team + care recipient
+router.put("/:id/on-my-way", async (req, res) => {
+  try {
+    const db = await getDb();
+    const userId = req.user.id;
+    const activeRole = req.user.activeRole || req.user.role;
+    const { estimatedMinutes, lat, lng } = req.body || {}; // optional ETA or caregiver coords
+
+    const session = await db.prepare(`
+      SELECT cs.*, cp.user_id AS caregiver_user_id,
+        cr.first_name AS recipient_first_name, cr.last_name AS recipient_last_name,
+        ${trustedLinkedIdSql("cr")} AS care_for_user_id,
+        cr.notification_channel, cr.sms_phone,
+        ${smsConsentedSql("cr")} AS sms_consented,
+        cr.location_address, cr.location_city, cr.location_state,
+        cr.latitude AS recipient_lat, cr.longitude AS recipient_lng
+      FROM care_sessions cs
+      LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+      LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
+      WHERE cs.id = ?
+    `).get(req.params.id);
+
+    if (!session) return res.status(404).json({ error: "Session not found" });
+
+    // Only the assigned caregiver (or admin) can signal on-my-way
+    if (activeRole !== "admin" && userId !== session.caregiver_user_id) {
+      return res.status(403).json({ error: "Only the assigned caregiver can signal en route" });
+    }
+
+    if (["completed", "cancelled"].includes(session.status)) {
+      return res.status(400).json({ error: "Session is already completed or cancelled" });
+    }
+
+    // Mark the on_my_way timestamp
+    await db.prepare(`
+      UPDATE care_sessions SET on_my_way_at = NOW(), updated_at = NOW()
+      WHERE id = ?
+    `).run(req.params.id);
+
+    // Build notification content
+    const caregiver = await db.prepare("SELECT first_name, last_name FROM users WHERE id = ?").get(session.caregiver_user_id);
+    const cgName = caregiver ? `${caregiver.first_name}` : "Your caregiver";
+    const recipientName = `${session.recipient_first_name || ""} ${session.recipient_last_name || ""}`.trim() || "your loved one";
+    const etaStr = estimatedMinutes ? ` (about ${estimatedMinutes} min away)` : "";
+    const locationParts = [session.location_address, session.location_city, session.location_state].filter(Boolean);
+    const mapsUrl = locationParts.length ? `https://maps.google.com/?q=${encodeURIComponent(locationParts.join(", "))}` : null;
+
+    const { sendPushToUser } = require("./push");
+
+    // Notification tags
+    const famTag = `session-${req.params.id.slice(0,8)}-family`;
+    const recipTag = `session-${req.params.id.slice(0,8)}-recip`;
+
+    // Notify care team — v1.109.7: allowed + opted in only (b3c808fd)
+    const teamUserIds = await visitUpdateAudience(db, session.care_recipient_id, { exclude: [session.caregiver_user_id] });
+
+    for (const uid of teamUserIds) {
+      if (uid === session.caregiver_user_id) continue;
+      await sendPushToUser(uid, {
+        title: `${cgName} is On the Way!`,
+        body: `Heading to ${recipientName}'s now${etaStr}`,
+        tag: famTag,
+        data: { type: "on_my_way", sessionId: req.params.id, page: "dashboard", mapsUrl },
+      }, "on_my_way");
+    }
+
+    // Notify care recipient
+    const channel = session.notification_channel || "push";
+    const recipFirstName = session.recipient_first_name || "there";
+
+    if (["push", "both"].includes(channel) && session.care_for_user_id && !teamUserIds.includes(session.care_for_user_id)) {
+      await sendPushToUser(session.care_for_user_id, {
+        title: `${cgName} is On the Way!`,
+        body: `Hi ${recipFirstName}, ${cgName} is heading to you now${etaStr}`,
+        tag: recipTag,
+        data: { type: "on_my_way_recipient", sessionId: req.params.id },
+      }, "on_my_way_recipient");
+    }
+
+    if (["sms", "both"].includes(channel) && session.sms_phone && session.sms_consented) {
+      const { sendSms } = require("../utils/sms");
+      await sendSms(session.sms_phone, `InPlace: Hi ${recipFirstName}, ${cgName} is on the way to you now${etaStr}!`);
+    }
+
+    // ─── Schedule "5 minutes away" notification if we can estimate ETA ───
+    let etaMinutes = estimatedMinutes || null;
+    if (!etaMinutes && lat && lng && session.recipient_lat && session.recipient_lng) {
+      // Haversine distance → rough driving ETA at ~30 mph average
+      const toRad = (d) => d * Math.PI / 180;
+      const R = 3959; // Earth radius in miles
+      const dLat = toRad(session.recipient_lat - lat);
+      const dLng = toRad(session.recipient_lng - lng);
+      const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat)) * Math.cos(toRad(session.recipient_lat)) * Math.sin(dLng/2)**2;
+      const miles = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+      etaMinutes = Math.round((miles / 30) * 60); // 30 mph average
+    }
+
+    if (etaMinutes && etaMinutes > 5) {
+      const delayMs = (etaMinutes - 5) * 60 * 1000;
+      const sessionId = req.params.id;
+      setTimeout(async () => {
+        try {
+          // Send "5 minutes away" notification to care team + care recipient
+          const { sendPushToUser: pushToUser } = require("./push");
+          for (const uid of teamUserIds) {
+            if (uid === session.caregiver_user_id) continue;
+            await pushToUser(uid, {
+              title: `${cgName} is 5 Minutes Away`,
+              body: `Almost there! ${cgName} will arrive at ${recipientName}'s shortly.`,
+              tag: famTag,
+              data: { type: "five_min_away", sessionId, page: "dashboard" },
+            }, "five_min_away");
+          }
+          const ch = session.notification_channel || "push";
+          const rName = session.recipient_first_name || "there";
+          if (["push", "both"].includes(ch) && session.care_for_user_id && !teamUserIds.includes(session.care_for_user_id)) {
+            await pushToUser(session.care_for_user_id, {
+              title: `${cgName} is Almost Here!`,
+              body: `InPlace: Hi ${rName}, ${cgName} will be at your door in about 5 minutes!`,
+              tag: recipTag,
+              data: { type: "five_min_away_recipient", sessionId },
+            }, "five_min_away_recipient");
+          }
+          if (["sms", "both"].includes(ch) && session.sms_phone && session.sms_consented) {
+            const { sendSms } = require("../utils/sms");
+            await sendSms(session.sms_phone, `InPlace: Hi ${rName}, ${cgName} will be at your door in about 5 minutes!`);
+          }
+          console.log(`  5-min-away notification sent for session ${sessionId}`);
+        } catch (err) {
+          console.error("5-min-away notification error:", err.message);
+        }
+      }, delayMs);
+      console.log(`  On-my-way signal sent for session ${req.params.id}${etaStr}. 5-min-away scheduled in ${Math.round(delayMs/60000)} min`);
+    } else {
+      console.log(`  On-my-way signal sent for session ${req.params.id}${etaStr}. ETA <= 5 min or unknown — no delayed notification.`);
+    }
+
+    res.json({ ok: true, on_my_way_at: new Date().toISOString(), etaMinutes });
+  } catch (err) {
+    console.error("PUT /sessions/:id/on-my-way error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// ─── PUT /api/sessions/:id/cancel ───
+// Cancel a confirmed/pending session with late-cancel tracking
+// ─── GET /api/sessions/:id/cancel-preview ───
+//
+// v1.105.15 — what cancelling right now would cost, BEFORE confirming.
+//
+// The Client Services Agreement charges the fee "posted on IPC's platform at the time of
+// cancellation". A charge the person was never shown is not posted to them in any
+// meaningful sense, and is a chargeback with extra steps.
+//
+// This deliberately calls the SAME decideCancellationCharge the cancel handler calls,
+// rather than reimplementing the rule for display. A preview that computes the number a
+// second way is a preview that will eventually disagree with the charge — and the failure
+// mode is quoting someone $0 and taking $120.
+router.get("/:id/cancel-preview", async (req, res) => {
+  try {
+    const db = await getDb();
+    const userId = req.user.id;
+    const activeRole = req.user.activeRole || req.user.role;
+
+    const session = await db.prepare(`
+      SELECT cs.*, cp.user_id AS caregiver_user_id, cr.timezone AS care_timezone
+      FROM care_sessions cs
+      LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+      LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
+      WHERE cs.id = ?
+    `).get(req.params.id);
+    if (!session) return res.status(404).json({ error: "Session not found" });
+
+    // v1.106.2 — same role-only gate as /cancel; see the note there.
+    const cpAccess = await sessionAccess(db, req.params.id, userId);
+    if (!cpAccess) return res.status(404).json({ error: "Session not found" });
+    const isCaregiver = cpAccess.isCaregiver;
+    const isFamily = cpAccess.isFamily || cpAccess.isAdmin;
+    if (!isCaregiver && !isFamily) return res.status(404).json({ error: "Session not found" });
+    const cancelledBy = isCaregiver ? "caregiver" : "family";
+
+    const tz = session.care_timezone || "America/New_York";
+    const startsAt = buildDateTimeInZone(
+      session.scheduled_date.split("T")[0], session.scheduled_time || "00:00", tz
+    );
+    const hoursUntil = (startsAt - getNowInZone(tz)) / 3600000;
+    const isLateCancel = !!session.caregiver_id && hoursUntil < 24;
+
+    const charge = await decideCancellationCharge(db, {
+      cancelledBy,
+      isLateCancel,
+      paymentIntentId: session.stripe_payment_intent_id,
+      paymentStatus: session.payment_status,
+      authorizedAmountCents: session.authorized_amount,
+    });
+
+    // v1.125.2 — part of a series? Then the cancel screen asks: just this visit, or this one
+    // and the later ones. Counted with the same rule /cancel will apply.
+    let series = null;
+    if (session.recurrence_group_id) {
+      const later = await laterInSeries(db, session, cancelledBy);
+      if (later.length) {
+        series = {
+          thisDay: cancelDayLabel(session.scheduled_date),
+          laterCount: later.length,
+          lastDay: cancelDayLabel(later[later.length - 1].scheduled_date),
+          rule: session.recurrence_rule || null,
+        };
+      }
+    }
+
+    res.json({
+      cancelledBy,
+      isLateCancel,
+      series,
+      hoursUntilSession: Math.round(hoursUntil * 10) / 10,
+      willCharge: charge.action === "capture",
+      chargeCents: charge.action === "capture" ? charge.amountCents : 0,
+      feePercent: charge.feePercent,
+      // One sentence the client can show verbatim. Built here so every cancel surface —
+      // Dashboard, VisitDetailModal, CaretakerHub, FindWork — says the same thing rather
+      // than four components each inventing their own wording for a contractual charge.
+      message: charge.action === "capture"
+        ? `This is a late cancellation (under 24 hours). You will be charged a ${charge.feePercent}% cancellation fee of $${(charge.amountCents / 100).toFixed(2)}.`
+        : cancelledBy === "caregiver"
+          ? "The job will go back to the open pool. The family will not be charged."
+          : isLateCancel
+            ? "This is a late cancellation (under 24 hours). You will not be charged."
+            : "You will not be charged.",
+    });
+  } catch (err) {
+    console.error("Cancel preview error:", err);
+    res.status(500).json({ error: "Failed to preview cancellation" });
+  }
+});
+
+// ─── The 24-hour reconcile window on a cancellation fee (v1.105.19) ───
+//
+// Two actions, deliberately asymmetric, because the parties are not symmetric.
+//
+// The CAREGIVER can waive. The fee is their lost wage — that is the whole reason it is a
+// pass-through and not a liquidated damage — so they are the only party with standing to
+// forgive it. This is also what makes "the Client shall be charged" true in the contract
+// while still letting a real human say no harm, no foul: the discretion belongs to the
+// caregiver, not to InPlace.
+//
+// The FAMILY can dispute. That does not cancel the charge; it pauses it and puts it in
+// front of a person. "I shouldn't have to pay this" and "that was a software problem" are
+// exactly the cases Pete wanted to leave room for, and they need a human, not a button
+// that silently zeroes the caregiver's money.
+
+// ─── The card hold, when the bank said no (v1.117.0) ───
+//
+// Pete, 10/14: "the most likely course of action will be sara checks her debit card, transfers
+// money in, and then we try again. so the fix can't just be 'add another card' there needs to
+// be a 'try that card again' option." See utils/holdDecline.js for the whole story.
+//
+// Who may see and retry it: the person who pays (the team's billing contact), the person who
+// booked the visit, and the loved one's care team leader. Never the caregiver — it is the
+// family's card — and never under impersonation, because a retry moves money.
+async function holdViewer(db, sessionId, userId) {
+  const row = await db.prepare(`
+    SELECT cs.id, cs.status, cs.family_user_id, cs.care_recipient_id, cs.scheduled_date, cs.scheduled_time,
+           cs.service_type, cs.estimated_cost, cs.payment_status, cs.stripe_payment_intent_id,
+           cs.hold_attempts, cs.hold_failed_at, cs.hold_failure_code, cs.hold_failure_card,
+           cs.hold_last_attempt_at,
+           cr.first_name AS recipient_first, cr.timezone AS tz,
+           cu.first_name AS caregiver_first,
+           (SELECT ct.billing_user_id FROM care_teams ct WHERE ct.care_recipient_id = cs.care_recipient_id
+              AND ct.billing_user_id IS NOT NULL LIMIT 1) AS billing_user_id,
+           EXISTS (SELECT 1 FROM care_team_members ctm JOIN care_teams ct ON ct.id = ctm.care_team_id
+                    WHERE ct.care_recipient_id = cs.care_recipient_id AND ctm.user_id = ? AND ctm.role = 'leader') AS is_leader
+      FROM care_sessions cs
+      LEFT JOIN care_recipients cr ON cr.id = cs.care_recipient_id
+      LEFT JOIN caregiver_profiles cp ON cp.id = cs.caregiver_id
+      LEFT JOIN users cu ON cu.id = cp.user_id
+     WHERE cs.id = ?
+  `).get(userId, sessionId);
+  if (!row) return { status: 404 };
+  const payerId = row.billing_user_id || row.family_user_id;
+  const allowed = userId === payerId || userId === row.family_user_id || !!row.is_leader;
+  if (!allowed) return { status: 403 };
+  return { row, isPayer: userId === payerId };
+}
+
+function holdState(row) {
+  const { declineReason, retryCanHelp } = require("../utils/holdDecline");
+  const held = !!row.stripe_payment_intent_id && ["authorized", "paid"].includes(row.payment_status);
+  const declined = !held && !!row.hold_failed_at;
+  return {
+    status: held ? "held" : declined ? "declined" : row.payment_status === "paid" ? "paid" : "pending",
+    card: row.hold_failure_card || null,
+    reason: declined ? declineReason(row.hold_failure_code) : null,
+    canRetrySameCard: declined ? retryCanHelp(row.hold_failure_code) : false,
+    failedAt: row.hold_failed_at || null,
+    attempts: Number(row.hold_attempts) || 0,
+    scheduledDate: row.scheduled_date || null,
+    scheduledTime: row.scheduled_time || null,
+    serviceType: row.service_type || null,
+    recipientFirstName: row.recipient_first || null,
+    caregiverFirstName: row.caregiver_first || null,
+    timezone: row.tz || null,
+    visitStatus: row.status,
+  };
+}
+
+// ─── GET /api/sessions/:id/hold ───
+router.get("/:id/hold", async (req, res) => {
+  try {
+    const db = await getDb();
+    const v = await holdViewer(db, req.params.id, req.user.id);
+    if (v.status === 404) return res.status(404).json({ error: "Visit not found" });
+    if (v.status === 403) return res.status(403).json({ error: "Not your visit" });
+    res.json({ ...holdState(v.row), isPayer: v.isPayer });
+  } catch (err) {
+    captureException(err, { where: "sessions: GET hold" });
+    res.status(500).json({ error: "Couldn't load this visit's payment" });
+  }
+});
+
+// ─── POST /api/sessions/:id/retry-hold — "Try the card again" ───
+router.post("/:id/retry-hold", blockWhileImpersonating("retry a family's card"), async (req, res) => {
+  try {
+    const db = await getDb();
+    const v = await holdViewer(db, req.params.id, req.user.id);
+    if (v.status === 404) return res.status(404).json({ error: "Visit not found" });
+    if (v.status === 403) return res.status(403).json({ error: "Not your visit" });
+    const row = v.row;
+    const state = holdState(row);
+    if (state.status === "held" || state.status === "paid") {
+      // Already in the state they asked for — the Needs-you card treats 409 as done.
+      return res.status(409).json({ ok: true, ...state, message: "The hold for this visit is already in place." });
+    }
+    if (!["confirmed", "in_progress"].includes(row.status)) {
+      return res.status(400).json({ error: "This visit isn't waiting on a card any more." });
+    }
+    const acct = require("./accountability");
+    const r = await acct.authorizeSessionPayment(row.id, { manual: true });
+    if (r && r.success) {
+      const after = await holdViewer(db, row.id, req.user.id);
+      return res.json({
+        ok: true, ...holdState(after.row),
+        message: `${r.card ? r.card.charAt(0).toUpperCase() + r.card.slice(1) : "The card"} went through. ${row.caregiver_first || "Your caregiver"}'s visit is paid for and ready to go.`,
+      });
+    }
+    if (r && r.tooSoon) return res.status(429).json({ error: r.error, code: "HOLD_RETRY_TOO_SOON" });
+    if (r && r.declined) {
+      const after = await holdViewer(db, row.id, req.user.id);
+      return res.status(402).json({ error: r.error, code: "HOLD_DECLINED", ...holdState(after.row) });
+    }
+    if (r && r.error === "no_payment_method") {
+      return res.status(402).json({ error: "There's no card or bank account saved to pay for this visit. Add one, then try again.", code: "NO_PAYMENT_METHOD" });
+    }
+    if (r && r.error === "demo_session_blocked") return res.status(400).json({ error: "Demo visits don't use real cards." });
+    captureException(new Error(`retry-hold failed: ${r && r.error}`), { where: "sessions: retry-hold", sessionId: row.id });
+    return res.status(502).json({ error: "We couldn't reach the bank just now. Try again in a minute." });
+  } catch (err) {
+    captureException(err, { where: "sessions: retry-hold" });
+    res.status(500).json({ error: "We couldn't retry the card just now." });
+  }
+});
+
+// ─── GET /api/sessions/:id/cancel-fee ───
+router.get("/:id/cancel-fee", async (req, res) => {
+  try {
+    const db = await getDb();
+    const row = await db.prepare(`
+      SELECT cs.id, cs.cancel_fee_status, cs.cancel_fee_cents, cs.cancel_fee_deadline,
+             cs.cancel_fee_note, cs.cancel_fee_decided_at, cs.family_user_id,
+             cs.scheduled_date, cs.scheduled_time, cs.service_type,
+             cp.user_id AS caregiver_user_id, cu.first_name AS caregiver_first,
+             cr.first_name AS recipient_first, cr.timezone AS tz
+      FROM care_sessions cs
+      LEFT JOIN caregiver_profiles cp ON cp.id = ${FEE_CAREGIVER_PROFILE_SQL}
+      LEFT JOIN users cu ON cu.id = cp.user_id
+      LEFT JOIN care_recipients cr ON cr.id = cs.care_recipient_id
+      WHERE cs.id = ?
+    `).get(req.params.id);
+    if (!row) return res.status(404).json({ error: "Session not found" });
+    const isCaregiver = req.user.id === row.caregiver_user_id;
+    const isFamily = req.user.id === row.family_user_id;
+    if (!isCaregiver && !isFamily) return res.status(403).json({ error: "Not your session" });
+    res.json({
+      status: row.cancel_fee_status || "none",
+      amountCents: row.cancel_fee_cents || 0,
+      deadline: row.cancel_fee_deadline,
+      note: row.cancel_fee_note,
+      decidedAt: row.cancel_fee_decided_at || null,
+      // v1.109.9 — the sheet a push now opens has to say WHICH visit this is about.
+      viewer: isCaregiver ? "caregiver" : "family",
+      scheduledDate: row.scheduled_date || null,
+      scheduledTime: row.scheduled_time || null,
+      serviceType: row.service_type || null,
+      recipientFirstName: row.recipient_first || null,
+      caregiverFirstName: row.caregiver_first || null,
+      timezone: row.tz || null,
+      canWaive: isCaregiver && row.cancel_fee_status === "pending",
+      canDispute: isFamily && row.cancel_fee_status === "pending",
+    });
+  } catch (err) {
+    console.error("Cancel fee read error:", err);
+    res.status(500).json({ error: "Failed to load the cancellation fee" });
+  }
+});
+
+// ─── POST /api/sessions/:id/cancel-fee/waive ─── caregiver only
+router.post("/:id/cancel-fee/waive", async (req, res) => {
+  try {
+    const db = await getDb();
+    const row = await db.prepare(`
+      SELECT cs.id, cs.cancel_fee_status, cs.cancel_fee_cents, cs.family_user_id,
+             cp.user_id AS caregiver_user_id
+      FROM care_sessions cs LEFT JOIN caregiver_profiles cp ON cp.id = ${FEE_CAREGIVER_PROFILE_SQL}
+      WHERE cs.id = ?
+    `).get(req.params.id);
+    if (!row) return res.status(404).json({ error: "Session not found" });
+    // Only the caregiver. An admin waiving on their behalf would be InPlace giving away
+    // someone else's wage, which is precisely the discretion the contract does not grant.
+    if (req.user.id !== row.caregiver_user_id) {
+      return res.status(403).json({ error: "Only the caregiver can waive their own cancellation fee." });
+    }
+    // v1.109.9 — already in the state you asked for is 409, the "already answered" contract
+    // every Needs-you endpoint keeps (a second tap, or the other device, is not an error).
+    if (row.cancel_fee_status === "waived") {
+      return res.status(409).json({ error: "You've already waived this fee.", status: "waived" });
+    }
+    if (row.cancel_fee_status !== "pending") {
+      return res.status(400).json({ error: `This fee is already ${row.cancel_fee_status || "settled"}.` });
+    }
+
+    const { voidSessionPayment } = require("./accountability");
+    const voided = await voidSessionPayment(req.params.id);
+    if (voided?.error) {
+      // Do NOT mark it waived if the money did not actually get released — that would tell
+      // a caregiver they had forgiven a charge the family is still about to pay.
+      console.error("[sessions] waive failed to void:", voided.error);
+      captureException(new Error(`cancel-fee waive void failed: ${voided.error}`), { sessionId: req.params.id });
+      return res.status(502).json({ error: "We couldn't release the charge just now. Try again in a moment." });
+    }
+    await db.prepare(`
+      UPDATE care_sessions SET cancel_fee_status = 'waived', cancel_fee_decided_at = NOW(),
+        cancel_fee_decided_by = ?, cancel_fee_note = ? WHERE id = ?
+    `).run(req.user.id, (req.body?.note || "").slice(0, 500), req.params.id);
+
+    sendPushToUser(row.family_user_id, {
+      title: "Cancellation fee waived",
+      body: "Your caregiver waived the late cancellation fee. You haven't been charged.",
+      data: { type: "cancel_fee_waived", sessionId: req.params.id, page: "dashboard", focus: `cancelFee:${req.params.id}` },
+    }, "cancel_fee_waived").catch(() => {});
+    res.json({ status: "waived" });
+  } catch (err) {
+    console.error("Cancel fee waive error:", err);
+    res.status(500).json({ error: "Failed to waive the fee" });
+  }
+});
+
+// ─── POST /api/sessions/:id/cancel-fee/dispute ─── family only
+router.post("/:id/cancel-fee/dispute", async (req, res) => {
+  try {
+    const db = await getDb();
+    const row = await db.prepare(
+      "SELECT id, cancel_fee_status, cancel_fee_cents, family_user_id FROM care_sessions WHERE id = ?"
+    ).get(req.params.id);
+    if (!row) return res.status(404).json({ error: "Session not found" });
+    if (req.user.id !== row.family_user_id) return res.status(403).json({ error: "Not your session" });
+    if (row.cancel_fee_status === "disputed") {
+      return res.status(409).json({ error: "You've already told us about this — a person is looking at it.", status: "disputed" });
+    }
+    if (row.cancel_fee_status !== "pending") {
+      return res.status(400).json({ error: `This fee is already ${row.cancel_fee_status || "settled"}.` });
+    }
+    const reason = (req.body?.reason || "").trim();
+    if (reason.length < 5) return res.status(400).json({ error: "Tell us briefly what's wrong." });
+
+    await db.prepare(`
+      UPDATE care_sessions SET cancel_fee_status = 'disputed', cancel_fee_decided_at = NOW(),
+        cancel_fee_decided_by = ?, cancel_fee_note = ? WHERE id = ?
+    `).run(req.user.id, reason.slice(0, 2000), req.params.id);
+
+    notifyAdmins("cancel_fee_disputed", {
+      title: "Cancellation fee disputed",
+      body: `A family disputed a $${((row.cancel_fee_cents || 0) / 100).toFixed(2)} cancellation fee.`,
+      data: { type: "cancel_fee_disputed", sessionId: req.params.id },
+    }).catch(() => {});
+
+    res.json({
+      status: "disputed",
+      // Say the backstop out loud. A dispute that quietly expires into "no charge" is a
+      // fine outcome, but only if the person was told it might happen.
+      message: "Thanks — we've paused the charge and a person will look at this. If we haven't resolved it within five days, the charge is dropped automatically.",
+    });
+  } catch (err) {
+    console.error("Cancel fee dispute error:", err);
+    res.status(500).json({ error: "Failed to raise the dispute" });
+  }
+});
+
+// ─── v1.125.2 — one visit's cancellation, factored out so a series can repeat it ───
+//
+// Pete, 10/28 (d42baa59): "I cannot tell if this session is canceled on November 3 or if she's
+// canceled the entire series. … we need a feature by which she is prompted whether she's
+// canceling a day in the series or the entire series."
+//
+// Everything that happens to ONE visit when it is cancelled — the status change, the late-cancel
+// flag, the fee decision, the fee record and its notices, the hold void — lives here unchanged
+// from the handler it came out of, so cancelling five visits of a series is five of exactly the
+// same thing. What is said to PEOPLE (the activity row, the "visit cancelled" push) stays in the
+// handler, once per request, so a series cancel is one notice that names the range, not five.
+async function cancelOneSession(db, session, sessionId, cancelledBy, reason) {
+  // Check if this is a late cancellation (<24 hours before session)
+  // No caregiver assigned = always free cancel (no one to compensate)
+  // Use care recipient's timezone for timing
+  const cancelTz = session.care_timezone || 'America/New_York';
+  const sessionDateTime = buildDateTimeInZone(session.scheduled_date.split("T")[0], session.scheduled_time || "00:00", cancelTz);
+  const hoursUntilSession = (sessionDateTime - getNowInZone(cancelTz)) / (1000 * 60 * 60);
+  const hasCaregiver = !!session.caregiver_id;
+  const isLateCancel = hasCaregiver && hoursUntilSession < 24;
+
+  if (cancelledBy === "caregiver") {
+    // Caregiver drops the job — revert to open so other caregivers can claim it
+    // Store cancelled_caregiver_id so family can still review them for late cancel
+    await db.prepare(`
+      UPDATE care_sessions
+      SET status = 'open',
+          cancelled_caregiver_id = caregiver_id,
+          caregiver_id = NULL,
+          cancellation_reason = ?,
+          cancelled_by = ?,
+          cancelled_at = NOW(),
+          late_cancel = ?,
+          updated_at = NOW()
+      WHERE id = ?
+    `).run(reason || null, cancelledBy, isLateCancel ? 1 : 0, sessionId);
+  } else {
+    // Family cancels — session is fully cancelled
+    await db.prepare(`
+      UPDATE care_sessions
+      SET status = 'cancelled',
+          cancellation_reason = ?,
+          cancelled_by = ?,
+          cancelled_at = NOW(),
+          late_cancel = ?,
+          updated_at = NOW()
+      WHERE id = ?
+    `).run(reason || null, cancelledBy, isLateCancel ? 1 : 0, sessionId);
+  }
+
+  // ─── v1.105.19 — settle the payment hold ───
+  //
+  // Nobody pre-pays. authorizeSessionPayment uses capture_method:'manual' and a poller
+  // places the hold 23-25 hours before the visit; capture happens at check-out. So a
+  // session cancelled more than a day out has no money attached at all, and one cancelled
+  // inside that window has an uncaptured authorization on the family's card.
+  //
+  // Before v1.105.14 nothing released it: voidSessionPayment existed but was called from
+  // exactly one place, the caregiver-no-show poller. A family cancelling the evening
+  // before was left with a pending charge for ~7 days until Stripe expired it.
+  //
+  // What happens to that hold is decided by the published agreements, not by this handler.
+  // See src/utils/cancellationFee.js for the clauses, for why only a CLIENT cancelling
+  // late is ever charged, and for the 24-hour reconcile window that a capture now waits
+  // out before it fires.
+  let charge = { action: "none", feePercent: 0, reason: "not_evaluated" };
+  try {
+    charge = await decideCancellationCharge(db, {
+      cancelledBy,
+      isLateCancel,
+      paymentIntentId: session.stripe_payment_intent_id,
+      paymentStatus: session.payment_status,
+      authorizedAmountCents: session.authorized_amount,
+    });
+  } catch (e) {
+    console.error("[sessions] cancellation charge decision failed:", e.message);
+    captureException(e, { where: "sessions: cancellation charge decision", sessionId: sessionId });
+    // Fall through with action 'none': leave the hold alone rather than guess. An
+    // untouched hold expires on its own in about a week. A guessed capture takes money.
+  }
+
+  // ─── v1.105.19 — a fee is RECORDED, not charged on the spot ───
+  //
+  // "24 hours to reconcile or escalate, otherwise handled by the rules. Silence is
+  // consent." The caregiver may waive (it is their lost wage), the family may dispute,
+  // and if neither acts the poller captures. Capturing here instead would take the money
+  // before the only person entitled to forgive it had been asked.
+  //
+  // Voids are NOT deferred. Releasing a hold has no downside to anybody and no one needs
+  // a window to think about it — deferring it would leave a pending charge sitting on a
+  // family's card for a day for no reason at all.
+  if (charge.action === "capture") {
+    try {
+      await db.prepare(`
+        UPDATE care_sessions SET
+          cancel_fee_status = 'pending',
+          cancel_fee_cents = ?,
+          cancel_fee_deadline = NOW() + INTERVAL '${CANCEL_FEE_WINDOW_HOURS} hours'
+        WHERE id = ?
+      `).run(charge.amountCents, sessionId);
+
+      const amt = `$${(charge.amountCents / 100).toFixed(2)}`;
+      if (session.caregiver_user_id) {
+        sendPushToUser(session.caregiver_user_id, {
+          title: "Late cancellation — you're owed " + amt,
+          body: `The family cancelled inside 24 hours. You'll be paid ${amt} automatically tomorrow. Tap if you'd rather waive it.`,
+          // v1.109.9 — page + focus so a tap (and the service worker's cold-start URL)
+          // opens the fee sheet. Without them the tap landed nowhere (9d286a8a).
+          data: { type: "cancel_fee_pending", sessionId: sessionId, amountCents: charge.amountCents, page: "dashboard", focus: `cancelFee:${sessionId}` },
+        }, "cancel_fee_pending").catch(() => {});
+      }
+      sendPushToUser(session.family_user_id, {
+        title: "Cancellation fee — " + amt,
+        body: `Cancelling inside 24 hours means the caregiver still gets paid. ${amt} will be charged tomorrow unless something's wrong — tap to tell us.`,
+        data: { type: "cancel_fee_notice", sessionId: sessionId, amountCents: charge.amountCents, page: "dashboard", focus: `cancelFee:${sessionId}` },
+      }, "cancel_fee_notice").catch(() => {});
+    } catch (e) {
+      console.error("[sessions] could not record the cancellation fee:", e.message);
+      captureException(e, { where: "sessions: record cancel fee", sessionId: sessionId });
+    }
+  } else if (charge.action !== "none") {
+    try {
+      // Lazy require: accountability.js pulls in this router's siblings, and a top-level
+      // require here creates a cycle. Same pattern as the capture call at check-out.
+      const { voidSessionPayment } = require("./accountability");
+      const result = await voidSessionPayment(sessionId);
+      if (result?.error) {
+        // Don't fail the cancellation over this. The session IS cancelled; an untouched
+        // hold expires by itself. Losing the cancel because Stripe hiccuped would be
+        // worse — the caregiver would still be expected at the door.
+        console.warn(`[sessions] ${charge.action} failed for ${sessionId.slice(0, 8)}: ${result.error}`);
+        captureException(new Error(`cancel-${charge.action} failed: ${result.error}`), { sessionId: sessionId });
+      }
+    } catch (e) {
+      console.error(`[sessions] ${charge.action} threw on cancel:`, e.message);
+      captureException(e, { where: "sessions: hold settlement on cancel", sessionId: sessionId });
+    }
+  }
+
+  const updated = await db.prepare("SELECT * FROM care_sessions WHERE id = ?").get(sessionId);
+  return { updated, isLateCancel, hasCaregiver, charge };
+}
+
+/**
+ * The later visits of the same series that this canceller could also cancel: a caregiver's are
+ * the ones still assigned to that caregiver; a family's are the ones for the same person. Only
+ * statuses /cancel accepts, never one already under way.
+ */
+async function laterInSeries(db, session, cancelledBy) {
+  if (!session || !session.recurrence_group_id) return [];
+  const after = String(session.scheduled_date || "").split("T")[0];
+  const sideSql = cancelledBy === "caregiver" ? "cs.caregiver_id = ?" : "cs.care_recipient_id = ?";
+  const sideVal = cancelledBy === "caregiver" ? session.caregiver_id : session.care_recipient_id;
+  if (!sideVal) return [];
+  return db.prepare(`
+    SELECT cs.*, cp.user_id AS caregiver_user_id, cr.timezone AS care_timezone
+      FROM care_sessions cs
+      LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+      LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
+     WHERE cs.recurrence_group_id = ?
+       AND cs.id <> ?
+       AND LEFT(cs.scheduled_date, 10) > ?
+       AND cs.status IN ('confirmed', 'pending', 'open', 'requested')
+       AND ${sideSql}
+     ORDER BY cs.scheduled_date ASC, cs.scheduled_time ASC
+     LIMIT 60
+  `).all(session.recurrence_group_id, session.id, after, sideVal);
+}
+
+const CANCEL_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const CANCEL_DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+/** "Mon Nov 3" from a stored date. Calendar arithmetic only. */
+function cancelDayLabel(dateStr) {
+  const [y, m, d] = String(dateStr || "").split("T")[0].split("-").map(Number);
+  if (!y || !m || !d) return String(dateStr || "");
+  return `${CANCEL_DAYS[new Date(Date.UTC(y, m - 1, d)).getUTCDay()]} ${CANCEL_MONTHS[m - 1]} ${d}`;
+}
+
+router.put("/:id/cancel", async (req, res) => {
+  try {
+    const db = await getDb();
+    const { reason } = req.body;
+    const userId = req.user.id;
+    const activeRole = req.user.activeRole || req.user.role;
+
+    const session = await db.prepare(`
+      SELECT cs.*, cp.user_id AS caregiver_user_id,
+        cr.timezone AS care_timezone
+      FROM care_sessions cs
+      LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+      LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
+      WHERE cs.id = ?
+    `).get(req.params.id);
+
+    if (!session) return res.status(404).json({ error: "Session not found" });
+
+    // Only confirmed/pending/open/requested sessions can be cancelled
+    const cancellableStatuses = ["confirmed", "pending", "open", "requested", "in_progress"];
+    if (!cancellableStatuses.includes(session.status)) {
+      return res.status(400).json({ error: `Cannot cancel a session with status '${session.status}'` });
+    }
+
+    // v1.106.2 — authorization, not just authentication.
+    //
+    // This read `activeRole === "caregiver"`, and `activeRole` is whatever role sits in the
+    // caller's own JWT. The caregiver role is free: anyone can register with it, or add it to an
+    // existing account via POST /api/auth/add-role, with no vetting and no background check. So
+    // "is a caregiver" was standing in for "is THE caregiver on THIS session", and any account on
+    // the platform could act on any session by id.
+    //
+    // sessionAccess() answers the question that was actually being asked, and answers 404 rather
+    // than 403 so probing ids tells you nothing.
+    const access = await sessionAccess(db, req.params.id, userId);
+    if (!access) return res.status(404).json({ error: "Session not found" });
+
+    // Determine who is cancelling. Deliberately NOT `access.canManage`: that also covers a care
+    // team member with edit rights, and widening who may cancel a visit is not this change's job.
+    let cancelledBy;
+    if (access.isCaregiver) {
+      cancelledBy = "caregiver";
+    } else if (access.isFamily || access.isAdmin) {
+      cancelledBy = "family";
+    } else {
+      return res.status(404).json({ error: "Session not found" });
+    }
+
+    // v1.125.2 — "one" (default, what every old client sends) or "series": this visit and
+    // every later one in the same recurring series that this person could cancel.
+    const scope = req.body && req.body.scope === "series" ? "series" : "one";
+    const { updated, isLateCancel, hasCaregiver, charge } = await cancelOneSession(db, session, req.params.id, cancelledBy, reason);
+
+    const more = [];
+    if (scope === "series" && session.recurrence_group_id) {
+      for (const s of await laterInSeries(db, session, cancelledBy)) {
+        // Each visit is re-authorized on its own; being allowed on the first is not a pass
+        // for the rest.
+        const acc = await sessionAccess(db, s.id, userId);
+        const allowed = acc && (cancelledBy === "caregiver" ? acc.isCaregiver : (acc.isFamily || acc.isAdmin));
+        if (!allowed) continue;
+        try {
+          await cancelOneSession(db, s, s.id, cancelledBy, reason);
+          more.push(s);
+        } catch (e) {
+          console.error("[sessions] series cancel step failed:", e.message);
+          captureException(e, { where: "sessions: series cancel", sessionId: s.id });
+        }
+      }
+    }
+    // When ONE visit of a series is cancelled, say so — and say the rest still stand. This is
+    // the sentence Pete could not find: "is this Nov 3, or the entire series?"
+    const stillBooked = scope === "one" && session.recurrence_group_id
+      ? (await laterInSeries(db, session, cancelledBy)).length
+      : 0;
+    const lastMore = more.length ? more[more.length - 1] : null;
+    const headDay = cancelDayLabel(session.scheduled_date);
+    const rangeWords = lastMore
+      ? `the ${headDay} visit and the ${more.length} after it, through ${cancelDayLabel(lastMore.scheduled_date)}`
+      : `the ${headDay} visit`;
+
+    // Activity feed entry — use the actual person's name
+    const canceller = await db.prepare("SELECT first_name, last_name FROM users WHERE id = ?").get(req.user.id);
+    const cancellerName = canceller ? `${canceller.first_name} ${canceller.last_name}` : (cancelledBy === "caregiver" ? "Caregiver" : "Family member");
+    const cancellerFirst = canceller ? canceller.first_name : (cancelledBy === "caregiver" ? "The caregiver" : "The family");
+    await db.prepare(
+      "INSERT INTO activity_feed (id, family_user_id, event_type, title, message) VALUES (?, ?, 'session_cancelled', ?, ?)"
+    ).run(
+      uuid(),
+      session.family_user_id,
+      more.length ? `Series Cancelled by ${cancellerName}` : `Session Cancelled by ${cancellerName}`,
+      (() => {
+        const svcLabel = (session.service_type || '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+        if (more.length) {
+          return `${cancellerName} cancelled ${rangeWords} (${more.length + 1} ${svcLabel.toLowerCase() || 'care'} visits)${isLateCancel ? " — the first is a late cancellation" : ""}`;
+        }
+        const tail = stillBooked
+          ? (cancelledBy === "caregiver"
+            ? ` Only this visit — the other ${stillBooked} in the series are still with ${cancellerFirst}.`
+            : ` Only this visit — the other ${stillBooked} in the series still stand.`)
+          : "";
+        return `${svcLabel} session on ${headDay} was cancelled by ${cancellerName}${isLateCancel ? " (late cancellation)" : ""}.${tail}`;
+      })()
+    );
+
+    // Notify the other party via WebSocket
+    const emitToUser = req.app.get("emitToUser");
+    if (emitToUser) {
+      const notifyUserId = cancelledBy === "caregiver" ? session.family_user_id : session.caregiver_user_id;
+      if (notifyUserId) {
+        emitToUser(notifyUserId, "session_update", {
+          sessionId: req.params.id,
+          status: updated.status,
+          cancelledBy,
+          isLateCancel,
+          canReview: cancelledBy === "caregiver" && isLateCancel,
+          seriesCancelled: more.length,
+        });
+      }
+    }
+
+    // ─── v1.105.14 — actually TELL the other person ───
+    //
+    // This handler wrote an activity-feed row and emitted a websocket event, and that was
+    // all. The websocket only reaches someone with the app open. So a caregiver with their
+    // phone in their pocket, already driving, got nothing — and arrived at the home of a
+    // vulnerable person who was not expecting them. That is the failure this fixes; it
+    // matters more than the money above.
+    //
+    // Deliberately NOT wrapped in the emitToUser check: the whole point is that push is
+    // the channel that works when the socket isn't connected.
+    const pushUserId = cancelledBy === "caregiver" ? session.family_user_id : session.caregiver_user_id;
+    if (pushUserId) {
+      const when = (() => {
+        try {
+          const d = new Date(session.scheduled_date.split("T")[0] + "T12:00:00");
+          const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+          const t = session.scheduled_time ? ` at ${session.scheduled_time}` : "";
+          return `${months[d.getMonth()]} ${d.getDate()}${t}`;
+        } catch { return "your upcoming visit"; }
+      })();
+
+      // The caregiver-facing copy says "do not travel" explicitly. A cancellation notice
+      // that only states a fact leaves the reader to work out the action; when the action
+      // is "turn the car around", say it.
+      const isForCaregiver = cancelledBy !== "caregiver";
+      // v1.125.2 — name the range for a series, and say "only this visit" when the rest stand.
+      const whatWord = more.length
+        ? `the ${when} visit and the ${more.length} after it (through ${cancelDayLabel(lastMore.scheduled_date)})`
+        : `the ${when} visit`;
+      const onlyThis = !more.length && stillBooked ? " Only that one — the rest of the series is unchanged." : "";
+      sendPushToUser(pushUserId, {
+        title: isForCaregiver ? (more.length ? "Visits cancelled" : "Visit cancelled") : "Caregiver cancelled",
+        body: isForCaregiver
+          ? `The family cancelled ${whatWord}.${onlyThis} Please do not travel to the home.`
+          : `Your caregiver cancelled ${whatWord}.${onlyThis}${isLateCancel ? " We're finding a replacement." : ""}`,
+        data: { type: "session_cancelled", sessionId: req.params.id, cancelledBy, seriesCancelled: more.length },
+      }, "session_cancelled").catch(() => {});
+    }
+    // A family cancelling a series whose later visits are with a DIFFERENT caregiver: each of
+    // those caregivers hears about their own visits, once.
+    if (cancelledBy !== "caregiver" && more.length) {
+      const byCaregiver = new Map();
+      for (const m of more) {
+        if (!m.caregiver_user_id || m.caregiver_user_id === pushUserId) continue;
+        if (!byCaregiver.has(m.caregiver_user_id)) byCaregiver.set(m.caregiver_user_id, []);
+        byCaregiver.get(m.caregiver_user_id).push(m);
+      }
+      for (const [uid, list] of byCaregiver) {
+        const days = list.map((m) => cancelDayLabel(m.scheduled_date)).join(", ");
+        sendPushToUser(uid, {
+          title: list.length > 1 ? "Visits cancelled" : "Visit cancelled",
+          body: `The family cancelled your ${list.length > 1 ? "visits" : "visit"} on ${days}. Please do not travel to the home.`,
+          data: { type: "session_cancelled", sessionId: list[0].id, cancelledBy },
+        }, "session_cancelled").catch(() => {});
+      }
+    }
+
+    res.json({
+      session: updated,
+      cancelledBy,
+      isLateCancel,
+      hasCaregiver,
+      // v1.125.2 — how many visits this request cancelled, and how many of the series remain.
+      cancelledCount: 1 + more.length,
+      seriesCancelled: more.length,
+      seriesRemaining: stillBooked,
+      // Family can review caregiver if caregiver late-cancelled
+      canReview: cancelledBy === "caregiver" && isLateCancel,
+      cancelledCaregiverId: cancelledBy === "caregiver" ? session.caregiver_id : null,
+      // ⚠️ ADVISORY ONLY — nothing charges on this, and the hold is voided above. Kept in
+      // the response so the client can warn "this is a late cancellation", NOT so it can
+      // claim money is owed. Do not wire a charge to this without a stated policy.
+      chargeApplies: cancelledBy === "family" && isLateCancel,
+      // What actually happened to the hold, so the client can tell the truth in the
+      // confirmation screen instead of guessing from chargeApplies.
+      holdAction: charge.action,
+      cancellationFeePercent: charge.feePercent,
+      cancellationFeeCents: charge.action === "capture" ? charge.amountCents : 0,
+    });
+  } catch (err) {
+    console.error("Cancel session error:", err);
+    res.status(500).json({ error: "Failed to cancel session" });
+  }
+});
+
+// ─── POST /api/sessions/:id/review ───
+// Submit a review for a session (completion or late-cancel)
+router.post("/:id/review", async (req, res) => {
+  try {
+    const db = await getDb();
+    const userId = req.user.id;
+    const { rating, comment } = req.body;
+
+    if (!rating || rating < 1 || rating > 5) {
+      return res.status(400).json({ error: "Rating must be 1-5" });
+    }
+
+    const session = await db.prepare("SELECT * FROM care_sessions WHERE id = ?").get(req.params.id);
+    if (!session) return res.status(404).json({ error: "Session not found" });
+
+    // Any care team member can review (v1.58.29)
+    if (userId !== session.family_user_id) {
+      const isCareTeam = await db.prepare(`
+        SELECT 1 FROM care_team_members ctm
+        JOIN care_teams ct ON ctm.care_team_id = ct.id
+        WHERE ct.care_recipient_id = ? AND ctm.user_id = ?
+        LIMIT 1
+      `).get(session.care_recipient_id, userId);
+      if (!isCareTeam) {
+        return res.status(403).json({ error: "Only care team members can leave a review" });
+      }
+    }
+
+    // Determine review type and caregiver to review
+    let reviewType = "completion";
+    let caregiverId = session.caregiver_id;
+
+    if (session.caregiver_no_show) {
+      reviewType = "no_show";
+      caregiverId = session.caregiver_id;
+    } else if (session.cancelled_by === "caregiver" && session.late_cancel && session.cancelled_caregiver_id) {
+      reviewType = "late_cancellation";
+      caregiverId = session.cancelled_caregiver_id;
+    } else if (session.status !== "completed") {
+      return res.status(400).json({ error: "Can only review completed sessions, no-shows, or late-cancelled sessions" });
+    }
+
+    if (!caregiverId) {
+      return res.status(400).json({ error: "No caregiver associated with this session" });
+    }
+
+    // Check for duplicate review
+    const existing = await db.prepare(
+      "SELECT id FROM reviews WHERE session_id = ? AND family_user_id = ?"
+    ).get(req.params.id, userId);
+    if (existing) return res.status(409).json({ error: "You already reviewed this session" });
+
+    const reviewId = uuid();
+    const adminStatus = rating < 3 ? 'flagged' : 'ok';
+    await db.prepare(
+      "INSERT INTO reviews (id, session_id, family_user_id, caregiver_id, rating, comment, review_type, admin_status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+    ).run(reviewId, req.params.id, userId, caregiverId, rating, comment || null, reviewType, adminStatus);
+
+    // Update caregiver average rating
+    const stats = await db.prepare(
+      "SELECT AVG(rating) AS avg_rating, COUNT(*) AS count FROM reviews WHERE caregiver_id = ?"
+    ).get(caregiverId);
+    await db.prepare(
+      "UPDATE caregiver_profiles SET rating_avg = ?, rating_count = ? WHERE id = ?"
+    ).run(Math.round(stats.avg_rating * 10) / 10, stats.count, caregiverId);
+
+    // Mark review as completed on the session (clears review gating)
+    await db.prepare(
+      "UPDATE care_sessions SET review_completed = 1 WHERE id = ?"
+    ).run(req.params.id);
+
+    // v1.107.8 — tell her. Pete: "'your session with Betty has been reviewed by Peter' is
+    // enough. They click on it, it takes them to their page where they can investigate the
+    // review if they want." No stars and no words on the lock screen: the tap is the choice.
+    try {
+      const who = await db.prepare(`
+        SELECT cp.user_id AS caregiver_user_id, cr.first_name AS recipient_first_name,
+               ru.first_name AS reviewer_first_name
+          FROM caregiver_profiles cp
+          JOIN care_sessions cs ON cs.id = ?
+          LEFT JOIN care_recipients cr ON cr.id = cs.care_recipient_id
+          LEFT JOIN users ru ON ru.id = ?
+         WHERE cp.id = ?
+      `).get(req.params.id, userId, caregiverId);
+      if (who && who.caregiver_user_id && who.caregiver_user_id !== userId) {
+        sendPushToUser(who.caregiver_user_id, {
+          title: "New review",
+          body: `Your session with ${who.recipient_first_name || "your client"} was reviewed by ${who.reviewer_first_name || "the family"}.`,
+          data: { type: "review_received", page: "caregiver-profile", caregiverId, sessionId: req.params.id },
+        }, "review").catch(() => {});
+      }
+    } catch (e) { /* the review stands whether or not the push does */ }
+
+    res.json({ review: { id: reviewId, rating, comment, reviewType } });
+  } catch (err) {
+    console.error("Review error:", err);
+    res.status(500).json({ error: "Failed to submit review" });
+  }
+});
+
+// ─── POST /api/sessions/:id/tip ───
+// Family leaves a tip + gratitude reason for the caregiver after a session
+router.post("/:id/tip", blockWhileImpersonating("charge a tip"), async (req, res) => {
+  // v1.108.1 — a tip on a visit that is already PAID, charged now to the card that paid it.
+  // Pete (9/17): the caregiver gets the whole tip, the family also covers the card fee, and it
+  // is offered until the visit is reviewed. Before payment, the pay-later path still uses
+  // POST /:id/pending-tip. This route used to write a tips row and charge nothing.
+  try {
+    const db = await getDb();
+    const userId = req.user.id;
+    const cents = Math.round(Number(req.body?.amount_cents));
+    const reason = (req.body?.reason_text || "").trim().slice(0, 300) || null;
+    if (!Number.isFinite(cents) || cents < 100) return res.status(400).json({ error: "Minimum tip is $1.00" });
+    if (cents > 50000) return res.status(400).json({ error: "Maximum tip is $500" });
+
+    const session = await db.prepare(`
+      SELECT cs.*, cp.user_id AS caregiver_user_id, cr.first_name AS recipient_first_name,
+             (SELECT ct.billing_user_id FROM care_teams ct WHERE ct.care_recipient_id = cs.care_recipient_id AND ct.billing_user_id IS NOT NULL LIMIT 1) AS billing_user_id
+        FROM care_sessions cs
+        LEFT JOIN caregiver_profiles cp ON cp.id = cs.caregiver_id
+        LEFT JOIN care_recipients cr ON cr.id = cs.care_recipient_id
+       WHERE cs.id = ?
+    `).get(req.params.id);
+    if (!session) return res.status(404).json({ error: "Session not found" });
+    if (userId !== session.family_user_id && userId !== session.billing_user_id) {
+      return res.status(404).json({ error: "Session not found" });
+    }
+    if (!session.caregiver_id) return res.status(400).json({ error: "No caregiver on this session" });
+    if (session.status !== "completed" || session.payment_status !== "paid") {
+      return res.status(409).json({ error: "A tip can be sent once the visit is paid" });
+    }
+    if (Number(session.review_completed) === 1) {
+      return res.status(409).json({ error: "Tips are sent before the review" });
+    }
+
+    // Reserve, so two taps cannot both charge.
+    const tipId = uuid();
+    let taken = false;
+    await db.transaction(async (tx) => {
+      await tx.prepare("SELECT id FROM care_sessions WHERE id = ? FOR UPDATE").get(req.params.id);
+      const existing = await tx.prepare("SELECT id FROM tips WHERE session_id = ?").get(req.params.id);
+      if (existing) { taken = true; return; }
+      await tx.prepare(
+        "INSERT INTO tips (id, session_id, family_user_id, caregiver_id, amount_cents, reason_text, status) VALUES (?, ?, ?, ?, ?, ?, 'charging')"
+      ).run(tipId, req.params.id, userId, session.caregiver_id, cents, reason);
+    });
+    if (taken) return res.status(409).json({ error: "A tip was already sent for this visit" });
+
+    const { chargeTip } = require("./accountability");
+    const r = await chargeTip(req.params.id, cents);
+    if (!r.charged) {
+      await db.prepare("DELETE FROM tips WHERE id = ? AND status = 'charging'").run(tipId);
+      const demo = r.error === "demo_session_blocked";
+      return res.status(demo ? 400 : 402).json({ error: demo ? "Demo visits can't be tipped" : r.error });
+    }
+    await db.prepare(
+      "UPDATE tips SET status = 'paid', stripe_payment_intent = ?, card_fee_cents = ? WHERE id = ?"
+    ).run(r.id, r.feeCents, tipId);
+
+    if (reason) {
+      try {
+        const profile = await db.prepare("SELECT gratitude_keywords FROM caregiver_profiles WHERE id = ?").get(session.caregiver_id);
+        const keywords = profile?.gratitude_keywords ? JSON.parse(profile.gratitude_keywords) : [];
+        keywords.push({ text: reason, date: new Date().toISOString().slice(0, 10), session_id: req.params.id });
+        await db.prepare("UPDATE caregiver_profiles SET gratitude_keywords = ? WHERE id = ?").run(JSON.stringify(keywords.slice(-50)), session.caregiver_id);
+      } catch (e) { captureException(e, { where: "tip: gratitude" }); }
+    }
+
+    try {
+      const from = await db.prepare("SELECT first_name FROM users WHERE id = ?").get(userId);
+      if (session.caregiver_user_id) {
+        sendPushToUser(session.caregiver_user_id, {
+          title: "You got a tip",
+          body: `${(from && from.first_name) || "The family"} sent you a $${(cents / 100).toFixed(2)} tip for your visit with ${session.recipient_first_name || "your client"}.`,
+          data: { type: "tip_received", sessionId: req.params.id, page: "dashboard" },
+        }, "tip").catch(() => {});
+      }
+    } catch (e) { /* the tip stands whether or not the push does */ }
+
+    res.json({ tip: { id: tipId, amount_cents: cents, reason_text: reason, card_fee_cents: r.feeCents, charged_cents: r.totalCents } });
+  } catch (err) {
+    captureException(err, { where: "sessions: tip" });
+    res.status(500).json({ error: "Failed to send tip" });
+  }
+});
+
+// ─── GET /api/sessions/tips/caregiver ───
+// Caregiver views their tips
+router.get("/tips/caregiver", async (req, res) => {
+  try {
+    const db = await getDb();
+    const userId = req.user.id;
+    const profile = await db.prepare("SELECT id FROM caregiver_profiles WHERE user_id = ?").get(userId);
+    if (!profile) return res.status(404).json({ error: "Caregiver profile not found" });
+
+    const tips = await db.prepare(`
+      SELECT t.*, cs.scheduled_date, cs.service_type,
+        u.first_name || ' ' || u.last_name AS family_name
+      FROM tips t
+      JOIN care_sessions cs ON t.session_id = cs.id
+      JOIN users u ON t.family_user_id = u.id
+      WHERE t.caregiver_id = ? AND COALESCE(t.status, 'paid') = 'paid'
+      ORDER BY t.created_at DESC
+      LIMIT 100
+    `).all(profile.id);
+
+    const totalCents = tips.reduce((sum, t) => sum + (t.amount_cents || 0), 0);
+    res.json({ tips, totalCents });
+  } catch (err) {
+    console.error("Fetch tips error:", err);
+    res.status(500).json({ error: "Failed to fetch tips" });
+  }
+});
+
+// ─── GET /api/sessions/:id/tip ───
+// Check if a tip already exists for this session
+router.get("/:id/tip", async (req, res) => {
+  try {
+    const db = await getDb();
+    const tip = await db.prepare("SELECT * FROM tips WHERE session_id = ? AND family_user_id = ?").get(req.params.id, req.user.id);
+    res.json({ tip: tip || null });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to check tip" });
+  }
+});
+
+// ─── GET /api/sessions/:id ───
+// v1.105.35 — was authenticate-only. This response carries the recipient's HOME ADDRESS,
+// the visit log (arrival mood, condition tags, care feedback) and the visit photos, so any
+// logged-in stranger holding a session id could read another family's private care record.
+// 404 rather than 403 on failure: "not yours" and "not there" should look identical.
+router.get("/:id", async (req, res) => {
+  const db = await getDb();
+  const access = await sessionAccess(db, req.params.id, req.user.id);
+  if (!access) return res.status(404).json({ error: "Session not found" });
+  const session0 = await db.prepare(`
+    SELECT cs.*,
+      cr.first_name || ' ' || cr.last_name AS recipient_name,
+      cr.location_address, cr.location_city, cr.location_state,
+      u.first_name || ' ' || u.last_name AS caregiver_name,
+      cp.rating_avg, cp.specialties AS caregiver_specialties,
+      cp.hourly_rate, cp.rate_daytime, cp.rate_nighttime, cp.rate_overnight,
+      bu.first_name || ' ' || bu.last_name AS booked_by_name
+    FROM care_sessions cs
+    LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
+    LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+    LEFT JOIN users u ON cp.user_id = u.id
+    LEFT JOIN users bu ON cs.family_user_id = bu.id
+    WHERE cs.id = ?
+  `).get(req.params.id);
+  const session = session0;
+
+  if (!session) return res.status(404).json({ error: "Session not found" });
+
+  // Get visit log if exists
+  const visitLog = await db.prepare(
+    "SELECT * FROM visit_logs WHERE session_id = ?"
+  ).get(req.params.id);
+
+  // ─── v1.106.46 — a photo URL that is actually a URL ───
+  //
+  // Pete: "Pictures uploaded to visits are displaying. Shows an upload but just black box with
+  // an x." The black box is a broken <img>, and this SELECT * is why.
+  //
+  // `visit_photos.photo_url` is not a URL and never was — it is the stored image. v1.106.7
+  // fixed exactly this shape in routes/photos.js and in the family dashboard, converting the
+  // column to a real URL with storedImageUrl() before it reaches a client. It missed this
+  // endpoint, and this endpoint is the one behind the visit sheet.
+  //
+  // Nothing broke at the time, because a base64 data URI in an <img src> renders fine — it is
+  // wasteful, but it works. Then v1.106.8 turned R2 on, the column started holding
+  // "r2:visit-photo/<date>/<uuid>", and the client dutifully set that as the src of an image.
+  // A browser cannot load a scheme it has never heard of, so it draws the broken-image glyph
+  // and the alt text. That is the black box with an x.
+  //
+  // Columns are named rather than starred, so the blob cannot come back by accident again.
+  const photos = visitLog
+    ? (await db.prepare(
+        "SELECT id, visit_log_id, photo_url, caption, created_at FROM visit_photos WHERE visit_log_id = ? ORDER BY created_at ASC"
+      ).all(visitLog.id)).map((p) => ({ ...p, photo_url: storedImageUrl("/api/photos", p) }))
+    : [];
+
+  // Cost breakdown — proposed_rate (family's offer) ALWAYS wins when stored on session.
+  // Caregiver profile rates are only used when no proposed rate was set.
+  let costBreakdown = null;
+  if (session.scheduled_date && session.scheduled_time) {
+    const proposedRate = parseFloat(session.proposed_rate) || 0;
+    const rates = proposedRate > 0
+      ? { daytime: proposedRate, nighttime: proposedRate, overnight: proposedRate, base: proposedRate }
+      : {
+          daytime: session.rate_daytime || session.hourly_rate || 28,
+          nighttime: session.rate_nighttime || session.hourly_rate || 28,
+          overnight: session.rate_overnight || session.hourly_rate || 28,
+          base: session.hourly_rate || 28,
+        };
+    // Use the stored surcharge to determine if session was short-notice at booking time
+    const storedSurcharge = parseFloat(session.short_notice_surcharge) || 0;
+    const shortNotice = storedSurcharge > 0;
+    costBreakdown = calculateSessionCost(session.scheduled_time, null, rates, {
+      scheduledDate: session.scheduled_date,
+      durationHours: parseFloat(session.duration_hours || 2),
+      shortNotice,
+    });
+    costBreakdown.shortNotice = shortNotice;
+
+    // 75/25 split: caregiver gets subtotal + 75% of surcharge
+    const feePercent = await getPlatformFeePercent(db, { session }); // v1.111.0 — per visit
+    const surchargeToCaregiver = Math.round((costBreakdown.surcharge || 0) * SURCHARGE_CAREGIVER_SHARE * 100) / 100;
+    costBreakdown.caregiverPayout = Math.round((costBreakdown.subtotal + surchargeToCaregiver) * 100) / 100;
+    costBreakdown.caregiverSurchargeShare = surchargeToCaregiver;
+    costBreakdown.platformFeePercent = feePercent;
+    // Family sees: InPlace fee = 20% of subtotal (surcharge split is internal)
+    costBreakdown.platformFee = Math.round(costBreakdown.subtotal * (feePercent / 100) * 100) / 100;
+    costBreakdown.familyTotal = Math.round((costBreakdown.total + costBreakdown.platformFee) * 100) / 100;
+
+    // Overtime info (from completed sessions)
+    const otMinutes = parseInt(session.overtime_minutes) || 0;
+    const otCost = parseFloat(session.overtime_cost) || 0;
+    if (otMinutes > 0) {
+      costBreakdown.overtimeMinutes = otMinutes;
+      costBreakdown.overtimeCost = otCost;
+      // Add overtime platform fee
+      const otPlatformFee = Math.round(otCost * (feePercent / 100) * 100) / 100;
+      costBreakdown.overtimePlatformFee = otPlatformFee;
+      costBreakdown.familyTotal = Math.round((costBreakdown.familyTotal + otCost + otPlatformFee) * 100) / 100;
+      costBreakdown.caregiverPayout = Math.round((costBreakdown.caregiverPayout + otCost) * 100) / 100;
+    }
+    costBreakdown.flexPolicy = session.flex_timing || 'strict';
+  }
+
+  // v1.108.0 — the report, labelled for reading, and the AI's summary sentence (only the
+  // summary: its "suggestions" are advice, which the app does not give).
+  let visitReport = null;
+  let visitSummaryText = null;
+  try {
+    // Her own report, or anyone allowed to read this person's visits.
+    let mayRead = !!(access.isCaregiver || access.isAdmin);
+    if (!mayRead) {
+      const { recipientCapabilities } = require("../utils/access");
+      const { can, CAP } = require("../utils/capabilities");
+      mayRead = can(await recipientCapabilities(db, session.care_recipient_id, req.user.id), CAP.READ_VISITS);
+    }
+    if (mayRead) visitReport = await require("../utils/visitReport").reportForDisplay(db, req.params.id);
+  } catch (e) { captureException(e, { where: "sessions: visit report display" }); }
+  if (visitLog && visitLog.ai_summary) {
+    try { visitSummaryText = JSON.parse(visitLog.ai_summary).summary || null; } catch { visitSummaryText = null; }
+  }
+
+  // v1.109.0 — every charge on this visit, itemised, for whoever is allowed to see the money.
+  // Pete: "payment records with breakdown of all costs and adjustments."
+  let receipt = null;
+  try {
+    const billing = await db.prepare(`
+      SELECT billing_user_id FROM care_teams
+       WHERE care_recipient_id = ? AND billing_user_id IS NOT NULL LIMIT 1
+    `).get(session.care_recipient_id);
+    const maySeeMoney = access.isAdmin || access.isCaregiver
+      || req.user.id === session.family_user_id
+      || (billing && billing.billing_user_id === req.user.id);
+    if (maySeeMoney) {
+      receipt = await require("../utils/ledger").forSession(db, req.params.id);
+      // A caregiver sees what she was paid, not what the family's card was charged.
+      if (access.isCaregiver && !access.isAdmin && receipt) {
+        receipt = {
+          entries: receipt.entries.map((e) => ({ ...e, charged: undefined, toInPlace: undefined,
+            lines: (e.lines || []).filter((l) => !/InPlace fee|Card processing/.test(l.label)) })),
+          totals: { toCaregiver: receipt.totals.toCaregiver },
+        };
+      }
+    }
+  } catch (e) { captureException(e, { where: "sessions: receipt" }); }
+
+  res.json({ session, visitLog, photos, costBreakdown, visitReport, visitSummaryText, receipt });
+});
+
+// ═══════════════════════════════════════════════════════════════════════
+// First-Visit Confirmation — caregiver confirms care recipient awareness
+// ═══════════════════════════════════════════════════════════════════════
+
+// ─── GET /api/sessions/:sessionId/first-visit-check ───
+// Returns whether this caregiver needs to complete a first-visit confirmation
+router.get("/:sessionId/first-visit-check", async (req, res) => {
+  try {
+    const db = await getDb();
+    const session = await db.prepare(`
+      SELECT cs.*, cp.id AS caregiver_profile_id, cp.user_id AS caregiver_user_id
+      FROM care_sessions cs
+      LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+      WHERE cs.id = ?
+    `).get(req.params.sessionId);
+
+    if (!session) return res.status(404).json({ error: "Session not found" });
+    if (session.caregiver_user_id !== req.user.id) {
+      return res.status(403).json({ error: "Only the assigned caregiver can access this" });
+    }
+
+    // Check if there's already a first_visit_confirmations row for this caregiver + care_recipient pair
+    const existing = await db.prepare(
+      "SELECT id FROM first_visit_confirmations WHERE caregiver_id = ? AND care_recipient_id = ?"
+    ).get(session.caregiver_profile_id, session.care_recipient_id);
+
+    // Get care recipient name for the UI
+    const recipient = await db.prepare(
+      "SELECT first_name, last_name FROM care_recipients WHERE id = ?"
+    ).get(session.care_recipient_id);
+
+    res.json({
+      needsConfirmation: !existing,
+      recipientName: recipient ? `${recipient.first_name} ${recipient.last_name}`.trim() : 'the care recipient',
+    });
+  } catch (err) {
+    console.error("First-visit check error:", err);
+    res.status(500).json({ error: "Failed to check first-visit status" });
+  }
+});
+
+// ─── POST /api/sessions/:sessionId/first-visit-confirm ───
+// Submit first-visit confirmation (does NOT block check-in)
+router.post("/:sessionId/first-visit-confirm", async (req, res) => {
+  try {
+    const { confirmation, notes } = req.body;
+
+    const validConfirmations = ['yes', 'no', 'unable'];
+    if (!confirmation || !validConfirmations.includes(confirmation)) {
+      return res.status(400).json({ error: "Confirmation must be 'yes', 'no', or 'unable'" });
+    }
+
+    const db = await getDb();
+    const session = await db.prepare(`
+      SELECT cs.*, cp.id AS caregiver_profile_id, cp.user_id AS caregiver_user_id
+      FROM care_sessions cs
+      LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+      WHERE cs.id = ?
+    `).get(req.params.sessionId);
+
+    if (!session) return res.status(404).json({ error: "Session not found" });
+    if (session.caregiver_user_id !== req.user.id) {
+      return res.status(403).json({ error: "Only the assigned caregiver can submit this" });
+    }
+
+    // Check if already submitted (idempotent on retry / network glitch)
+    const existing = await db.prepare(
+      "SELECT id, confirmation FROM first_visit_confirmations WHERE session_id = ?"
+    ).get(req.params.sessionId);
+
+    if (existing) {
+      return res.json({ success: true, confirmation: existing.confirmation, alreadySubmitted: true });
+    }
+
+    const id = require("uuid").v4();
+    await db.prepare(`
+      INSERT INTO first_visit_confirmations (id, care_recipient_id, caregiver_id, session_id, confirmation, notes)
+      VALUES (?, ?, ?, ?, ?, ?)
+      ON CONFLICT (session_id) DO NOTHING
+    `).run(id, session.care_recipient_id, session.caregiver_profile_id, req.params.sessionId, confirmation, notes || null);
+
+    // If 'no' or 'unable', notify the family AND admin, pause future bookings
+    if (confirmation !== 'yes') {
+      const caregiverUser = await db.prepare("SELECT first_name, last_name FROM users WHERE id = ?").get(req.user.id);
+      const caregiverName = caregiverUser ? `${caregiverUser.first_name} ${caregiverUser.last_name}` : "Caregiver";
+      const recipient = await db.prepare("SELECT first_name, last_name FROM care_recipients WHERE id = ?").get(session.care_recipient_id);
+      const recipientName = recipient ? `${recipient.first_name} ${recipient.last_name}`.trim() : "Care recipient";
+
+      const title = confirmation === 'no'
+        ? `${recipientName} may not be aware of care visit`
+        : `${caregiverName} unable to assess ${recipientName}'s awareness`;
+      const message = confirmation === 'no'
+        ? `${caregiverName} reported that ${recipientName} seems unaware of today's care visit.${notes ? ' Note: ' + notes : ''}`
+        : `${caregiverName} was unable to assess whether ${recipientName} is aware of today's care visit.${notes ? ' Note: ' + notes : ''}`;
+
+      // BLOCKING: Pause future bookings for this care recipient until resolved
+      try {
+        const pauseReason = confirmation === 'no'
+          ? `Caregiver reported care recipient seems unaware of visit (${new Date().toLocaleDateString()})`
+          : `Caregiver unable to assess care recipient awareness (${new Date().toLocaleDateString()})`;
+        await db.prepare(`
+          UPDATE care_recipients SET bookings_paused = 1, bookings_paused_reason = ?, updated_at = NOW()
+          WHERE id = ? AND COALESCE(bookings_paused, 0) = 0
+        `).run(pauseReason, session.care_recipient_id);
+      } catch (pauseErr) {
+        console.error("Bookings pause error:", pauseErr.message);
+      }
+
+      // Notify family
+      try {
+        await db.prepare(`
+          INSERT INTO activity_feed (id, family_user_id, care_recipient_id, event_type, title, message, metadata)
+          VALUES (?, ?, ?, 'first_visit_concern', ?, ?, ?)
+        `).run(require("uuid").v4(), session.family_user_id, session.care_recipient_id, title, message, JSON.stringify({ sessionId: req.params.sessionId, confirmation }));
+
+        const emitToUser = req.app.get("emitToUser");
+        if (emitToUser) emitToUser(session.family_user_id, "activity_update", { title, message });
+      } catch (notifErr) {
+        console.error("First-visit notification error:", notifErr.message);
+      }
+
+      // Notify admin (Pete) — urgent
+      try {
+        const adminUsers = await db.prepare("SELECT id FROM users WHERE is_admin = 1").all();
+        const adminTitle = `First-visit concern: ${recipientName}`;
+        const adminMsg = `${caregiverName} reported a concern during first visit with ${recipientName}: ${confirmation === 'no' ? 'recipient seems unaware' : 'unable to assess awareness'}. Future bookings have been paused.${notes ? ' Caregiver notes: ' + notes : ''}`;
+        for (const admin of adminUsers) {
+          await db.prepare(`
+            INSERT INTO activity_feed (id, family_user_id, event_type, title, message, metadata, created_at)
+            VALUES (?, ?, 'first_visit_concern_admin', ?, ?, ?, NOW())
+          `).run(require("uuid").v4(), admin.id, adminTitle, adminMsg,
+            JSON.stringify({ sessionId: req.params.sessionId, recipientId: session.care_recipient_id, confirmation, caregiverNotes: notes }));
+        }
+      } catch (adminErr) {
+        console.error("First-visit admin notification error:", adminErr.message);
+      }
+    }
+
+    res.json({ success: true, confirmation });
+  } catch (err) {
+    console.error("First-visit confirm error:", err);
+    res.status(500).json({ error: "Failed to submit first-visit confirmation" });
+  }
+});
+
+// ─── POST /api/sessions/:id/propose-time ───
+// Caregiver proposes a different time for an open session (counter-offer)
+router.post("/:id/propose-time", async (req, res) => {
+  try {
+    const db = await getDb();
+    const { proposedDate, proposedTime, message } = req.body;
+    const userId = req.user.id;
+    const activeRole = req.user.activeRole || req.user.role;
+    const rawRoles = req.user.roles || activeRole || "";
+    const roles = Array.isArray(rawRoles) ? rawRoles : String(rawRoles).split(",").map(r => r.trim());
+
+    // authz-ok: eligibility only — the vetting gate that actually decides is below, once the
+    // session (and therefore the family a vouch would be scoped to) is known.
+    if (!roles.includes("caregiver")) {
+      return res.status(403).json({ error: "Only caregivers can propose times" });
+    }
+    if (!proposedDate || !proposedTime) {
+      return res.status(400).json({ error: "Proposed date and time are required" });
+    }
+
+    const profile = await db.prepare("SELECT * FROM caregiver_profiles WHERE user_id = ?").get(userId);
+    if (!profile) return res.status(404).json({ error: "Caregiver profile not found" });
+    if (profile.account_paused) {
+      return res.status(403).json({ error: "Your account is paused. Contact support for assistance." });
+    }
+
+    const session = await db.prepare(`
+      SELECT cs.*, cr.first_name AS recipient_first_name
+      FROM care_sessions cs
+      LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
+      WHERE cs.id = ?
+    `).get(req.params.id);
+
+    if (!session) return res.status(404).json({ error: "Session not found" });
+    if (!["open", "requested", "pending"].includes(session.status)) {
+      return res.status(400).json({ error: "This session is no longer available for proposals" });
+    }
+
+    // v1.106.2 — proposing a time notifies the family and puts a name in front of them, so it is
+    // the same trust decision as claiming the job, and it was ungated. Mirrors the claim gate
+    // (sessions.js ~528) and the offers gate: a real Checkr result clears any job; an admin
+    // vouch clears only the vouched family's jobs.
+    if (!profile.is_background_checked) {
+      const vouched = await hasActiveVouch(db, userId, session.family_user_id);
+      if (!vouched) {
+        return res.status(403).json({ error: "You must complete your background check before proposing times." });
+      }
+    }
+
+    // Check if this caregiver already has a pending proposal for this session
+    const existing = await db.prepare(
+      "SELECT id FROM time_proposals WHERE session_id = ? AND caregiver_user_id = ? AND status = 'pending'"
+    ).get(req.params.id, userId);
+    if (existing) {
+      return res.status(400).json({ error: "You already have a pending proposal for this session" });
+    }
+
+    const proposalId = require("uuid").v4();
+    const expiresAt = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(); // 2-hour response window
+    await db.prepare(`
+      INSERT INTO time_proposals (id, session_id, caregiver_profile_id, caregiver_user_id, proposed_date, proposed_time, message, status, expires_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?)
+    `).run(proposalId, req.params.id, profile.id, userId, proposedDate, proposedTime, message || null, expiresAt);
+
+    // Notify family
+    const emitToUser = req.app.get("emitToUser");
+    const sendPushToUser = req.app.get("sendPushToUser");
+    const caregiverUser = await db.prepare("SELECT first_name, last_name FROM users WHERE id = ?").get(userId);
+    const caregiverName = caregiverUser ? `${caregiverUser.first_name} ${caregiverUser.last_name}` : "A caregiver";
+
+    const timeStr = formatTimeForDisplay(proposedTime);
+
+    const title = `${caregiverName} proposed a different time`;
+    const body = `${caregiverName} would like to care for ${session.recipient_first_name} on ${proposedDate} at ${timeStr} instead. You have 2 hours to respond.`;
+
+    await db.prepare(
+      "INSERT INTO activity_feed (id, family_user_id, care_recipient_id, event_type, title, message, metadata) VALUES (?, ?, ?, 'time_proposal', ?, ?, ?)"
+    ).run(require("uuid").v4(), session.family_user_id, session.care_recipient_id, title, body,
+      JSON.stringify({ proposalId, sessionId: req.params.id, caregiverName, proposedDate, proposedTime: timeStr }));
+
+    if (emitToUser) {
+      emitToUser(session.family_user_id, "time_proposal", { proposalId, sessionId: req.params.id, caregiverName, proposedDate, proposedTime: timeStr });
+      emitToUser(session.family_user_id, "activity_update", {});
+    }
+    if (sendPushToUser) {
+      sendPushToUser(session.family_user_id, { title, body, data: { type: "time_proposal", sessionId: req.params.id } }, "time_proposal").catch(() => {});
+    }
+
+    // Email notification to family
+    try {
+      const { sendEmail, brandedHtml } = require("../utils/email");
+      const familyUser = await db.prepare("SELECT email, first_name FROM users WHERE id = ?").get(session.family_user_id);
+      if (familyUser?.email) {
+        const origTime = formatTimeForDisplay(session.scheduled_time);
+        const appUrl = process.env.APP_URL || 'https://inplace.care';
+        await sendEmail({
+          to: familyUser.email,
+          subject: `${caregiverName} proposed a different time for ${session.recipient_first_name}'s care`,
+          html: brandedHtml({
+            heading: 'New Time Proposal',
+            body: `<p>Hi ${familyUser.first_name},</p>
+              <p><strong>${caregiverName}</strong> would like to care for <strong>${session.recipient_first_name}</strong> but proposed a different time:</p>
+              <table style="margin: 16px 0; border-collapse: collapse;">
+                <tr>
+                  <td style="padding: 8px 16px 8px 0; color: #888; font-size: 14px;">Original:</td>
+                  <td style="padding: 8px 0; text-decoration: line-through; color: #999;">${proposedDate === (session.scheduled_date || '').split('T')[0] ? '' : session.scheduled_date + ' at '}${origTime}</td>
+                </tr>
+                <tr>
+                  <td style="padding: 8px 16px 8px 0; color: #7b61ff; font-weight: 600; font-size: 14px;">Proposed:</td>
+                  <td style="padding: 8px 0; color: #7b61ff; font-weight: 600; font-size: 16px;">${proposedDate} at ${timeStr}</td>
+                </tr>
+              </table>
+              ${message ? `<p style="background: #f5f0ff; padding: 10px 14px; border-radius: 8px; font-style: italic; color: #555;">"${message}"</p>` : ''}
+              <p style="background: #fff3e0; padding: 10px 14px; border-radius: 8px; color: #e65100; font-weight: 600;">\u23F1 You have 2 hours to accept or decline this proposal.</p>`,
+            ctaText: 'Review Proposal',
+            ctaUrl: `${appUrl}/dashboard`,
+          }),
+        }).catch(err => console.error('Proposal email error:', err));
+      }
+    } catch (emailErr) {
+      console.error('Proposal email notification error:', emailErr);
+    }
+
+    res.json({ proposal: { id: proposalId, status: "pending" } });
+  } catch (err) {
+    console.error("Propose-time error:", err);
+    res.status(500).json({ error: "Failed to submit time proposal" });
+  }
+});
+
+// ─── PUT /api/sessions/:id/proposals/:proposalId/accept ───
+// Family accepts a caregiver's time proposal → confirms session with new time + that caregiver
+router.put("/:id/proposals/:proposalId/accept", async (req, res) => {
+  try {
+    const db = await getDb();
+    const userId = req.user.id;
+
+    const proposal = await db.prepare(`
+      SELECT tp.*, cs.family_user_id, cs.status AS session_status, cs.care_recipient_id,
+        cr.first_name AS recipient_first_name,
+        u.first_name AS cg_first_name, u.last_name AS cg_last_name
+      FROM time_proposals tp
+      JOIN care_sessions cs ON tp.session_id = cs.id
+      LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
+      LEFT JOIN users u ON tp.caregiver_user_id = u.id
+      WHERE tp.id = ? AND tp.session_id = ?
+    `).get(req.params.proposalId, req.params.id);
+
+    if (!proposal) return res.status(404).json({ error: "Proposal not found" });
+    if (proposal.family_user_id !== userId) {
+      return res.status(403).json({ error: "Only the requesting family can accept proposals" });
+    }
+    if (proposal.status !== "pending") {
+      // v1.109.8 — same rule as time-change respond: already accepted is 409 (done), not an error
+      if (proposal.status === "accepted") {
+        return res.status(409).json({ error: "Already accepted", code: "ALREADY_RESPONDED", status: proposal.status });
+      }
+      return res.status(400).json({ error: `Proposal is already ${proposal.status}` });
+    }
+    // Check if proposal has expired
+    if (proposal.expires_at && new Date(proposal.expires_at) < new Date()) {
+      await db.prepare("UPDATE time_proposals SET status = 'expired', responded_at = NOW() WHERE id = ?").run(req.params.proposalId);
+      return res.status(400).json({ error: "This proposal has expired. The 2-hour response window has passed." });
+    }
+    if (!["open", "requested", "pending"].includes(proposal.session_status)) {
+      return res.status(400).json({ error: "This session is no longer available" });
+    }
+
+    // v1.114.3 — accepting her proposed time books her; it must not book her twice.
+    {
+      const sess = await db.prepare("SELECT id, duration_hours FROM care_sessions WHERE id = ?").get(req.params.id);
+      const cGate = await scheduleConflictGate(db, {
+        id: req.params.id,
+        scheduled_date: proposal.proposed_date,
+        scheduled_time: proposal.proposed_time,
+        duration_hours: sess && sess.duration_hours,
+      }, { id: proposal.caregiver_profile_id });
+      if (cGate) {
+        return res.status(409).json({
+          error: "This caregiver is already booked at that time — " + cGate.error.replace(/^You already have /, "").replace(/ Ask the family.*$/, "") + " Pick another caregiver or time.",
+        });
+      }
+    }
+
+    // v1.106.13 — three writes that have to be one.
+    //
+    // Confirming the session, accepting this proposal and declining the rival proposals are
+    // a single decision. Split, the failure modes are all live-user-visible: a confirmed
+    // session whose proposal is still 'pending' shows the family an Accept button for work
+    // already booked, and rival proposals left 'pending' let a second caregiver be accepted
+    // onto the same visit — overwriting caregiver_id on a session the first one is planning
+    // to work.
+    //
+    // The status re-check inside the UPDATE is the other half. Everything above was read
+    // before these writes, so two accepts arriving together both passed the "still open"
+    // check. Making the write itself conditional means the second one changes no rows.
+    const confirmed = await db.transaction(async (tx) => {
+      const applied = await tx.prepare(`
+        UPDATE care_sessions SET
+          scheduled_date = ?, scheduled_time = ?,
+          caregiver_id = ?, status = 'confirmed', updated_at = NOW()
+        WHERE id = ? AND status IN ('open', 'requested', 'pending')
+      `).run(proposal.proposed_date, proposal.proposed_time, proposal.caregiver_profile_id, req.params.id);
+
+      if (!applied || applied.changes === 0) return false;
+
+      await tx.prepare("UPDATE time_proposals SET status = 'accepted', responded_at = NOW() WHERE id = ?").run(req.params.proposalId);
+      await tx.prepare("UPDATE time_proposals SET status = 'declined', responded_at = NOW() WHERE session_id = ? AND id != ? AND status = 'pending'").run(req.params.id, req.params.proposalId);
+      return true;
+    });
+
+    if (!confirmed) {
+      return res.status(409).json({ error: "This session was just booked by someone else." });
+    }
+
+    // Auto-create assignment so caregiver appears in future "Request Care" lists
+    try {
+      await ensureAssignment(db, {
+        careRecipientId: proposal.care_recipient_id,
+        familyUserId: proposal.family_user_id,
+        caregiverProfileId: proposal.caregiver_profile_id,
+      });
+    } catch (assignErr) { console.error('[proposal-accept] ensureAssignment error:', assignErr.message); }
+
+    // Notify the caregiver
+    const emitToUser = req.app.get("emitToUser");
+    const sendPushToUser = req.app.get("sendPushToUser");
+    const caregiverName = `${proposal.cg_first_name} ${proposal.cg_last_name}`;
+
+    const title = "Your proposed time was accepted!";
+    const body = `Your time proposal for ${proposal.recipient_first_name} has been accepted. The session is confirmed.`;
+
+    if (emitToUser) {
+      emitToUser(proposal.caregiver_user_id, "session_update", { sessionId: req.params.id, status: "confirmed" });
+      emitToUser(userId, "session_update", { sessionId: req.params.id, status: "confirmed" });
+    }
+    if (sendPushToUser) {
+      sendPushToUser(proposal.caregiver_user_id, { title, body, data: { type: "proposal_accepted", sessionId: req.params.id } }, "proposal_accepted").catch(() => {});
+    }
+
+    res.json({ session: { id: req.params.id, status: "confirmed", date: proposal.proposed_date, time: proposal.proposed_time } });
+  } catch (err) {
+    console.error("Accept-proposal error:", err);
+    res.status(500).json({ error: "Failed to accept proposal" });
+  }
+});
+
+// ─── PUT /api/sessions/:id/proposals/:proposalId/decline ───
+// Family declines a caregiver's time proposal
+router.put("/:id/proposals/:proposalId/decline", async (req, res) => {
+  try {
+    const db = await getDb();
+    const userId = req.user.id;
+
+    const proposal = await db.prepare(`
+      SELECT tp.*, cs.family_user_id, cr.first_name AS recipient_first_name,
+        u.first_name AS cg_first_name, u.last_name AS cg_last_name
+      FROM time_proposals tp
+      JOIN care_sessions cs ON tp.session_id = cs.id
+      LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
+      LEFT JOIN users u ON tp.caregiver_user_id = u.id
+      WHERE tp.id = ? AND tp.session_id = ?
+    `).get(req.params.proposalId, req.params.id);
+
+    if (!proposal) return res.status(404).json({ error: "Proposal not found" });
+    if (proposal.family_user_id !== userId) {
+      return res.status(403).json({ error: "Only the requesting family can decline proposals" });
+    }
+    if (proposal.status !== "pending") {
+      return res.status(400).json({ error: `Proposal is already ${proposal.status}` });
+    }
+
+    await db.prepare("UPDATE time_proposals SET status = 'declined', responded_at = NOW() WHERE id = ?").run(req.params.proposalId);
+
+    // Notify the caregiver
+    const emitToUser = req.app.get("emitToUser");
+    const sendPushToUser = req.app.get("sendPushToUser");
+
+    const title = "Time proposal declined";
+    const body = `Your proposed time for ${proposal.recipient_first_name} was not accepted. The request is still open if you'd like to accept at the original time.`;
+
+    if (emitToUser) {
+      emitToUser(proposal.caregiver_user_id, "session_update", { sessionId: req.params.id });
+    }
+    if (sendPushToUser) {
+      sendPushToUser(proposal.caregiver_user_id, { title, body, data: { type: "proposal_declined", sessionId: req.params.id } }, "proposal_declined").catch(() => {});
+    }
+
+    res.json({ proposal: { id: req.params.proposalId, status: "declined" } });
+  } catch (err) {
+    console.error("Decline-proposal error:", err);
+    res.status(500).json({ error: "Failed to decline proposal" });
+  }
+});
+
+module.exports = router;
+// v1.106.16 — the expireStaleProposals re-export is gone. It lives in utils/proposals now, and
+// leaving a second address for it here is exactly the duplication this batch is removing.

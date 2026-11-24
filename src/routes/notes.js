@@ -1,0 +1,347 @@
+const express = require("express");
+const { v4: uuid } = require("uuid");
+const { getDb } = require("../models/database");
+const { uploadQuota } = require("../utils/usageLimits");
+const { authenticate } = require("../middleware/auth");
+const { captureException } = require("../utils/sentry");
+const { validateMagicBytes } = require("../utils/fileValidation");
+const { sendStoredFile, IMAGE_MIMES, DOCUMENT_MIMES } = require("../utils/serveMedia");
+const { attachReactions } = require("../utils/reactions"); // v1.105.170
+const storage = require("../utils/storage");
+const { noteAccess, noteRowReadable } = require("../utils/noteVisibility"); // v1.106.38, v1.107.2
+
+// v1.76.0 — parse stored JSON defensively (one malformed row must not 500 the list)
+function safeJson(raw, fallback) {
+  if (!raw) return fallback;
+  try { return JSON.parse(raw); } catch { return fallback; }
+}
+
+const router = express.Router();
+// v1.106.5 — a per-account daily byte ceiling. Rate limits count requests; the Sept 2
+// outage was about bytes, and 5 MB at a permitted rate still fills the volume.
+router.use(authenticate, uploadQuota());
+
+// ─── Access control — v1.107.2: utils/noteVisibility noteAccess() is the only door ───
+
+// GET /api/notes/:careRecipientId — get notes for a care recipient
+// Accessible by: family (owner), shared users, care team members, assigned caregivers, admins
+// ─── GET /api/notes/mine/recipients ───
+//
+// v1.105.153. Which people's notes may I read? Registered BEFORE /:careRecipientId — "mine"
+// is two segments so it could not be swallowed anyway, but the next specific route added here
+// might be one, and this is the order that stays correct.
+//
+// Membership, never role. Pete: "not all caregivers will be on the care team" — a caregiver
+// assigned to a session and nothing more is in none of the three sources this reads, so she
+// gets an empty list and no screen, which is the intended answer rather than a special case.
+router.get("/mine/recipients", async (req, res) => {
+  try {
+    const db = await getDb();
+    const { recipientsWithCapabilityFor } = require("../utils/access");
+    const { CAP } = require("../utils/capabilities");
+    // v1.107.2 — the Care Notes screen is for anyone who may do ANY of the four things on
+    // it, and it is told which. Julia (read+write notes, read+log visits) and Peggy (write
+    // notes, log visits, read nothing) both land here; this used to list only READ_NOTES, so a
+    // write-only helper had no screen at all and nobody could log a visit from caregiver mode.
+    const [rn, wn, rv, wv] = await Promise.all([
+      recipientsWithCapabilityFor(db, req.user.id, CAP.READ_NOTES),
+      recipientsWithCapabilityFor(db, req.user.id, CAP.WRITE_NOTES),
+      recipientsWithCapabilityFor(db, req.user.id, CAP.READ_VISITS),
+      recipientsWithCapabilityFor(db, req.user.id, CAP.WRITE_VISITS),
+    ]);
+    const ids = (list) => new Set(list.map((r) => r.id));
+    const [RN, WN, RV, WV] = [ids(rn), ids(wn), ids(rv), ids(wv)];
+    const byId = new Map();
+    for (const r of [...rn, ...wn, ...rv, ...wv]) if (!byId.has(r.id)) byId.set(r.id, r);
+    const recipients = [...byId.values()].sort((a, b) => String(a.first_name).localeCompare(String(b.first_name)));
+    res.json({
+      recipients: recipients.map((r) => ({
+        id: r.id, firstName: r.first_name, lastName: r.last_name, timezone: r.timezone,
+        canReadNotes: RN.has(r.id),
+        canWriteNotes: WN.has(r.id),
+        canReadVisits: RV.has(r.id),
+        canWriteVisits: WV.has(r.id),
+      })),
+    });
+  } catch (err) {
+    captureException(err, { where: "notes: mine/recipients" });
+    console.error("Notes recipients error:", err.message);
+    res.status(500).json({ error: "Could not load your care recipients" });
+  }
+});
+
+router.get("/:careRecipientId", async (req, res) => {
+  const db = await getDb();
+  const recipientId = req.params.careRecipientId;
+
+  // v1.107.2 — capability, not share level: see utils/noteVisibility noteAccess().
+  const na = await noteAccess(db, recipientId, req.user.id);
+  if (!na.read) {
+    return res.status(403).json({ error: "Not authorized to view notes for this care recipient" });
+  }
+  const { sql: filterSql, params: filterParams } = na.filter;
+
+  const notes = await db.prepare(`
+    SELECT rn.id, rn.care_recipient_id, rn.author_id, rn.content, rn.note_type,
+           rn.needs_attention, rn.categories, rn.ai_highlights,
+           (rn.photo IS NOT NULL) AS has_photo,
+           rn.created_at, rn.updated_at,
+           u.first_name AS author_first_name, u.last_name AS author_last_name, u.role AS author_role
+    FROM recipient_notes rn
+    JOIN users u ON rn.author_id = u.id
+    WHERE rn.care_recipient_id = ?${filterSql}
+    ORDER BY rn.created_at DESC
+  `).all(recipientId, ...filterParams);
+
+  // v1.105.170 — reactions ride along with the notes, in ONE query for the whole list.
+  // They are loaded AFTER the visibility filter above, so a reaction can never appear on a
+  // note this reader is not allowed to see — the filter is the only place that decision is
+  // made, and adding a second one here is how the two drift apart.
+  res.json({
+    notes: await attachReactions(db, "note", notes.map((n) => ({
+      ...n,
+      categories: safeJson(n.categories, []),
+      ai_highlights: safeJson(n.ai_highlights, null),
+    }))),
+  });
+});
+
+// POST /api/notes — create a note
+router.post("/", async (req, res) => {
+  // v1.103.2 — the whole handler is wrapped: an unhandled async throw in
+  // Express 4 leaves the request HANGING (the client just spins forever).
+  try {
+  const db = await getDb();
+  const { careRecipientId, content, noteType = "general", offlineTimestamp, offlineSync, needsAttention, photo, careEventId } = req.body;
+
+  if (!careRecipientId || !content) {
+    return res.status(400).json({ error: "careRecipientId and content required" });
+  }
+  if (String(content).length > 5000) {
+    return res.status(400).json({ error: "Note is too long (5,000 characters max)" });
+  }
+  if (!["general", "observation", "visit_summary"].includes(noteType)) {
+    return res.status(400).json({ error: "Invalid note type" });
+  }
+  // v1.76.0 — optional photo (e.g. the toe that might be broken)
+  let photoData = null;
+  if (photo) {
+    const m = typeof photo === "string" && photo.match(/^data:([^;]+);base64,(.+)$/s);
+    if (!m) return res.status(400).json({ error: "Photo must be a base64 data URI" });
+    const mime = m[1].toLowerCase();
+    if (!["image/jpeg", "image/png", "image/webp"].includes(mime)) {
+      return res.status(400).json({ error: "Photo must be JPEG, PNG, or WebP" });
+    }
+    const buf = Buffer.from(m[2], "base64");
+    if (buf.length > 5 * 1024 * 1024) return res.status(400).json({ error: "Photo too large (5MB max)" });
+    const magic = validateMagicBytes(buf, mime);
+    if (!magic.valid) return res.status(400).json({ error: "Photo content does not match its type" });
+    // v1.106.8 — to R2 when configured, unchanged base64 when not. Every reader already
+    // goes through storage.resolveFileData, so both shapes read the same.
+    photoData = await storage.storeFileData("note-photo", photo);
+  }
+
+  // v1.107.2 — write_notes, or the care recipient on a full/collaborative account.
+  const na = await noteAccess(db, careRecipientId, req.user.id);
+  if (!na.write) {
+    return res.status(403).json({ error: "Not authorized to add notes for this care recipient" });
+  }
+
+  // Use offline timestamp if provided (caregiver was offline and recorded locally)
+  const isOfflineSync = !!offlineSync;
+  if (isOfflineSync) {
+    console.log(`[notes] Offline sync — original time: ${offlineTimestamp}, recipient ${careRecipientId.slice(0, 8)}`);
+  }
+
+  // v1.106.30 — a note can be ABOUT an appointment. Pete: "I'm going to Betty's doctors
+  // appointment today and I would like to be able to leave notes like the doctor said mom
+  // should do this or that and this is the new medication. Otherwise, the only thing that
+  // [iPAi] knows is that an appointment happened."
+  //
+  // It stays a note in the care record — same table, same team push, same iPAi categoriser —
+  // and only carries which appointment it came from. Verified against the SAME recipient, so
+  // an event id cannot be used to attach a note to a person the caller has no access to.
+  let linkedEventId = null;
+  if (careEventId) {
+    const ev = await db.prepare("SELECT id, care_recipient_id FROM care_events WHERE id = ?").get(careEventId);
+    if (!ev || ev.care_recipient_id !== careRecipientId) {
+      return res.status(400).json({ error: "That appointment does not belong to this care recipient" });
+    }
+    linkedEventId = ev.id;
+  }
+
+  const id = uuid();
+  const createdAtSQL = isOfflineSync && offlineTimestamp
+    ? `'${new Date(offlineTimestamp).toISOString()}'`
+    : 'NOW()';
+  await db.prepare(`
+    INSERT INTO recipient_notes (id, care_recipient_id, author_id, content, note_type, needs_attention, photo, care_event_id, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ${createdAtSQL})
+  `).run(id, careRecipientId, req.user.id, content, noteType, needsAttention ? 1 : 0, photoData, linkedEventId);
+
+  // v1.76.0 — harvest structure from observations (non-blocking; chips appear when done)
+  if (noteType === "observation" || noteType === "general") {
+    try {
+      const { categorizeObservation } = require("../utils/careIntelligence");
+      categorizeObservation(id).catch((e) => captureException(e, { where: "notes: categorize" }));
+    } catch (e) { captureException(e, { where: "notes: categorize require" }); }
+  }
+
+  // ─── v1.96.0 — every new note pings the whole care team (Pete's 7/12 feedback) ───
+  // Urgent notes get the ⚠️ variant, photo notes the 📷 variant. The author is
+  // never notified about their own note. Per-user opt-out via notification_prefs
+  // (push_team_note; urgent notes use the pre-existing push_observation_attention).
+  try {
+    const cr = await db.prepare("SELECT family_user_id, first_name FROM care_recipients WHERE id = ?").get(careRecipientId);
+    if (cr) {
+      const author = await db.prepare("SELECT first_name, last_name FROM users WHERE id = ?").get(req.user.id);
+      const authorName = author ? `${author.first_name} ${author.last_name}` : "A team member";
+
+      // v1.105.81 — only people who can READ a note are told one exists. This used to be
+      // every care_team_member, which with per-invitation capabilities means a helper who was
+      // deliberately denied the care record still got "New note — Betty" for a note she
+      // cannot open. Useless to her, and it leaks that something was written and about whom.
+      const { usersWithCapability } = require("../utils/access");
+      const { CAP } = require("../utils/capabilities");
+      const notifyIds = new Set(await usersWithCapability(db, careRecipientId, CAP.READ_NOTES));
+      notifyIds.delete(req.user.id); // never notify the author
+
+      // ─── v1.105.182 — Activity is the PAST, and a note left no trace in it ───
+      //
+      // Pete, twice: "i don't see debbie's added note anywhere on activity. why does this keep
+      // dropping?"
+      //
+      // Because the Activity card renders `notifications.filter(n => !n.read)` plus a tail from
+      // `activity_feed` — and a note wrote a notification but never an activity_feed row. So a
+      // note appeared in Activity only while its notification was UNREAD, and vanished the
+      // moment he opened it. Reading the thing was what deleted the record of it.
+      //
+      // v1.105.176 grouped message notifications so notes were not crowded out of the fetch.
+      // That was real, and it was the wrong layer: the card filters messages out anyway, and
+      // no amount of room in the list keeps a row that is deleted on read.
+      //
+      // One row keyed on the RECIPIENT, so everyone with access sees it — including the author,
+      // which the notification path can never do (you are never pushed your own note) and which
+      // Pete asked for by name: "Including my own."
+      //
+      // No excerpt. recipient_notes.content is PHI and this renders on a dashboard; the title
+      // says a note exists and tapping it goes to the note. Same rule as the push.
+      try {
+        await db.prepare(
+          "INSERT INTO activity_feed (id, family_user_id, care_recipient_id, event_type, title, message, metadata) VALUES (?, ?, ?, ?, ?, ?, ?)"
+        ).run(uuid(), cr.family_user_id, careRecipientId,
+          needsAttention ? "observation_attention" : "team_note",
+          needsAttention
+            ? `⚠️ ${authorName} flagged something about ${cr.first_name}`
+            : `${authorName} added a note about ${cr.first_name}`,
+          null,
+          JSON.stringify({ type: needsAttention ? "observation_attention" : "team_note", careRecipientId, noteId: id, page: "care-profile" })
+        );
+      } catch (e) { captureException(e, { where: "notes: activity row" }); }
+
+      const title = needsAttention
+        ? `⚠️ Needs attention — ${cr.first_name}`
+        : photoData
+          ? `📷 New photo note — ${cr.first_name}`
+          : `New note — ${cr.first_name}`;
+      const eventType = needsAttention ? "observation_attention" : "team_note";
+      const { sendPushToUser } = require("./push");
+      for (const userId of notifyIds) {
+        // v1.105.39 — the note itself never leaves the app. recipient_notes.content is
+        // marked /* PHI */ in the schema, and a push body renders on a LOCKED screen:
+        // "confused about where she was, wouldn't take her evening pill" was readable by
+        // anyone who picked up the phone. Pete: "no phi on lock screens."
+        sendPushToUser(userId, {
+          title,
+          body: `${authorName} — tap to read`,
+          tag: `note-${id.slice(0, 8)}`,
+          data: { type: eventType, careRecipientId, noteId: id, page: "care-profile" },
+        }, eventType).catch(() => {});
+      }
+    }
+  } catch (e) { captureException(e, { where: "notes: team push" }); }
+
+  const note = await readNoteForResponse(db, id);
+  res.status(201).json({ note });
+  } catch (err) {
+    captureException(err, { where: "notes: create" });
+    console.error("Note create error:", err.message);
+    res.status(500).json({ error: "Failed to add note" });
+  }
+});
+
+// GET /api/notes/:id/photo — stream a note's photo (same access + visibility rules)
+router.get("/:id/photo", async (req, res) => {
+  try {
+    const db = await getDb();
+    const note = await db.prepare("SELECT care_recipient_id, author_id, note_type, photo FROM recipient_notes WHERE id = ?").get(req.params.id);
+    if (!note || !note.photo) return res.status(404).json({ error: "Photo not found" });
+    const na = await noteAccess(db, note.care_recipient_id, req.user.id);
+    if (!noteRowReadable(na, note)) return res.status(404).json({ error: "Photo not found" });
+    // v1.106.3 — never echo the stored mime; see src/utils/serveMedia.js.
+    return await sendStoredFile(res, note.photo, { allow: IMAGE_MIMES, filename: "note-photo" });
+  } catch (err) {
+    captureException(err, { where: "notes: photo" });
+    res.status(500).json({ error: "Failed to load photo" });
+  }
+});
+
+// PUT /api/notes/:id — edit a note (author or family owner can edit)
+router.put("/:id", async (req, res) => {
+  const db = await getDb();
+  const { content, noteType } = req.body;
+
+  const existing = await db.prepare("SELECT * FROM recipient_notes WHERE id = ?").get(req.params.id);
+  if (!existing) return res.status(404).json({ error: "Note not found" });
+
+  // v1.105.35 — this used to read "author, OR anyone holding the family role", which is
+  // every family user on the platform, on every note about every recipient. The correct
+  // helper was already defined 230 lines above and used by the GET on this same router.
+  // v1.107.2 — your own note while you still may write here, or anyone's with manage.
+  const na = await noteAccess(db, existing.care_recipient_id, req.user.id);
+  const canEdit = na.manage || (na.write && existing.author_id === req.user.id);
+  if (!canEdit) {
+    return res.status(403).json({ error: "Not authorized to edit this note" });
+  }
+
+  await db.prepare(`
+    UPDATE recipient_notes SET content = COALESCE(?, content), note_type = COALESCE(?, note_type), updated_at = NOW()
+    WHERE id = ?
+  `).run(content, noteType, req.params.id);
+
+  const note = await readNoteForResponse(db, req.params.id);
+  res.json({ note });
+});
+
+// DELETE /api/notes/:id — delete a note
+router.delete("/:id", async (req, res) => {
+  const db = await getDb();
+  const existing = await db.prepare("SELECT * FROM recipient_notes WHERE id = ?").get(req.params.id);
+  if (!existing) return res.status(404).json({ error: "Note not found" });
+
+  // v1.105.35 — same fix as the edit above: scoped to this recipient, not to the role.
+  const na = await noteAccess(db, existing.care_recipient_id, req.user.id);
+  const canDelete = na.manage || (na.write && existing.author_id === req.user.id);
+  if (!canDelete) {
+    return res.status(403).json({ error: "Not authorized" });
+  }
+
+  await db.prepare("DELETE FROM recipient_notes WHERE id = ?").run(req.params.id);
+  res.json({ success: true });
+});
+
+// v1.107.2 — never `rn.*` in a response: that shipped the stored photo (an r2: marker, or a
+// legacy base64 blob) back to the client, which drew the marker as an <img src>.
+async function readNoteForResponse(db, id) {
+  const n = await db.prepare(`
+    SELECT rn.id, rn.care_recipient_id, rn.author_id, rn.content, rn.note_type, rn.needs_attention,
+           rn.categories, rn.ai_highlights, rn.care_event_id, (rn.photo IS NOT NULL) AS has_photo,
+           rn.created_at, rn.updated_at,
+           u.first_name AS author_first_name, u.last_name AS author_last_name, u.role AS author_role
+    FROM recipient_notes rn JOIN users u ON rn.author_id = u.id WHERE rn.id = ?
+  `).get(id);
+  if (!n) return n;
+  return { ...n, categories: safeJson(n.categories, []), ai_highlights: safeJson(n.ai_highlights, null) };
+}
+
+module.exports = router;

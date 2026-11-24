@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bottom Nav Options — InPlace</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #2b2f36; color: #eee; margin: 0; padding: 28px 16px 60px; }
+  h1 { text-align: center; font-size: 20px; font-weight: 700; }
+  p.sub { text-align: center; color: #aab; font-size: 13px; max-width: 640px; margin: 6px auto 30px; }
+  .row { display: flex; gap: 28px; justify-content: center; flex-wrap: wrap; }
+  .option { text-align: center; }
+  .option h2 { font-size: 14px; font-weight: 700; color: #fff; margin: 0 0 2px; }
+  .option p { font-size: 11.5px; color: #aab; max-width: 250px; margin: 0 auto 12px; line-height: 1.45; }
+  .phone { width: 260px; height: 240px; background: #f8f9fa; border-radius: 0 0 34px 34px; border: 7px solid #111;
+           border-top: none; position: relative; overflow: hidden; margin: 0 auto; box-shadow: 0 10px 30px rgba(0,0,0,.45); }
+  .content { position: absolute; inset: 0; padding: 12px; font-size: 11px; color: #666; }
+  .card { background: #fff; border: 1px solid #e4e4e4; border-radius: 10px; padding: 10px; margin-bottom: 8px; }
+  .indicator { position: absolute; bottom: 7px; left: 50%; transform: translateX(-50%); width: 96px; height: 4px;
+               background: #111; border-radius: 3px; z-index: 60; opacity: .85; }
+  .nav { position: absolute; left: 0; right: 0; bottom: 0; display: flex; justify-content: space-around; align-items: flex-start;
+         background: #fff; border-top: 1px solid #e2e2e2; box-shadow: 0 -2px 8px rgba(0,0,0,.06); z-index: 50; }
+  .item { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; color: #888; font-size: 8.5px; font-weight: 500; }
+  .item .ic { font-size: 17px; line-height: 1; }
+  .item.active { color: #1b6b5a; }
+  /* A — tinted inset: bar + inset are ONE surface, labels sit lower into it */
+  .nav.a { padding: 6px 2px 24px; background: linear-gradient(#ffffff, #f4f6f5 78%); }
+  /* B — icons only, active shows label */
+  .nav.b { padding: 8px 2px 20px; }
+  .nav.b .ic { font-size: 21px; }
+  .nav.b .lbl { display: none; }
+  .nav.b .active .lbl { display: block; font-size: 8px; }
+  /* C — current layout, deeper dip (13px clearance only) */
+  .nav.c { padding: 5px 2px 13px; }
+  .note { font-size: 10px; color: #99a; margin-top: 8px; }
+</style>
+</head>
+<body>
+  <h1>Bottom Nav — three ways to kill the white slab</h1>
+  <p class="sub">Same six tabs, same home-indicator clearance rules, three treatments of the safe-area zone.
+     The black pill is the iPhone home indicator. Pick one, mix them, or reject all three.</p>
+  <div class="row">
+
+    <div class="option">
+      <h2>A · Tinted inset</h2>
+      <p>The inset stops being "white space below the bar" and becomes the bottom of the bar itself —
+         a soft tint gradient fills it. Labels stay where they are. Feels like iOS-native tab bars.</p>
+      <div class="phone">
+        <div class="content"><div class="card">Betty Lee · Care team</div><div class="card">Next up: no sessions</div></div>
+        <div class="nav a">
+          <div class="item active"><span class="ic">🏠</span><span class="lbl">Home</span></div>
+          <div class="item"><span class="ic">🌷</span><span class="lbl">Loved One</span></div>
+          <div class="item"><span class="ic">🤝</span><span class="lbl">Caregivers</span></div>
+          <div class="item"><span class="ic">💬</span><span class="lbl">Messages</span></div>
+          <div class="item"><span class="ic">👤</span><span class="lbl">Account</span></div>
+          <div class="item"><span class="ic">🛡️</span><span class="lbl">Admin</span></div>
+        </div>
+        <div class="indicator"></div>
+      </div>
+      <div class="note">Height unchanged — perception fix, zero risk</div>
+    </div>
+
+    <div class="option">
+      <h2>B · Icons only</h2>
+      <p>Labels dropped except on the active tab. Bigger icons, ~30% shorter bar, most content space.
+         Riskier for elderly users who rely on the words — worth testing with Debbie/Sara.</p>
+      <div class="phone">
+        <div class="content"><div class="card">Betty Lee · Care team</div><div class="card">Next up: no sessions</div><div class="card">Recent visit photos</div></div>
+        <div class="nav b">
+          <div class="item active"><span class="ic">🏠</span><span class="lbl">Home</span></div>
+          <div class="item"><span class="ic">🌷</span><span class="lbl">Loved One</span></div>
+          <div class="item"><span class="ic">🤝</span><span class="lbl">Caregivers</span></div>
+          <div class="item"><span class="ic">💬</span><span class="lbl">Messages</span></div>
+          <div class="item"><span class="ic">👤</span><span class="lbl">Account</span></div>
+          <div class="item"><span class="ic">🛡️</span><span class="lbl">Admin</span></div>
+        </div>
+        <div class="indicator"></div>
+      </div>
+      <div class="note">Shortest bar — a11y tradeoff on labels</div>
+    </div>
+
+    <div class="option">
+      <h2>C · Deeper dip</h2>
+      <p>Keep labels, cut the clearance to the true minimum (~13px above the indicator).
+         The v1.74.3 trim went halfway; this goes the rest. Cheapest change, still some white below.</p>
+      <div class="phone">
+        <div class="content"><div class="card">Betty Lee · Care team</div><div class="card">Next up: no sessions</div><div class="card">Recent visit photos</div></div>
+        <div class="nav c">
+          <div class="item active"><span class="ic">🏠</span><span class="lbl">Home</span></div>
+          <div class="item"><span class="ic">🌷</span><span class="lbl">Loved One</span></div>
+          <div class="item"><span class="ic">🤝</span><span class="lbl">Caregivers</span></div>
+          <div class="item"><span class="ic">💬</span><span class="lbl">Messages</span></div>
+          <div class="item"><span class="ic">👤</span><span class="lbl">Account</span></div>
+          <div class="item"><span class="ic">🛡️</span><span class="lbl">Admin</span></div>
+        </div>
+        <div class="indicator"></div>
+      </div>
+      <div class="note">One-line CSS change from today's state</div>
+    </div>
+
+  </div>
+  <p class="sub" style="margin-top: 26px">My recommendation: <b>A + C combined</b> — tint the inset so it reads as part of the bar,
+     and take the last 9px of dip. B only if you want maximum content space and your testers can live without labels.</p>
+</body>
+</html>

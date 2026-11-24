@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Appointment Tile — Before / After Mockup</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f5f5f5; padding: 24px; }
+  h1 { font-size: 22px; color: #1b6b5a; margin-bottom: 6px; }
+  h2 { font-size: 16px; color: #666; margin-bottom: 16px; font-weight: 500; }
+  .section-label { font-size: 13px; font-weight: 700; color: #999; text-transform: uppercase; letter-spacing: 1px; margin: 32px 0 12px; }
+  .columns { display: flex; gap: 24px; flex-wrap: wrap; }
+  .col { flex: 1; min-width: 320px; max-width: 500px; }
+
+  .card {
+    background: #fff; border-radius: 12px; padding: 16px 18px; margin-bottom: 12px;
+    border: 1px solid #e0e0e0; box-shadow: 0 1px 4px rgba(0,0,0,0.06); cursor: pointer;
+    transition: box-shadow 0.15s;
+  }
+  .card:hover { box-shadow: 0 2px 12px rgba(0,0,0,0.1); }
+  .card.ready { border: 2px solid #e8724a; background: linear-gradient(135deg, #fff3e0 0%, #fff 100%); box-shadow: 0 2px 12px rgba(232,114,74,0.15); }
+
+  .tag { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 600; margin-right: 4px; margin-bottom: 3px; }
+  .tag-health { background: #fff3e0; color: #e65100; }
+  .tag-green { background: #e8f5e9; color: #2e7d32; }
+  .tag-teal { background: #f0faf8; color: #1b6b5a; }
+  .tag-blue { background: #e3f2fd; color: #1565c0; }
+  .tag-status { padding: 5px 12px; border-radius: 10px; font-size: 11px; font-weight: 600; }
+
+  .label-ready { font-size: 11px; font-weight: 700; color: #e8724a; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 3px; }
+  .name { font-size: 15px; font-weight: 600; color: #333; }
+  .meta { font-size: 13px; color: #666; margin-top: 2px; }
+  .location { font-size: 12px; color: #888; margin-top: 2px; }
+  .instructions { font-size: 12px; color: #555; margin-top: 4px; font-style: italic; }
+  .payout { font-size: 20px; font-weight: 800; color: #1b6b5a; }
+
+  .btn { padding: 10px 22px; color: #fff; border: none; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+  .btn-checkin { background: #e8724a; box-shadow: 0 2px 8px rgba(232,114,74,0.3); }
+  .btn-profile { margin-top: 8px; padding: 4px 10px; background: transparent; border: 1px solid #ddd; border-radius: 6px; font-size: 11px; font-weight: 600; color: #1b6b5a; cursor: pointer; }
+
+  .new-badge { display: inline-block; background: #e8724a; color: #fff; font-size: 9px; font-weight: 700; padding: 1px 6px; border-radius: 6px; margin-left: 6px; vertical-align: middle; }
+
+  /* NEW: care-needs strip */
+  .care-needs-strip {
+    display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px;
+  }
+  /* NEW: notes preview */
+  .notes-preview {
+    margin-top: 8px; padding: 8px 10px; background: #fafafa; border-left: 3px solid #e8724a;
+    border-radius: 4px; font-size: 12px; color: #555; line-height: 1.4;
+  }
+  .notes-label { font-weight: 600; color: #e8724a; font-size: 11px; margin-bottom: 2px; }
+
+  /* NEW: expanded detail */
+  .expanded-detail {
+    margin-top: 12px; padding-top: 12px; border-top: 1px solid #eee;
+    font-size: 12px; line-height: 1.5;
+  }
+  .detail-row { margin-bottom: 6px; }
+  .detail-label { font-weight: 600; color: #333; }
+  .mood-badge { font-size: 11px; color: #666; margin-right: 6px; }
+  .feedback-block {
+    margin-top: 8px; padding: 8px 10px; background: #f0faf8; border-radius: 6px;
+    font-size: 11px; color: #555;
+  }
+  .feedback-header { font-weight: 600; color: #1b6b5a; font-size: 11px; margin-bottom: 4px; }
+  .strikethrough { text-decoration: line-through; color: #bbb; }
+</style>
+</head>
+<body>
+
+<h1>Appointment Tile Redesign</h1>
+<h2>Cary's feedback: "I want more info when I tap tiles — care needs, notes, feedback"</h2>
+
+<div class="columns">
+
+<!-- ─── CURRENT (BEFORE) ─── -->
+<div class="col">
+  <div class="section-label">Current — Before</div>
+
+  <div class="card ready">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+      <div style="flex:1;min-width:180px">
+        <div class="label-ready">Ready to Check In</div>
+        <div class="name">Betty Lee</div>
+        <div class="meta">Today at 2:00 PM • 3hr • Companionship</div>
+        <div class="location">📍 123 Oak St, Blacksburg, VA</div>
+        <div class="instructions">"Mom likes her tea at 3pm, Earl Grey with honey"</div>
+        <button class="btn-profile">View Care Profile</button>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">
+        <div class="payout">$72.00</div>
+        <button class="btn btn-checkin">Check In Now</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+      <div style="flex:1;min-width:180px">
+        <div class="name">Tony Nav</div>
+        <div class="meta">Mar 10 at 9:00 AM • 4hr • Personal Care</div>
+        <div class="location">📍 456 Elm Ave, Blacksburg, VA</div>
+        <button class="btn-profile">View Care Profile</button>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">
+        <div class="payout">$120.00</div>
+        <span class="tag-status" style="background:#e8f5e9;color:#2e7d32">Confirmed</span>
+      </div>
+    </div>
+  </div>
+
+  <div style="margin-top: 16px; padding: 16px; background: #fff8f0; border-radius: 10px; border: 1px dashed #e8724a;">
+    <div style="font-size: 13px; font-weight: 600; color: #e8724a; margin-bottom: 4px;">What's missing (Cary's feedback)</div>
+    <ul style="font-size: 12px; color: #555; padding-left: 18px; line-height: 1.8;">
+      <li>Can't see <b>care needs</b> (health conditions, what tasks to do) at a glance</li>
+      <li>No <b>notes from care team</b> visible without expanding</li>
+      <li>No <b>past feedback</b> or visit history visible</li>
+      <li>Have to click "View Care Profile" just to get basics</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ─── PROPOSED (AFTER) ─── -->
+<div class="col">
+  <div class="section-label">Proposed — After <span class="new-badge">NEW</span></div>
+
+  <div class="card ready">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+      <div style="flex:1;min-width:180px">
+        <div class="label-ready">Ready to Check In</div>
+        <div class="name">Betty Lee</div>
+        <div class="meta">Today at 2:00 PM • 3hr • Companionship</div>
+        <div class="location">📍 123 Oak St, Blacksburg, VA</div>
+
+        <!-- NEW: Care needs at a glance -->
+        <div class="care-needs-strip">
+          <span class="tag tag-health">Dementia (early)</span>
+          <span class="tag tag-health">Arthritis</span>
+          <span class="tag tag-teal">Companionship</span>
+          <span class="tag tag-teal">Meal Prep</span>
+        </div>
+
+        <!-- NEW: Care team notes preview (always visible) -->
+        <div class="notes-preview">
+          <div class="notes-label">📋 Care Team Notes</div>
+          Mom likes her tea at 3pm, Earl Grey with honey. She may resist taking her 2pm medication — be gentle but persistent.
+        </div>
+
+        <button class="btn-profile" style="margin-top:6px">▼ Tap for full details</button>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">
+        <div class="payout">$72.00</div>
+        <button class="btn btn-checkin">Check In Now</button>
+      </div>
+    </div>
+
+    <!-- NEW: Expanded detail (shown on tap) -->
+    <div class="expanded-detail">
+      <div class="detail-row">
+        <span class="detail-label">Health: </span>
+        <span class="tag tag-health">Early-stage dementia</span>
+        <span class="tag tag-health">Mild arthritis</span>
+      </div>
+      <div class="detail-row">
+        <span class="detail-label">Medications: </span>
+        <span style="color:#666">Donepezil 10mg (morning), Ibuprofen as needed</span>
+      </div>
+      <div class="detail-row">
+        <span class="detail-label" style="color:#c62828">⚠ Allergies: </span>
+        <span style="color:#c62828">Penicillin</span>
+      </div>
+      <div class="detail-row">
+        <span class="detail-label">Recent moods: </span>
+        <span class="mood-badge">😊→😊</span>
+        <span class="mood-badge">😊→😐</span>
+        <span class="mood-badge">😊→😊</span>
+      </div>
+      <div class="feedback-block">
+        <div class="feedback-header">💬 Last visit feedback (Feb 28)</div>
+        "Betty had a great afternoon. We did a puzzle together and she was very engaged. Reminded about 2pm meds — took them with applesauce."
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+      <div style="flex:1;min-width:180px">
+        <div class="name">Tony Nav</div>
+        <div class="meta">Mar 10 at 9:00 AM • 4hr • Personal Care</div>
+        <div class="location">📍 456 Elm Ave, Blacksburg, VA</div>
+
+        <!-- NEW: Care needs at a glance -->
+        <div class="care-needs-strip">
+          <span class="tag tag-health">Mobility limited</span>
+          <span class="tag tag-teal">Bathing</span>
+          <span class="tag tag-teal">Dressing</span>
+          <span class="tag tag-teal">Transfer</span>
+        </div>
+
+        <!-- NEW: Notes preview -->
+        <div class="notes-preview">
+          <div class="notes-label">📋 Care Team Notes</div>
+          Tony uses a walker. His daughter will let you in — ring the doorbell twice.
+        </div>
+
+        <button class="btn-profile" style="margin-top:6px">▼ Tap for full details</button>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">
+        <div class="payout">$120.00</div>
+        <span class="tag-status" style="background:#e8f5e9;color:#2e7d32">Confirmed</span>
+      </div>
+    </div>
+  </div>
+
+  <div style="margin-top: 16px; padding: 16px; background: #f0faf8; border-radius: 10px; border: 1px dashed #1b6b5a;">
+    <div style="font-size: 13px; font-weight: 600; color: #1b6b5a; margin-bottom: 4px;">What's new</div>
+    <ul style="font-size: 12px; color: #555; padding-left: 18px; line-height: 1.8;">
+      <li><b>Care needs tags</b> shown at a glance (health + requested tasks)</li>
+      <li><b>Care team notes</b> always visible on the tile</li>
+      <li><b>Full details on tap:</b> medications, allergies, recent moods</li>
+      <li><b>Last visit feedback</b> shown in expanded view</li>
+      <li>Address still hidden until session is accepted ✓</li>
+    </ul>
+  </div>
+</div>
+
+</div>
+
+</body>
+</html>

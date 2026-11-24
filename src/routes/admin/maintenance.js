@@ -1,0 +1,502 @@
+// Split out of routes/admin.js (v1.92.0, tier-2 #3 — zero behavior change).
+// Route bodies are verbatim; registration ORDER across modules is preserved by
+// ./index.js. Shared state (passkey challenge store, helpers) lives in ./shared.js.
+const { v4: uuid } = require("uuid");
+const { getDb } = require("../../models/database");
+const { authenticate, requireAdmin } = require("../../middleware/auth");
+const { captureException } = require("../../utils/sentry");
+const { activeVouchesFor } = require("../../utils/vouches");
+const { sendVerificationEmail } = require("../auth");
+const {
+  generateAuthenticationOptions,
+  verifyAuthenticationResponse,
+} = require("@simplewebauthn/server");
+const { isTrustedIp, registerTrustedIp, getTrustedIps, removeTrustedIp } = require("../../utils/trustedIps");
+const { getClientIp, writeAuditLog } = require("../../middleware/auditLog");
+const {
+  RP_ID, ORIGIN,
+  setPasskeyChallenge, getPasskeyChallenge, setNukeChallenge, getNukeChallenge,
+  NOT_DEMO_SESSION, safeJson, logAdminAction, checkAdmin,
+} = require("./shared");
+
+module.exports = function register(router) {
+
+// ═══════════════════════════════════════════════════════════
+// GET /api/admin/backup — Download full database backup as SQL
+// Admin-only. Returns a .sql file with all table data.
+// ═══════════════════════════════════════════════════════════
+router.get("/backup", authenticate, requireAdmin, async (req, res) => {
+  try {
+    const db = await getDb();
+    const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+    const filename = `inplace-backup-${timestamp}.sql`;
+
+    // Get all table names
+    const tables = await db.prepare(`
+      SELECT tablename FROM pg_tables WHERE schemaname = 'public' ORDER BY tablename
+    `).all();
+
+    let sql = `-- InPlace Database Backup\n-- Generated: ${new Date().toISOString()}\n-- Tables: ${tables.length}\n\n`;
+
+    for (const { tablename } of tables) {
+      // Get column info
+      const cols = await db.prepare(`
+        SELECT column_name, data_type FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = ?
+        ORDER BY ordinal_position
+      `).all(tablename);
+
+      const colNames = cols.map(c => c.column_name);
+
+      // Get all rows
+      const rows = await db.prepare(`SELECT * FROM "${tablename}"`).all();
+
+      sql += `-- Table: ${tablename} (${rows.length} rows)\n`;
+
+      if (rows.length > 0) {
+        for (const row of rows) {
+          const values = colNames.map(col => {
+            const val = row[col];
+            if (val === null || val === undefined) return "NULL";
+            if (typeof val === "boolean") return val ? "TRUE" : "FALSE";
+            if (typeof val === "number") return String(val);
+            if (val instanceof Date) return `'${val.toISOString()}'`;
+            // Escape single quotes in strings
+            return `'${String(val).replace(/'/g, "''")}'`;
+          });
+          sql += `INSERT INTO "${tablename}" (${colNames.map(c => `"${c}"`).join(", ")}) VALUES (${values.join(", ")});\n`;
+        }
+      }
+      sql += "\n";
+    }
+
+    res.setHeader("Content-Type", "application/sql");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.send(sql);
+  } catch (err) {
+    console.error("Backup error:", err);
+    res.status(500).json({ error: "Backup failed: " + err.message });
+  }
+});
+
+// ─── POST /api/admin/backfill-assignments ───
+// One-time backfill: create caregiver_assignments for any caregiver who has
+// confirmed/completed sessions with a care recipient but no assignment record.
+router.post("/backfill-assignments", async (req, res) => {
+  try {
+    const db = await getDb();
+    // Find caregiver+recipient+family combos with sessions but no assignment
+    const missing = await db.prepare(`
+      SELECT DISTINCT cs.caregiver_id AS caregiver_profile_id,
+        cs.care_recipient_id, cs.family_user_id
+      FROM care_sessions cs
+      WHERE cs.caregiver_id IS NOT NULL
+        AND cs.status IN ('confirmed', 'in_progress', 'completed')
+        AND NOT EXISTS (
+          SELECT 1 FROM caregiver_assignments ca
+          WHERE ca.caregiver_profile_id = cs.caregiver_id
+            AND ca.care_recipient_id = cs.care_recipient_id
+            AND ca.family_user_id = cs.family_user_id
+        )
+    `).all();
+
+    let created = 0;
+    for (const row of missing) {
+      await db.prepare(`
+        INSERT INTO caregiver_assignments (id, care_recipient_id, family_user_id, caregiver_profile_id, is_active, is_favorite)
+        VALUES (?, ?, ?, ?, 1, 0)
+      `).run(uuid(), row.care_recipient_id, row.family_user_id, row.caregiver_profile_id);
+      created++;
+      console.log(`[backfill] Created assignment: caregiver ${row.caregiver_profile_id.slice(0,8)} → recipient ${row.care_recipient_id.slice(0,8)} (family ${row.family_user_id.slice(0,8)})`);
+    }
+
+    res.json({ success: true, created, missing: missing.length });
+  } catch (err) {
+    console.error("Backfill assignments error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── POST /api/admin/ledger/backfill-captures (v1.117.0) ───
+//
+// The ledger began at v1.109.0 (Sep 18). Visits settled by capturing their hold before that —
+// Tina's Sep 14–18, five of them — were paid in Stripe but have no ledger row and no `payments`
+// row, so Financials, Books and the person drawer cannot see them. Pete, 10/14: "correct the
+// records".
+//
+// The numbers come from STRIPE, never from estimated_cost: amount_received is what the family
+// paid, application_fee_amount is what InPlace kept, and the rest went to the caregiver's
+// Connect account. A row is dated when the money moved (payment_captured_at), not today, so
+// 30-day windows (care tools, Financials) are not distorted. `{ dryRun: true }` returns the plan
+// and writes nothing. Idempotent: the (stripe_payment_intent, kind) unique index refuses a
+// second row, and a session that has one is not selected again.
+router.post("/ledger/backfill-captures", async (req, res) => {
+  try {
+    const db = await getDb();
+    const dryRun = !!(req.body && req.body.dryRun);
+    const missing = await db.prepare(`
+      SELECT cs.id, cs.status, cs.stripe_payment_intent_id, cs.caregiver_id, cs.care_recipient_id,
+             cs.family_user_id, cs.scheduled_date,
+             COALESCE(cs.payment_captured_at, cs.completed_at, cs.updated_at) AS paid_at,
+             (SELECT ct.billing_user_id FROM care_teams ct WHERE ct.care_recipient_id = cs.care_recipient_id
+                AND ct.billing_user_id IS NOT NULL LIMIT 1) AS billing_user_id
+        FROM care_sessions cs
+        JOIN users fu ON fu.id = cs.family_user_id
+       WHERE cs.payment_status = 'paid'
+         AND cs.stripe_payment_intent_id IS NOT NULL
+         AND COALESCE(fu.is_demo, 0) = 0
+         AND NOT EXISTS (SELECT 1 FROM ledger_entries le WHERE le.session_id = cs.id
+                           AND le.kind IN ('capture', 'autopay', 'checkout', 'cancel_fee'))
+         AND NOT EXISTS (SELECT 1 FROM payments p WHERE p.session_id = cs.id AND p.status = 'completed')
+       ORDER BY cs.scheduled_date
+    `).all();
+
+    const { getStripe } = require("../accountability");
+    const stripe = getStripe();
+    const plan = [];
+    for (const s of missing) {
+      let pi;
+      try { pi = await stripe.paymentIntents.retrieve(s.stripe_payment_intent_id); }
+      catch (e) { plan.push({ sessionId: s.id, date: s.scheduled_date, skipped: `Stripe: ${e.message}` }); continue; }
+      if (!pi || pi.status !== "succeeded" || !(Number(pi.amount_received) > 0)) {
+        plan.push({ sessionId: s.id, date: s.scheduled_date, skipped: `payment intent is ${pi && pi.status}` });
+        continue;
+      }
+      const familyCents = Math.round(Number(pi.amount_received));
+      const platformCents = pi.application_fee_amount != null
+        ? Math.min(Math.round(Number(pi.application_fee_amount)), familyCents) : familyCents;
+      const toCaregiver = !!(pi.transfer_data && pi.transfer_data.destination);
+      const caregiverCents = toCaregiver ? familyCents - platformCents : 0;
+      const kind = s.status === "cancelled" ? "cancel_fee" : "capture";
+      plan.push({ sessionId: s.id, date: s.scheduled_date, kind, familyCents, caregiverCents, platformCents,
+        paidAt: s.paid_at, paymentIntent: pi.id });
+      if (dryRun) continue;
+      await db.prepare(`
+        INSERT INTO ledger_entries
+          (id, session_id, care_recipient_id, kind, status, family_user_id, caregiver_id,
+           family_cents, caregiver_cents, platform_cents, card_fee_cents, stripe_payment_intent, breakdown, created_at)
+        VALUES (?, ?, ?, ?, 'succeeded', ?, ?, ?, ?, ?, 0, ?, ?, ?)
+        ON CONFLICT DO NOTHING
+      `).run(uuid(), s.id, s.care_recipient_id, kind, s.billing_user_id || s.family_user_id, s.caregiver_id,
+        familyCents, caregiverCents, platformCents, pi.id,
+        JSON.stringify({
+          backfilled: "v1.117.0 — paid before the ledger existed; amounts read from Stripe",
+          familyTotalCents: familyCents, caregiverCents, platformFeeCents: platformCents, capturedCents: familyCents,
+        }),
+        s.paid_at);
+    }
+    if (!dryRun) {
+      await logAdminAction(req, "ledger_backfill_captures", "ledger_entries", null,
+        { rows: plan.filter((p) => !p.skipped).length, sessions: plan.map((p) => p.sessionId) });
+    }
+    res.json({ dryRun, found: missing.length, plan });
+  } catch (err) {
+    captureException(err, { where: "admin: ledger backfill" });
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── GET /api/admin/users/:id/reachability ───
+//
+// v1.105.144. "Did it actually ring?" has been unanswerable all week, and every attempt to
+// answer it has been inference from one field. Pete: "julia's definitely not on the PWA, but
+// on the ios version" — while `user_client_info.platform` says "web" for her, which is either
+// a bug in how the native app reports itself or a stale row from a browser session. Either
+// way, guessing is how the last three wrong answers happened.
+//
+// This is the question stated properly: what would a call to this person actually reach?
+// Devices, kinds, and whether each one has EVER worked — a subscription that has never had a
+// success is a subscription that does not exist, no matter how good the row looks.
+//
+// No tokens or endpoints are returned. A push token is a credential for someone's phone; the
+// kind and the dates are what a diagnosis needs.
+// ─── GET /api/admin/db-storage (v1.105.178) ───
+//
+// Railway warned that Postgres is at 81% of its volume, and nothing in the app could say why.
+// Answering "what is using the disk" by reading the schema and guessing is exactly the habit
+// this codebase keeps paying for, so: ask the database.
+//
+// Read-only and admin-gated. `pg_total_relation_size` includes indexes and TOAST — TOAST is the
+// whole point here, because a base64 photo in a TEXT column lives there rather than in the
+// table's main fork, and a naive size query would report the table as tiny.
+router.get("/db-storage", authenticate, checkAdmin, requireAdmin, async (req, res) => {
+  try {
+    const db = await getDb();
+    const total = await db.prepare("SELECT pg_database_size(current_database()) AS bytes").get();
+
+    const tables = await db.prepare(`
+      SELECT c.relname AS table,
+             pg_total_relation_size(c.oid) AS total_bytes,
+             pg_relation_size(c.oid) AS heap_bytes,
+             pg_indexes_size(c.oid) AS index_bytes,
+             COALESCE(pg_total_relation_size(c.reltoastrelid), 0) AS toast_bytes,
+             c.reltuples::bigint AS approx_rows
+      FROM pg_class c
+      JOIN pg_namespace n ON n.oid = c.relnamespace
+      WHERE c.relkind = 'r' AND n.nspname = 'public'
+      ORDER BY pg_total_relation_size(c.oid) DESC
+      LIMIT 25
+    `).all();
+
+    // The columns actually suspected of holding base64: measured, not assumed. Each entry is
+    // [table, column]; a table that does not exist is skipped rather than failing the report.
+    const BLOB_COLUMNS = [
+      ["users", "profile_photo"], ["users", "avatar_url"],
+      ["care_recipients", "photo"],
+      ["recipient_notes", "photo"],
+      ["family_visits", "photo"], ["family_visits", "photos"],
+      ["feedback", "screenshot"],
+      ["caregiver_documents", "file_data"],
+      ["verified_documents", "file_data"],
+    ];
+    const columns = [];
+    for (const [table, column] of BLOB_COLUMNS) {
+      try {
+        const row = await db.prepare(`
+          SELECT COUNT(*) FILTER (WHERE ${column} IS NOT NULL) AS rows_with_data,
+                 COALESCE(SUM(pg_column_size(${column})), 0) AS bytes,
+                 COALESCE(MAX(pg_column_size(${column})), 0) AS largest_bytes,
+                 COUNT(*) FILTER (WHERE ${column} LIKE 'r2:%') AS already_offloaded
+          FROM ${table}
+        `).get();
+        if (row && Number(row.rows_with_data) > 0) {
+          columns.push({
+            column: `${table}.${column}`,
+            rowsWithData: Number(row.rows_with_data),
+            bytes: Number(row.bytes),
+            largestBytes: Number(row.largest_bytes),
+            alreadyOffloaded: Number(row.already_offloaded),
+          });
+        }
+      } catch { /* column or table absent on this deployment — not a failure of the report */ }
+    }
+    columns.sort((a, b) => b.bytes - a.bytes);
+
+    res.json({
+      databaseBytes: Number(total?.bytes || 0),
+      tables: tables.map((t) => ({
+        table: t.table,
+        totalBytes: Number(t.total_bytes),
+        heapBytes: Number(t.heap_bytes),
+        indexBytes: Number(t.index_bytes),
+        // Where a base64 blob actually lives.
+        toastBytes: Number(t.toast_bytes),
+        approxRows: Number(t.approx_rows),
+      })),
+      blobColumns: columns,
+    });
+  } catch (err) {
+    captureException(err, { where: "admin: db storage" });
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── POST /api/admin/db-storage/prune-snapshots (v1.105.178) ───
+//
+// Deleting the rows is only half of it. Postgres frees the space for REUSE but does not hand it
+// back to the filesystem, and Railway's warning is about the volume — so without the VACUUM
+// FULL the number Pete is looking at would not move. The table is a handful of rows, so the
+// exclusive lock it takes lasts a moment, and nothing reads boot_snapshots at runtime.
+//
+// `keep` defaults to 1: the point of a pre-migration snapshot is undoing the migration that is
+// about to run, so the newest one is the one with a job. The nightly pg_dump is the real backup
+// and is untouched by this.
+router.post("/db-storage/prune-snapshots", authenticate, checkAdmin, requireAdmin, async (req, res) => {
+  try {
+    const db = await getDb();
+    const keep = Math.max(0, Math.min(parseInt(req.body?.keep, 10) || 1, 5));
+
+    const before = await db.prepare(
+      "SELECT COUNT(*)::int AS rows, COALESCE(pg_total_relation_size('public.boot_snapshots'), 0)::bigint AS bytes FROM boot_snapshots"
+    ).get();
+
+    await db.prepare(
+      "DELETE FROM boot_snapshots WHERE id NOT IN (SELECT id FROM boot_snapshots ORDER BY created_at DESC, id DESC LIMIT ?)"
+    ).run(keep);
+
+    // ─── v1.105.180 — VACUUM FULL is the wrong first move on a FULL disk ───
+    //
+    // It rewrites the table into a new file, so it needs free space equal to the table's size.
+    // On prod that meant asking for 130 MB of headroom on a volume with none, and it failed
+    // with `could not write to file "pg_wal/xlogtemp": No space left on device` — the attempt
+    // to reclaim space needed space.
+    //
+    // Plain VACUUM does not rewrite anything: it marks the deleted pages reusable in place, in
+    // constant extra space. That is what stops writes failing. It does not hand the space back
+    // to the filesystem, so Railway's gauge will not move — but it is the step that can always
+    // run, and it has to come first.
+    await db.exec("VACUUM boot_snapshots");
+
+    // Now that the rows are gone and the pages are reusable, the rewrite is small enough to
+    // have a chance. Best effort, deliberately: failing to shrink the file is a worse outcome
+    // than the DELETE not having happened, so it must not turn the whole call into a 500.
+    let compacted = true;
+    let compactError = null;
+    try {
+      await db.exec("VACUUM FULL boot_snapshots");
+    } catch (e) {
+      compacted = false;
+      compactError = e.message;
+    }
+
+    const after = await db.prepare(
+      "SELECT COUNT(*)::int AS rows, COALESCE(pg_total_relation_size('public.boot_snapshots'), 0)::bigint AS bytes FROM boot_snapshots"
+    ).get();
+    const dbSize = await db.prepare("SELECT pg_database_size(current_database())::bigint AS bytes").get();
+
+    await logAdminAction(req, "db_prune_snapshots", "database", "boot_snapshots", {
+      keep,
+      freedBytes: Number(before?.bytes || 0) - Number(after?.bytes || 0),
+    });
+
+    res.json({
+      keep,
+      before: { rows: Number(before?.rows || 0), bytes: Number(before?.bytes || 0) },
+      after: { rows: Number(after?.rows || 0), bytes: Number(after?.bytes || 0) },
+      freedBytes: Number(before?.bytes || 0) - Number(after?.bytes || 0),
+      databaseBytes: Number(dbSize?.bytes || 0),
+      // false means the rows are gone and the space is reusable by Postgres, but the file has
+      // not shrunk — so the volume gauge will not move until there is room to rewrite.
+      compacted,
+      compactError,
+    });
+  } catch (err) {
+    captureException(err, { where: "admin: prune boot snapshots" });
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get("/users/:id/reachability", authenticate, checkAdmin, requireAdmin, async (req, res) => {
+  try {
+    const db = await getDb();
+    const user = await db.prepare(
+      "SELECT id, first_name, last_name, email FROM users WHERE id = ?"
+    ).get(req.params.id);
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    const client = await db.prepare(
+      "SELECT app_version, user_agent, platform, last_seen_at FROM user_client_info WHERE user_id = ?"
+    ).get(req.params.id);
+
+    const subs = await db.prepare(`
+      SELECT endpoint, fail_count, last_success_at, last_failure_at, created_at, updated_at
+      FROM push_subscriptions WHERE user_id = ? ORDER BY created_at
+    `).all(req.params.id);
+
+    const devices = subs.map((s) => {
+      const ep = String(s.endpoint || "");
+      // native://ios/<token> and native://android/<token> — anything else is Web Push.
+      // v1.105.151 — one definition, shared with /api/push/status and the client's self-repair.
+      // v1.105.155 — WHICH push service, so a browser subscription can be placed. Apple's is
+      // Safari or an iOS home-screen app; Google's is Chrome, and usually a laptop. "web" on
+      // its own could not tell Pete's iPhone from his Mac, which is the exact question he was
+      // asking. Host only — never the token.
+      let service = null;
+      try { service = ep.startsWith("http") ? new URL(ep).host : null; } catch { service = null; }
+      return {
+        kind: require("../../utils/pushDevices").deviceKind(ep),
+        service,
+        // Enough to tell two rows apart in a support conversation, and useless to anyone else.
+        ref: ep.slice(-6),
+        failCount: s.fail_count || 0,
+        everWorked: !!s.last_success_at,
+        lastSuccessAt: s.last_success_at,
+        lastFailureAt: s.last_failure_at,
+        createdAt: s.created_at,
+      };
+    });
+
+    const usable = devices.filter((d) => d.failCount < 5);
+    const summary = !devices.length
+      ? "no devices registered — a call can only be answered if they happen to be in the app"
+      : usable.some((d) => d.kind === "ios" || d.kind === "android")
+        ? `native push should reach them (${usable.filter((d) => d.kind !== "web").length} device(s))`
+        : "only Web Push is registered — inside the native iOS app that arrives nowhere";
+
+    res.json({
+      user: { id: user.id, name: `${user.first_name || ""} ${user.last_name || ""}`.trim(), email: user.email },
+      client: client || null,
+      devices,
+      summary,
+    });
+  } catch (err) {
+    console.error("Reachability error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── GET /api/admin/client-versions ───
+// Returns all active users with their client version info (web/iOS/Android, app_version, platform)
+router.get("/client-versions", authenticate, checkAdmin, requireAdmin, async (req, res) => {
+  try {
+    const db = await getDb();
+    const data = await db.prepare(`
+      SELECT
+        u.id, u.first_name, u.last_name, u.email, u.role, u.roles,
+        uci.app_version, uci.user_agent, uci.platform, uci.last_seen_at
+      FROM users u
+      LEFT JOIN user_client_info uci ON u.id = uci.user_id
+      WHERE u.is_active = 1
+      ORDER BY uci.last_seen_at DESC NULLS LAST
+    `).all();
+    res.json({ users: data });
+  } catch (err) {
+    console.error("Client versions error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── GET /api/admin/schema-drift ───
+//
+// v1.106.4. On 2026-09-13 `caregiver_profiles.location_source` turned out not to exist on prod
+// or staging: it had been added inside the frozen legacy `migrations` array, which only runs on
+// a database that has never seen it. Every test passed the whole time, because tests build a
+// fresh database and therefore DO run that array. `lint:sql-columns` could not catch it either
+// — it parses the same array and so believed the column existed.
+//
+// The thing that was missing was any way to ask a running deployment what its schema actually
+// is. Finding a three-week-old outage took a hand-written probe against a live endpoint. This
+// answers it in one request, and it will surface the whole class rather than one instance.
+router.get("/schema-drift", authenticate, checkAdmin, requireAdmin, async (req, res) => {
+  try {
+    const db = await getDb();
+    const { loadSchema } = require("../../utils/expectedSchema");
+    const expected = loadSchema();
+
+    const rows = await db.prepare(
+      "SELECT table_name, column_name FROM information_schema.columns WHERE table_schema = 'public'"
+    ).all();
+    const actual = new Map();
+    for (const r of rows) {
+      if (!actual.has(r.table_name)) actual.set(r.table_name, new Set());
+      actual.get(r.table_name).add(r.column_name);
+    }
+
+    const missingTables = [];
+    const missingColumns = [];
+    for (const [table, cols] of expected) {
+      const have = actual.get(table);
+      if (!have) { missingTables.push(table); continue; }
+      for (const col of cols) if (!have.has(col)) missingColumns.push(`${table}.${col}`);
+    }
+
+    const applied = await db.prepare("SELECT id FROM schema_migrations ORDER BY id").all();
+
+    res.json({
+      ok: missingTables.length === 0 && missingColumns.length === 0,
+      // What the code declares but this database does not have. Anything here is a live bug:
+      // some query is naming a column that is not there, and failing at runtime only.
+      missingTables,
+      missingColumns,
+      counts: { expectedTables: expected.size, actualTables: actual.size },
+      migrationsApplied: applied.map((a) => a.id),
+      note: missingColumns.length
+        ? "Add these in MIGRATIONS_V2 (src/models/database.js). Never in the frozen legacy array — it does not replay."
+        : "This database has every column the code declares.",
+    });
+  } catch (err) {
+    captureException(err, { where: "admin: schema-drift" });
+    res.status(500).json({ error: err.message });
+  }
+});
+};

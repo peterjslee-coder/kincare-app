@@ -1,0 +1,844 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>InPlace — Dark Mode Concept</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: #1a1a2e;
+    color: #e0e0e0;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 32px 16px;
+  }
+
+  h1 {
+    font-size: 28px;
+    font-weight: 700;
+    color: #fff;
+    margin-bottom: 8px;
+    text-align: center;
+  }
+  .subtitle {
+    color: #9ca3af;
+    font-size: 15px;
+    margin-bottom: 32px;
+    text-align: center;
+    max-width: 600px;
+    line-height: 1.5;
+  }
+
+  /* Toggle */
+  .mode-toggle {
+    display: flex;
+    background: #2a2a4a;
+    border-radius: 12px;
+    padding: 4px;
+    margin-bottom: 40px;
+    gap: 4px;
+  }
+  .mode-toggle button {
+    padding: 10px 28px;
+    border: none;
+    border-radius: 10px;
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    background: transparent;
+    color: #9ca3af;
+  }
+  .mode-toggle button.active {
+    background: #1b6b5a;
+    color: #fff;
+    box-shadow: 0 2px 8px rgba(27,107,90,0.3);
+  }
+
+  /* Phone frames */
+  .phones-container {
+    display: flex;
+    gap: 40px;
+    flex-wrap: wrap;
+    justify-content: center;
+    margin-bottom: 48px;
+  }
+
+  .phone-wrapper {
+    text-align: center;
+  }
+  .phone-wrapper .label {
+    font-size: 13px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    margin-bottom: 12px;
+    color: #9ca3af;
+  }
+
+  .phone {
+    width: 320px;
+    height: 640px;
+    border-radius: 36px;
+    overflow: hidden;
+    position: relative;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+    transition: transform 0.3s ease;
+  }
+  .phone:hover { transform: translateY(-4px); }
+
+  /* ===== LIGHT THEME ===== */
+  .phone.light {
+    background: #f8f9fa;
+    border: 3px solid #d1d5db;
+  }
+  .phone.light .status-bar {
+    background: #1b6b5a;
+    color: #fff;
+    padding: 8px 20px;
+    font-size: 11px;
+    font-weight: 600;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .phone.light .header {
+    background: #fff;
+    padding: 14px 18px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid #e5e7eb;
+  }
+  .phone.light .header .logo {
+    font-size: 18px;
+    font-weight: 700;
+    color: #1b6b5a;
+  }
+  .phone.light .header .avatar {
+    width: 32px; height: 32px; border-radius: 50%;
+    background: #e0f2e9;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 700; color: #1b6b5a;
+  }
+  .phone.light .content {
+    padding: 14px;
+    overflow-y: auto;
+    height: 480px;
+  }
+  .phone.light .greeting {
+    font-size: 20px; font-weight: 700; color: #333;
+    margin-bottom: 4px;
+  }
+  .phone.light .greeting-sub {
+    font-size: 13px; color: #6c757d; margin-bottom: 16px;
+  }
+  .phone.light .card {
+    background: #fff;
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  }
+  .phone.light .card-header {
+    font-size: 13px; font-weight: 700; color: #1b6b5a;
+    margin-bottom: 10px;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .phone.light .session-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px;
+    border-radius: 8px;
+    background: #f8f9fa;
+    margin-bottom: 6px;
+  }
+  .phone.light .session-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: #1b6b5a; flex-shrink: 0;
+  }
+  .phone.light .session-dot.upcoming { background: #2e5984; }
+  .phone.light .session-name {
+    font-size: 13px; font-weight: 600; color: #333;
+  }
+  .phone.light .session-time {
+    font-size: 11px; color: #6c757d;
+  }
+  .phone.light .quick-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .phone.light .quick-btn {
+    background: #e0f2e9;
+    border-radius: 10px;
+    padding: 12px 10px;
+    text-align: center;
+    font-size: 12px; font-weight: 600; color: #1b6b5a;
+  }
+  .phone.light .quick-btn .icon { font-size: 20px; margin-bottom: 4px; }
+  .phone.light .health-bar {
+    height: 6px; background: #e5e7eb; border-radius: 3px;
+    margin-top: 8px; overflow: hidden;
+  }
+  .phone.light .health-bar-fill {
+    height: 100%; background: #1b6b5a; border-radius: 3px; width: 72%;
+  }
+  .phone.light .health-label {
+    font-size: 11px; color: #6c757d; margin-top: 4px;
+    display: flex; justify-content: space-between;
+  }
+
+  /* Bottom nav light */
+  .phone.light .bottom-nav {
+    position: absolute; bottom: 0; left: 0; right: 0;
+    background: #fff;
+    display: flex; justify-content: space-around;
+    padding: 8px 0 16px;
+    border-top: 1px solid #e5e7eb;
+    box-shadow: 0 -2px 8px rgba(0,0,0,0.06);
+  }
+  .phone.light .nav-item {
+    text-align: center; font-size: 10px; color: #9ca3af;
+  }
+  .phone.light .nav-item.active { color: #1b6b5a; }
+  .phone.light .nav-item .nav-icon { font-size: 20px; margin-bottom: 2px; }
+
+  /* ===== DARK THEME ===== */
+  .phone.dark {
+    background: #121218;
+    border: 3px solid #2a2a3a;
+  }
+  .phone.dark .status-bar {
+    background: #16362e;
+    color: #a3d9c8;
+    padding: 8px 20px;
+    font-size: 11px;
+    font-weight: 600;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .phone.dark .header {
+    background: #1a1a24;
+    padding: 14px 18px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid #2a2a3a;
+  }
+  .phone.dark .header .logo {
+    font-size: 18px;
+    font-weight: 700;
+    color: #4fd1b0;
+  }
+  .phone.dark .header .avatar {
+    width: 32px; height: 32px; border-radius: 50%;
+    background: #1e3a32;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 700; color: #4fd1b0;
+  }
+  .phone.dark .content {
+    padding: 14px;
+    overflow-y: auto;
+    height: 480px;
+  }
+  .phone.dark .greeting {
+    font-size: 20px; font-weight: 700; color: #f0f0f5;
+    margin-bottom: 4px;
+  }
+  .phone.dark .greeting-sub {
+    font-size: 13px; color: #8a8a9a; margin-bottom: 16px;
+  }
+  .phone.dark .card {
+    background: #1e1e2a;
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    border: 1px solid #2a2a3a;
+  }
+  .phone.dark .card-header {
+    font-size: 13px; font-weight: 700; color: #4fd1b0;
+    margin-bottom: 10px;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .phone.dark .session-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px;
+    border-radius: 8px;
+    background: #262636;
+    margin-bottom: 6px;
+  }
+  .phone.dark .session-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: #4fd1b0; flex-shrink: 0;
+  }
+  .phone.dark .session-dot.upcoming { background: #6b9fd4; }
+  .phone.dark .session-name {
+    font-size: 13px; font-weight: 600; color: #e0e0ec;
+  }
+  .phone.dark .session-time {
+    font-size: 11px; color: #7a7a8e;
+  }
+  .phone.dark .quick-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .phone.dark .quick-btn {
+    background: #1e3a32;
+    border-radius: 10px;
+    padding: 12px 10px;
+    text-align: center;
+    font-size: 12px; font-weight: 600; color: #4fd1b0;
+  }
+  .phone.dark .quick-btn .icon { font-size: 20px; margin-bottom: 4px; }
+  .phone.dark .health-bar {
+    height: 6px; background: #2a2a3a; border-radius: 3px;
+    margin-top: 8px; overflow: hidden;
+  }
+  .phone.dark .health-bar-fill {
+    height: 100%; background: #4fd1b0; border-radius: 3px; width: 72%;
+  }
+  .phone.dark .health-label {
+    font-size: 11px; color: #7a7a8e; margin-top: 4px;
+    display: flex; justify-content: space-between;
+  }
+
+  /* Bottom nav dark */
+  .phone.dark .bottom-nav {
+    position: absolute; bottom: 0; left: 0; right: 0;
+    background: #1a1a24;
+    display: flex; justify-content: space-around;
+    padding: 8px 0 16px;
+    border-top: 1px solid #2a2a3a;
+    box-shadow: 0 -2px 12px rgba(0,0,0,0.4);
+  }
+  .phone.dark .nav-item {
+    text-align: center; font-size: 10px; color: #5a5a6e;
+  }
+  .phone.dark .nav-item.active { color: #4fd1b0; }
+  .phone.dark .nav-item .nav-icon { font-size: 20px; margin-bottom: 2px; }
+
+  /* ===== COLOR PALETTE SECTION ===== */
+  .palette-section {
+    max-width: 740px;
+    width: 100%;
+    margin-bottom: 48px;
+  }
+  .palette-section h2 {
+    font-size: 20px; font-weight: 700; color: #fff;
+    margin-bottom: 16px;
+  }
+  .palette-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 12px;
+  }
+  .swatch {
+    border-radius: 12px;
+    padding: 16px;
+    font-size: 12px;
+    position: relative;
+    min-height: 80px;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+  }
+  .swatch .swatch-name {
+    font-weight: 700;
+    margin-bottom: 2px;
+  }
+  .swatch .swatch-hex {
+    font-size: 11px;
+    opacity: 0.8;
+  }
+  .swatch.on-dark { color: #f0f0f5; }
+  .swatch.on-light { color: #1a1a24; }
+
+  /* ===== DESIGN NOTES ===== */
+  .notes-section {
+    max-width: 740px;
+    width: 100%;
+    margin-bottom: 48px;
+  }
+  .notes-section h2 {
+    font-size: 20px; font-weight: 700; color: #fff;
+    margin-bottom: 16px;
+  }
+  .note-card {
+    background: #1e1e2a;
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 12px;
+    border: 1px solid #2a2a3a;
+  }
+  .note-card h3 {
+    font-size: 15px; font-weight: 700; color: #4fd1b0;
+    margin-bottom: 8px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .note-card p {
+    font-size: 14px; color: #b0b0c0; line-height: 1.6;
+  }
+
+  /* Screen selector tabs */
+  .screen-tabs {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .screen-tabs button {
+    padding: 8px 18px;
+    border: 1px solid #2a2a3a;
+    border-radius: 8px;
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    background: #1e1e2a;
+    color: #9ca3af;
+  }
+  .screen-tabs button.active {
+    background: #2a2a4a;
+    color: #fff;
+    border-color: #4fd1b0;
+  }
+
+  .screen-panel { display: none; }
+  .screen-panel.active { display: flex; gap: 40px; flex-wrap: wrap; justify-content: center; }
+</style>
+</head>
+<body>
+
+<h1>InPlace Dark Mode Concept</h1>
+<p class="subtitle">A warm, low-contrast dark theme designed for caregivers checking the app during evening and nighttime hours — easier on the eyes during late-night care sessions.</p>
+
+<div class="screen-tabs">
+  <button class="active" onclick="showScreen('dashboard', this)">Dashboard</button>
+  <button onclick="showScreen('schedule', this)">Schedule</button>
+  <button onclick="showScreen('chat', this)">iPAi Chat</button>
+</div>
+
+<!-- ===== DASHBOARD SCREEN ===== -->
+<div id="screen-dashboard" class="screen-panel active">
+
+  <!-- LIGHT -->
+  <div class="phone-wrapper">
+    <div class="label">Light Mode</div>
+    <div class="phone light">
+      <div class="status-bar">
+        <span>9:41 AM</span>
+        <span>InPlace v1.51</span>
+      </div>
+      <div class="header">
+        <div class="logo">InPlace</div>
+        <div class="avatar">PL</div>
+      </div>
+      <div class="content">
+        <div class="greeting">Good morning, Pete</div>
+        <div class="greeting-sub">Betty's care team is on track today</div>
+
+        <div class="card">
+          <div class="card-header">Today's Sessions</div>
+          <div class="session-item">
+            <div class="session-dot"></div>
+            <div>
+              <div class="session-name">Sara Huber — Morning Care</div>
+              <div class="session-time">8:00 AM – 12:00 PM  &#x2022;  In Progress</div>
+            </div>
+          </div>
+          <div class="session-item">
+            <div class="session-dot upcoming"></div>
+            <div>
+              <div class="session-name">Cary Taker — Afternoon</div>
+              <div class="session-time">1:00 PM – 5:00 PM  &#x2022;  Upcoming</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">Quick Actions</div>
+          <div class="quick-actions">
+            <div class="quick-btn"><div class="icon">&#128172;</div>iPAi Chat</div>
+            <div class="quick-btn"><div class="icon">&#128197;</div>Calendar</div>
+            <div class="quick-btn"><div class="icon">&#128138;</div>Medications</div>
+            <div class="quick-btn"><div class="icon">&#128221;</div>Care Notes</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">Weekly Care Coverage</div>
+          <div class="health-bar"><div class="health-bar-fill"></div></div>
+          <div class="health-label"><span>28 of 40 hrs covered</span><span>72%</span></div>
+        </div>
+      </div>
+      <div class="bottom-nav">
+        <div class="nav-item active"><div class="nav-icon">&#127968;</div>Home</div>
+        <div class="nav-item"><div class="nav-icon">&#128197;</div>Schedule</div>
+        <div class="nav-item"><div class="nav-icon">&#128172;</div>Chat</div>
+        <div class="nav-item"><div class="nav-icon">&#9881;</div>Settings</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- DARK -->
+  <div class="phone-wrapper">
+    <div class="label">Dark Mode</div>
+    <div class="phone dark">
+      <div class="status-bar">
+        <span>11:42 PM</span>
+        <span>InPlace v1.51</span>
+      </div>
+      <div class="header">
+        <div class="logo">InPlace</div>
+        <div class="avatar">PL</div>
+      </div>
+      <div class="content">
+        <div class="greeting">Good evening, Pete</div>
+        <div class="greeting-sub">Betty's care team is on track today</div>
+
+        <div class="card">
+          <div class="card-header">Today's Sessions</div>
+          <div class="session-item">
+            <div class="session-dot"></div>
+            <div>
+              <div class="session-name">Sara Huber — Morning Care</div>
+              <div class="session-time">8:00 AM – 12:00 PM  &#x2022;  Completed</div>
+            </div>
+          </div>
+          <div class="session-item">
+            <div class="session-dot upcoming"></div>
+            <div>
+              <div class="session-name">Cary Taker — Afternoon</div>
+              <div class="session-time">1:00 PM – 5:00 PM  &#x2022;  Completed</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">Quick Actions</div>
+          <div class="quick-actions">
+            <div class="quick-btn"><div class="icon">&#128172;</div>iPAi Chat</div>
+            <div class="quick-btn"><div class="icon">&#128197;</div>Calendar</div>
+            <div class="quick-btn"><div class="icon">&#128138;</div>Medications</div>
+            <div class="quick-btn"><div class="icon">&#128221;</div>Care Notes</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">Weekly Care Coverage</div>
+          <div class="health-bar"><div class="health-bar-fill"></div></div>
+          <div class="health-label"><span>28 of 40 hrs covered</span><span>72%</span></div>
+        </div>
+      </div>
+      <div class="bottom-nav">
+        <div class="nav-item active"><div class="nav-icon">&#127968;</div>Home</div>
+        <div class="nav-item"><div class="nav-icon">&#128197;</div>Schedule</div>
+        <div class="nav-item"><div class="nav-icon">&#128172;</div>Chat</div>
+        <div class="nav-item"><div class="nav-icon">&#9881;</div>Settings</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== SCHEDULE SCREEN ===== -->
+<div id="screen-schedule" class="screen-panel">
+
+  <!-- LIGHT -->
+  <div class="phone-wrapper">
+    <div class="label">Light Mode</div>
+    <div class="phone light">
+      <div class="status-bar"><span>9:41 AM</span><span>InPlace v1.51</span></div>
+      <div class="header">
+        <div class="logo" style="font-size:16px;">&#8592; Schedule</div>
+        <div style="font-size:13px;font-weight:600;color:#1b6b5a;">+ Add</div>
+      </div>
+      <div class="content">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+          <div style="font-size:16px;font-weight:700;color:#333;">March 2026</div>
+          <div style="display:flex;gap:8px;">
+            <span style="font-size:12px;color:#6c757d;background:#f0f0f0;padding:4px 10px;border-radius:6px;">Week</span>
+            <span style="font-size:12px;color:#fff;background:#1b6b5a;padding:4px 10px;border-radius:6px;">Day</span>
+          </div>
+        </div>
+        <!-- Day slots -->
+        <div style="margin-bottom:6px;">
+          <div style="font-size:11px;color:#6c757d;margin-bottom:4px;">8:00 AM</div>
+          <div style="background:#e0f2e9;border-left:3px solid #1b6b5a;border-radius:6px;padding:10px;margin-bottom:8px;">
+            <div style="font-size:13px;font-weight:600;color:#1b6b5a;">Sara — Morning Care</div>
+            <div style="font-size:11px;color:#6c757d;">8:00 AM – 12:00 PM</div>
+          </div>
+        </div>
+        <div style="margin-bottom:6px;">
+          <div style="font-size:11px;color:#6c757d;margin-bottom:4px;">12:00 PM</div>
+          <div style="background:#f8f9fa;border-radius:6px;padding:10px;border:1px dashed #e0e0e0;margin-bottom:8px;">
+            <div style="font-size:12px;color:#999;">No coverage</div>
+          </div>
+        </div>
+        <div style="margin-bottom:6px;">
+          <div style="font-size:11px;color:#6c757d;margin-bottom:4px;">1:00 PM</div>
+          <div style="background:#eaf0f7;border-left:3px solid #2e5984;border-radius:6px;padding:10px;margin-bottom:8px;">
+            <div style="font-size:13px;font-weight:600;color:#2e5984;">Cary — Afternoon</div>
+            <div style="font-size:11px;color:#6c757d;">1:00 PM – 5:00 PM</div>
+          </div>
+        </div>
+        <div style="margin-bottom:6px;">
+          <div style="font-size:11px;color:#6c757d;margin-bottom:4px;">5:00 PM</div>
+          <div style="background:#fff5f0;border-left:3px solid #e8724a;border-radius:6px;padding:10px;margin-bottom:8px;">
+            <div style="font-size:13px;font-weight:600;color:#e8724a;">Medication Reminder</div>
+            <div style="font-size:11px;color:#6c757d;">5:30 PM — Evening meds</div>
+          </div>
+        </div>
+      </div>
+      <div class="bottom-nav">
+        <div class="nav-item"><div class="nav-icon">&#127968;</div>Home</div>
+        <div class="nav-item active"><div class="nav-icon">&#128197;</div>Schedule</div>
+        <div class="nav-item"><div class="nav-icon">&#128172;</div>Chat</div>
+        <div class="nav-item"><div class="nav-icon">&#9881;</div>Settings</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- DARK -->
+  <div class="phone-wrapper">
+    <div class="label">Dark Mode</div>
+    <div class="phone dark">
+      <div class="status-bar"><span>11:42 PM</span><span>InPlace v1.51</span></div>
+      <div class="header">
+        <div class="logo" style="font-size:16px;">&#8592; Schedule</div>
+        <div style="font-size:13px;font-weight:600;color:#4fd1b0;">+ Add</div>
+      </div>
+      <div class="content">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+          <div style="font-size:16px;font-weight:700;color:#f0f0f5;">March 2026</div>
+          <div style="display:flex;gap:8px;">
+            <span style="font-size:12px;color:#7a7a8e;background:#262636;padding:4px 10px;border-radius:6px;">Week</span>
+            <span style="font-size:12px;color:#121218;background:#4fd1b0;padding:4px 10px;border-radius:6px;">Day</span>
+          </div>
+        </div>
+        <div style="margin-bottom:6px;">
+          <div style="font-size:11px;color:#7a7a8e;margin-bottom:4px;">8:00 AM</div>
+          <div style="background:#1a2e28;border-left:3px solid #4fd1b0;border-radius:6px;padding:10px;margin-bottom:8px;">
+            <div style="font-size:13px;font-weight:600;color:#4fd1b0;">Sara — Morning Care</div>
+            <div style="font-size:11px;color:#7a7a8e;">8:00 AM – 12:00 PM</div>
+          </div>
+        </div>
+        <div style="margin-bottom:6px;">
+          <div style="font-size:11px;color:#7a7a8e;margin-bottom:4px;">12:00 PM</div>
+          <div style="background:#1e1e2a;border-radius:6px;padding:10px;border:1px dashed #2a2a3a;margin-bottom:8px;">
+            <div style="font-size:12px;color:#5a5a6e;">No coverage</div>
+          </div>
+        </div>
+        <div style="margin-bottom:6px;">
+          <div style="font-size:11px;color:#7a7a8e;margin-bottom:4px;">1:00 PM</div>
+          <div style="background:#1a2438;border-left:3px solid #6b9fd4;border-radius:6px;padding:10px;margin-bottom:8px;">
+            <div style="font-size:13px;font-weight:600;color:#6b9fd4;">Cary — Afternoon</div>
+            <div style="font-size:11px;color:#7a7a8e;">1:00 PM – 5:00 PM</div>
+          </div>
+        </div>
+        <div style="margin-bottom:6px;">
+          <div style="font-size:11px;color:#7a7a8e;margin-bottom:4px;">5:00 PM</div>
+          <div style="background:#2a1e1a;border-left:3px solid #f0956c;border-radius:6px;padding:10px;margin-bottom:8px;">
+            <div style="font-size:13px;font-weight:600;color:#f0956c;">Medication Reminder</div>
+            <div style="font-size:11px;color:#7a7a8e;">5:30 PM — Evening meds</div>
+          </div>
+        </div>
+      </div>
+      <div class="bottom-nav">
+        <div class="nav-item"><div class="nav-icon">&#127968;</div>Home</div>
+        <div class="nav-item active"><div class="nav-icon">&#128197;</div>Schedule</div>
+        <div class="nav-item"><div class="nav-icon">&#128172;</div>Chat</div>
+        <div class="nav-item"><div class="nav-icon">&#9881;</div>Settings</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== CHAT SCREEN ===== -->
+<div id="screen-chat" class="screen-panel">
+
+  <!-- LIGHT -->
+  <div class="phone-wrapper">
+    <div class="label">Light Mode</div>
+    <div class="phone light">
+      <div class="status-bar"><span>9:41 AM</span><span>InPlace v1.51</span></div>
+      <div class="header">
+        <div class="logo" style="font-size:16px;">iPAi</div>
+        <div style="font-size:11px;color:#6c757d;">Care Assistant</div>
+      </div>
+      <div class="content" style="display:flex;flex-direction:column;gap:10px;padding-bottom:60px;">
+        <!-- AI message -->
+        <div style="align-self:flex-start;max-width:80%;background:#e0f2e9;border-radius:14px 14px 14px 4px;padding:12px;font-size:13px;color:#333;line-height:1.5;">
+          Good morning, Pete! Betty had a good night. Sara noted she slept well and had breakfast at 7:30. Anything you'd like to check on?
+        </div>
+        <!-- User message -->
+        <div style="align-self:flex-end;max-width:80%;background:#1b6b5a;border-radius:14px 14px 4px 14px;padding:12px;font-size:13px;color:#fff;line-height:1.5;">
+          Has she taken her morning meds yet?
+        </div>
+        <!-- AI message -->
+        <div style="align-self:flex-start;max-width:80%;background:#e0f2e9;border-radius:14px 14px 14px 4px;padding:12px;font-size:13px;color:#333;line-height:1.5;">
+          Yes! Sara confirmed all 3 morning medications were given at 8:15 AM. Next medications are due at 5:30 PM (evening routine).
+        </div>
+        <!-- Input area -->
+        <div style="position:absolute;bottom:56px;left:0;right:0;padding:10px 14px;background:#fff;border-top:1px solid #e5e7eb;">
+          <div style="display:flex;gap:8px;align-items:center;">
+            <div style="flex:1;background:#f8f9fa;border:1px solid #e0e0e0;border-radius:20px;padding:10px 14px;font-size:13px;color:#999;">Ask iPAi anything...</div>
+            <div style="width:36px;height:36px;background:#1b6b5a;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-size:16px;">&#8593;</div>
+          </div>
+        </div>
+      </div>
+      <div class="bottom-nav">
+        <div class="nav-item"><div class="nav-icon">&#127968;</div>Home</div>
+        <div class="nav-item"><div class="nav-icon">&#128197;</div>Schedule</div>
+        <div class="nav-item active"><div class="nav-icon">&#128172;</div>Chat</div>
+        <div class="nav-item"><div class="nav-icon">&#9881;</div>Settings</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- DARK -->
+  <div class="phone-wrapper">
+    <div class="label">Dark Mode</div>
+    <div class="phone dark">
+      <div class="status-bar"><span>11:42 PM</span><span>InPlace v1.51</span></div>
+      <div class="header">
+        <div class="logo" style="font-size:16px;">iPAi</div>
+        <div style="font-size:11px;color:#7a7a8e;">Care Assistant</div>
+      </div>
+      <div class="content" style="display:flex;flex-direction:column;gap:10px;padding-bottom:60px;">
+        <!-- AI message -->
+        <div style="align-self:flex-start;max-width:80%;background:#1e2e28;border:1px solid #2a3a34;border-radius:14px 14px 14px 4px;padding:12px;font-size:13px;color:#d0d0dc;line-height:1.5;">
+          Good evening, Pete. Betty had a calm day. Cary noted she enjoyed her afternoon walk and ate well at dinner. How can I help?
+        </div>
+        <!-- User message -->
+        <div style="align-self:flex-end;max-width:80%;background:#1b5a4a;border-radius:14px 14px 4px 14px;padding:12px;font-size:13px;color:#e0f2e9;line-height:1.5;">
+          Did she take her evening meds?
+        </div>
+        <!-- AI message -->
+        <div style="align-self:flex-start;max-width:80%;background:#1e2e28;border:1px solid #2a3a34;border-radius:14px 14px 14px 4px;padding:12px;font-size:13px;color:#d0d0dc;line-height:1.5;">
+          Yes! Cary confirmed all evening medications at 5:35 PM before she left. Everything's on track. Betty's resting comfortably now.
+        </div>
+        <!-- Input area -->
+        <div style="position:absolute;bottom:56px;left:0;right:0;padding:10px 14px;background:#1a1a24;border-top:1px solid #2a2a3a;">
+          <div style="display:flex;gap:8px;align-items:center;">
+            <div style="flex:1;background:#262636;border:1px solid #2a2a3a;border-radius:20px;padding:10px 14px;font-size:13px;color:#5a5a6e;">Ask iPAi anything...</div>
+            <div style="width:36px;height:36px;background:#1b5a4a;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#4fd1b0;font-size:16px;">&#8593;</div>
+          </div>
+        </div>
+      </div>
+      <div class="bottom-nav">
+        <div class="nav-item"><div class="nav-icon">&#127968;</div>Home</div>
+        <div class="nav-item"><div class="nav-icon">&#128197;</div>Schedule</div>
+        <div class="nav-item active"><div class="nav-icon">&#128172;</div>Chat</div>
+        <div class="nav-item"><div class="nav-icon">&#9881;</div>Settings</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== COLOR PALETTE ===== -->
+<div class="palette-section">
+  <h2>Dark Mode Color Palette</h2>
+  <div class="palette-grid">
+    <div class="swatch on-dark" style="background:#121218;">
+      <div class="swatch-name">Background</div>
+      <div class="swatch-hex">#121218</div>
+    </div>
+    <div class="swatch on-dark" style="background:#1a1a24;">
+      <div class="swatch-name">Surface</div>
+      <div class="swatch-hex">#1a1a24</div>
+    </div>
+    <div class="swatch on-dark" style="background:#1e1e2a;">
+      <div class="swatch-name">Card</div>
+      <div class="swatch-hex">#1e1e2a</div>
+    </div>
+    <div class="swatch on-dark" style="background:#262636;">
+      <div class="swatch-name">Elevated</div>
+      <div class="swatch-hex">#262636</div>
+    </div>
+    <div class="swatch on-dark" style="background:#2a2a3a;">
+      <div class="swatch-name">Border</div>
+      <div class="swatch-hex">#2a2a3a</div>
+    </div>
+    <div class="swatch on-light" style="background:#4fd1b0;">
+      <div class="swatch-name">Primary Teal</div>
+      <div class="swatch-hex">#4fd1b0</div>
+    </div>
+    <div class="swatch on-light" style="background:#6b9fd4;">
+      <div class="swatch-name">Ocean Blue</div>
+      <div class="swatch-hex">#6b9fd4</div>
+    </div>
+    <div class="swatch on-light" style="background:#f0956c;">
+      <div class="swatch-name">Coral Accent</div>
+      <div class="swatch-hex">#f0956c</div>
+    </div>
+    <div class="swatch on-dark" style="background:#1e3a32;">
+      <div class="swatch-name">Teal Tint</div>
+      <div class="swatch-hex">#1e3a32</div>
+    </div>
+    <div class="swatch on-dark" style="background:#1a2438;">
+      <div class="swatch-name">Blue Tint</div>
+      <div class="swatch-hex">#1a2438</div>
+    </div>
+    <div class="swatch on-light" style="background:#f0f0f5;">
+      <div class="swatch-name">Text Primary</div>
+      <div class="swatch-hex">#f0f0f5</div>
+    </div>
+    <div class="swatch on-light" style="background:#7a7a8e;">
+      <div class="swatch-name">Text Muted</div>
+      <div class="swatch-hex">#7a7a8e</div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== DESIGN NOTES ===== -->
+<div class="notes-section">
+  <h2>Design Decisions</h2>
+
+  <div class="note-card">
+    <h3>&#127769; Built for Evening Caregiving</h3>
+    <p>Caregivers often check the app late at night — after putting someone to bed, reviewing the day's notes, or prepping for tomorrow. The dark theme uses warm, desaturated backgrounds (#121218 with a slight purple-blue hue) to reduce eye strain without feeling cold or clinical.</p>
+  </div>
+
+  <div class="note-card">
+    <h3>&#127912; Lifted Accent Colors</h3>
+    <p>The brand teal shifts from #1b6b5a (dark, rich) to #4fd1b0 (luminous mint) so it pops on dark backgrounds while keeping the same warmth. Ocean blue and coral follow the same pattern — lighter and slightly desaturated to maintain contrast ratios above WCAG AA (4.5:1).</p>
+  </div>
+
+  <div class="note-card">
+    <h3>&#128065; Layered Elevation</h3>
+    <p>Instead of drop shadows (invisible on dark backgrounds), depth is communicated through surface brightness: background (#121218) → surface (#1a1a24) → card (#1e1e2a) → elevated (#262636). Subtle 1px borders (#2a2a3a) reinforce card edges.</p>
+  </div>
+
+  <div class="note-card">
+    <h3>&#9878; Role-Colored Tinting</h3>
+    <p>Schedule blocks use dark tinted backgrounds (e.g., #1a2e28 for teal, #1a2438 for blue) rather than bright fills. This preserves the color-coding system you already have while keeping the overall surface dim. The left-border accent stays vivid for quick scanning.</p>
+  </div>
+
+  <div class="note-card">
+    <h3>&#128268; Implementation: CSS Variables + Toggle</h3>
+    <p>Since InPlace already uses CSS custom properties (--role-color, etc.), dark mode can be implemented by swapping a root-level data attribute (e.g., data-theme="dark") and overriding ~15 variables. Options: respect the OS setting via prefers-color-scheme, add a manual toggle in Settings, or offer "automatic" that switches at sunset based on the user's timezone.</p>
+  </div>
+</div>
+
+<script>
+function showScreen(name, btn) {
+  document.querySelectorAll('.screen-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.screen-tabs button').forEach(b => b.classList.remove('active'));
+  document.getElementById('screen-' + name).classList.add('active');
+  btn.classList.add('active');
+}
+</script>
+
+</body>
+</html>

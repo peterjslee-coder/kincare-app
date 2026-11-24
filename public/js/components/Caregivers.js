@@ -1,0 +1,891 @@
+const Caregivers = window.Caregivers = () => {
+  const [caregivers, setCaregivers] = useState([]);
+  const [assignments, setAssignments] = useState([]);
+  const [recipients, setRecipients] = useState([]);
+  const [loading, setLoading] = useState(true);
+  // Open the main RequestCareModal with a caregiver pre-selected
+  const scheduleCaregiver = (cg) => {
+    if (window.__openRequestCareModal) {
+      window.__openRequestCareModal(null, {
+        name: cg.name || `${cg.first_name || ''} ${cg.last_name || ''}`.trim(),
+        caregiverId: cg.caregiver_profile_id || cg.id,
+        userId: cg.user_id || cg.userId,
+        rate: cg.rateDaytime ? `$${cg.rateDaytime}/hr` : (cg.hourlyRate ? `$${cg.hourlyRate}/hr` : '$30/hr'),
+        available: true,
+      });
+    }
+  };
+  const [activeTab, setActiveTab] = useState('nearby');
+  const { showToast } = useToast();
+
+  // ─── v1.105.186 — add someone you already know ───
+  // Pete, Sep 7: "I find someone interested in the wild. I get their name and number and
+  // email, and the next thing they get is an email to finish setting up their account." They
+  // are the family's own caregiver — InPlace did not vet them and never says it did. The word
+  // "vouch" does not appear on this screen. See src/utils/knownCaregivers.js.
+  const [knownInvites, setKnownInvites] = useState([]);
+  const [knownOpen, setKnownOpen] = useState(false);
+  const [knownForm, setKnownForm] = useState({ recipientId: '', name: '', email: '', phone: '' });
+  const [knownSaving, setKnownSaving] = useState(false);
+  const [knownError, setKnownError] = useState('');
+
+  const fetchKnownInvites = async (recips) => {
+    const list = recips || recipients;
+    if (!list.length) { setKnownInvites([]); return; }
+    try {
+      const all = [];
+      for (const r of list) {
+        const res = await apiFetch(`/api/known-caregivers?careRecipientId=${encodeURIComponent(r.id)}`);
+        if (res?.ok) {
+          const d = await res.json();
+          (d.invites || []).forEach((inv) => all.push({ ...inv, recipientFirstName: r.first_name || r.firstName }));
+        }
+        // 403 = not this recipient's leader; nothing to list, not an error
+      }
+      setKnownInvites(all);
+    } catch (e) { /* a failed list is an empty list here, and the door still works */ }
+  };
+
+  const sendKnownInvite = async () => {
+    setKnownError('');
+    const rid = knownForm.recipientId || (recipients[0] && recipients[0].id);
+    if (!rid) { setKnownError('Add your loved one first, then add their caregiver.'); return; }
+    if (!knownForm.name.trim()) { setKnownError('Their name is required.'); return; }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(knownForm.email.trim())) { setKnownError('That email doesn\u2019t look right.'); return; }
+    setKnownSaving(true);
+    try {
+      const res = await apiFetch('/api/known-caregivers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ careRecipientId: rid, name: knownForm.name.trim(), email: knownForm.email.trim(), phone: knownForm.phone.trim() || null }),
+      });
+      const d = res ? await res.json().catch(() => ({})) : {};
+      if (res?.ok) {
+        showToast(d.message || 'Email sent', 'success');
+        setKnownForm({ recipientId: '', name: '', email: '', phone: '' });
+        setKnownOpen(false);
+        await fetchKnownInvites();
+      } else {
+        setKnownError(d.error || 'Couldn\u2019t send that. Try again.');
+      }
+    } catch (e) {
+      setKnownError('Couldn\u2019t reach InPlace. Check your connection and try again.');
+    }
+    setKnownSaving(false);
+  };
+
+  const resendKnownInvite = async (inv) => {
+    try {
+      const res = await apiFetch(`/api/known-caregivers/${inv.id}/resend`, { method: 'POST' });
+      const d = res ? await res.json().catch(() => ({})) : {};
+      if (res?.ok) { showToast(d.message || 'Sent another email', 'success'); await fetchKnownInvites(); }
+      else showToast(d.error || 'Couldn\u2019t resend', 'error');
+    } catch (e) { showToast('Couldn\u2019t reach InPlace', 'error'); }
+  };
+
+  const withdrawKnownInvite = async (inv) => {
+    if (!window.confirm(`Withdraw the invite to ${inv.name}? The link in their email will stop working.`)) return;
+    try {
+      const res = await apiFetch(`/api/known-caregivers/${inv.id}`, { method: 'DELETE' });
+      const d = res ? await res.json().catch(() => ({})) : {};
+      if (res?.ok) { showToast('Invite withdrawn', 'success'); await fetchKnownInvites(); }
+      else showToast(d.error || 'Couldn\u2019t withdraw', 'error');
+    } catch (e) { showToast('Couldn\u2019t reach InPlace', 'error'); }
+  };
+
+  // Privacy: hide caregiver full names in browse — show first name + last initial only
+  // Full names are revealed only after in-app connection/assignment
+  const privacyName = (cg, isAssigned) => {
+    if (isAssigned) return cg.name || 'Caregiver'; // assigned caregivers show full name
+    if (!cg.name) return 'Caregiver';
+    const parts = cg.name.trim().split(/\s+/);
+    if (parts.length < 2) return parts[0];
+    return `${parts[0]} ${parts[parts.length - 1][0]}.`;
+  };
+
+  // Location search state
+  const [searchAddress, setSearchAddress] = useState('');
+  const [searchRadius, setSearchRadius] = useState(25);
+  const [searchCenter, setSearchCenter] = useState(null);
+  const [locationResults, setLocationResults] = useState([]);
+  const [searchFailed, setSearchFailed] = useState(false); // v1.105.51
+  const [locationLoading, setLocationLoading] = useState(false);
+  const [hasSearched, setHasSearched] = useState(false);
+
+  // Map refs
+  const mapRef = useRef(null);
+  const leafletMap = useRef(null);
+  const markersRef = useRef([]);
+  const circleRef = useRef(null);
+  // v1.106.28 — handles for everything the map effect schedules, so the cleanup can actually
+  // stop it. Five setTimeouts and a ResizeObserver used to escape it entirely.
+  const pending = useRef([]);
+  const observer = useRef(null);
+  const autoSearchedRef = useRef(false);
+
+  const fetchData = async () => {
+    try {
+      const [cgRes, assignRes, dashRes] = await Promise.all([
+        apiFetch('/api/caregivers?radius=100'),
+        apiFetch('/api/assignments'),
+        apiFetch('/api/dashboard'),
+      ]);
+      if (cgRes?.ok) {
+        const d = await cgRes.json();
+        setCaregivers(d.caregivers || []);
+      }
+      if (assignRes?.ok) {
+        const d = await assignRes.json();
+        setAssignments(d.assignments || []);
+      }
+      if (dashRes?.ok) {
+        const d = await dashRes.json();
+        setRecipients(d.careRecipients || []);
+        fetchKnownInvites(d.careRecipients || []); // v1.105.186
+
+        // Auto-populate search with first recipient's zip or city, then auto-search
+        const first = (d.careRecipients || [])[0];
+        if (first && !searchAddress) {
+          const zip = first.location_zip || first.locationZip;
+          const city = first.location_city || first.locationCity;
+          const state = first.location_state || first.locationState;
+          const addr = zip || (city ? `${city}, ${state || 'VA'}` : '');
+          if (addr) {
+            setSearchAddress(addr);
+            // Also set center from recipient coords if available
+            if (first.latitude && first.longitude) {
+              setSearchCenter({ lat: first.latitude, lng: first.longitude });
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Fetch caregivers error:', err);
+    }
+    setLoading(false);
+  };
+
+  useEffect(() => { fetchData(); }, []);
+
+  // Auto-search nearby tab when address is populated from recipient
+  useEffect(() => {
+    if (searchAddress && activeTab === 'nearby' && !autoSearchedRef.current && !hasSearched) {
+      autoSearchedRef.current = true;
+      handleLocationSearch();
+    }
+  }, [searchAddress, activeTab]);
+
+  const handleAssign = async (caregiverProfileId, recipientId) => {
+    try {
+      const res = await apiFetch('/api/assignments', {
+        method: 'POST',
+        body: JSON.stringify({ caregiverProfileId, careRecipientId: recipientId }),
+      });
+      if (res?.ok) { await fetchData(); showToast('Caregiver assigned', 'success'); }
+      else showToast('Failed to assign caregiver', 'error');
+    } catch (err) {
+      console.error('Assign error:', err);
+      showToast('Failed to assign caregiver', 'error');
+    }
+  };
+
+  const handleUnassign = async (assignmentId) => {
+    try {
+      const res = await apiFetch(`/api/assignments/${assignmentId}`, { method: 'DELETE' });
+      if (res?.ok) { await fetchData(); showToast('Caregiver removed', 'success'); }
+    } catch (err) {
+      console.error('Unassign error:', err);
+      showToast('Failed to remove caregiver', 'error');
+    }
+  };
+
+  const handleToggleFavorite = async (assignmentId) => {
+    try {
+      const res = await apiFetch(`/api/assignments/${assignmentId}/favorite`, { method: 'PUT' });
+      if (res?.ok) { await fetchData(); showToast('Favorite updated', 'success'); }
+    } catch (err) {
+      console.error('Favorite toggle error:', err);
+    }
+  };
+
+  // ─── Location Search ───
+  const handleLocationSearch = async () => {
+    if (!searchAddress.trim()) return;
+    setLocationLoading(true);
+    setHasSearched(true);
+    try {
+      const params = new URLSearchParams({
+        address: searchAddress,
+        radius: searchRadius.toString(),
+      });
+      // v1.105.51 — a failed search left locationResults untouched and the panel said "No
+      // caregivers found in this area." A family looking for help was told nobody was
+      // nearby when the search had simply failed.
+      const res = await apiFetch(`/api/caregivers?${params}`);
+      if (!res?.ok) {
+        setSearchFailed(true);
+        showToast('Search failed — please try again', 'error');
+      } else {
+        const data = await res.json();
+        setSearchFailed(false);
+        setLocationResults(data.caregivers || []);
+        setSearchCenter(data.searchCenter);
+      }
+    } catch (err) {
+      console.error('Location search error:', err);
+      setSearchFailed(true);
+      showToast('Search failed', 'error');
+    }
+    setLocationLoading(false);
+  };
+
+  // ─── Map rendering for "Find Nearby" tab ───
+  useEffect(() => {
+    if (activeTab !== 'nearby') return;
+    // Wait for DOM
+    const timer = setTimeout(() => {
+      if (!mapRef.current) return;
+
+      if (leafletMap.current) {
+        leafletMap.current.remove();
+        leafletMap.current = null;
+      }
+      // v1.106.28 — markersRef and circleRef OUTLIVED the map they belonged to. On the next
+      // render, renderMarkers() called map.removeLayer(m) with markers from the destroyed
+      // instance; Leaflet then read _leaflet_pos off an element whose panes no longer exist:
+      //     TypeError: undefined is not an object (evaluating 't._leaflet_pos')
+      // which appears in two separate pieces of Pete's feedback from this page. A layer
+      // belongs to one map; when the map goes, so do the references to it.
+      markersRef.current = [];
+      circleRef.current = null;
+
+      const map = L.map(mapRef.current, {
+        center: searchCenter ? [searchCenter.lat, searchCenter.lng] : [37.2296, -80.4139],
+        zoom: 12,
+        zoomControl: true,
+        scrollWheelZoom: true,
+      });
+
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap contributors',
+        maxZoom: 18,
+      }).addTo(map);
+
+      leafletMap.current = map;
+      map.invalidateSize(true);
+      // Force multiple invalidateSize calls to handle layout timing.
+      // v1.106.28 — every one of these was fire-and-forget: five timers and a ResizeObserver
+      // that the cleanup below never touched. They are collected now so switching tabs stops
+      // them, rather than leaving them to fire against whatever map exists by then.
+      const forceResize = () => { if (leafletMap.current) leafletMap.current.invalidateSize(true); };
+      forceResize();
+      for (const ms of [100, 300, 600, 1200]) pending.current.push(setTimeout(forceResize, ms));
+      if (window.ResizeObserver && mapRef.current) {
+        const ro = new ResizeObserver(() => forceResize());
+        ro.observe(mapRef.current);
+        observer.current = ro;
+        pending.current.push(setTimeout(() => ro.disconnect(), 3000));
+      }
+
+      // If no search center, try recipient coords or browser geolocation as fallback
+      if (!searchCenter) {
+        // v1.105.54 — plugin-first; see getDeviceLocation.
+        getDeviceLocation({ timeoutMs: 5000 }).then(({ pos }) => {
+          if (pos && leafletMap.current) {
+            leafletMap.current.setView([pos.coords.latitude, pos.coords.longitude], 12);
+          }
+        });
+      }
+    }, 100);
+
+    return () => {
+      clearTimeout(timer);
+      for (const t of pending.current) clearTimeout(t);
+      pending.current = [];
+      if (observer.current) { observer.current.disconnect(); observer.current = null; }
+      if (leafletMap.current) {
+        leafletMap.current.remove();
+        leafletMap.current = null;
+      }
+      markersRef.current = [];
+      circleRef.current = null;
+    };
+  }, [activeTab, searchCenter]);
+
+  // Update map markers when search results change
+  useEffect(() => {
+    if (activeTab !== 'nearby') return;
+    // Map is created with a 100ms delay, so wait for it.
+    // v1.106.28 — this recursed through setTimeout with nothing holding the handle, so on
+    // unmount or a tab switch it polled every 50ms for the life of the page, and when a map
+    // did appear it rendered markers from a closure over stale results.
+    let cancelled = false;
+    let waitTimer = null;
+    const waitForMap = () => {
+      if (cancelled) return;
+      if (!leafletMap.current) { waitTimer = setTimeout(waitForMap, 50); return; }
+      renderMarkers();
+    };
+    const markerCleanup = { fn: null };
+    const renderMarkers = () => {
+    const map = leafletMap.current;
+    if (!map) return;
+    const assignedCgIds = new Set(assignments.map(a => a.caregiver_profile_id));
+
+    // Clear old
+    markersRef.current.forEach(m => map.removeLayer(m));
+    markersRef.current = [];
+    if (circleRef.current) { map.removeLayer(circleRef.current); circleRef.current = null; }
+
+    const bounds = [];
+
+    // Draw search radius circle
+    if (searchCenter) {
+      circleRef.current = L.circle([searchCenter.lat, searchCenter.lng], {
+        radius: searchRadius * 1609.34,
+        color: 'var(--accent-color)',
+        fillColor: 'var(--accent-color)',
+        fillOpacity: 0.06,
+        weight: 2,
+        dashArray: '6 4',
+      }).addTo(map);
+
+      // Search center marker
+      const centerIcon = L.divIcon({
+        className: '',
+        html: `<div style="background:#e8724a;color:#fff;width:12px;height:12px;border-radius:50%;border:3px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,0.4);"></div>`,
+        iconSize: [18, 18],
+        iconAnchor: [9, 9],
+      });
+      const cm = L.marker([searchCenter.lat, searchCenter.lng], { icon: centerIcon }).addTo(map);
+      cm.bindPopup(`<div style="font-family:sans-serif;font-size:12px"><strong>Search Center</strong><br/>${String(searchAddress || '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))}</div>`);
+      markersRef.current.push(cm);
+      bounds.push([searchCenter.lat, searchCenter.lng]);
+    }
+
+    // Merge location results + assigned caregivers, applying fallback coords for those without location
+    const fallbackLat = searchCenter?.lat || (recipients[0] && (recipients[0].latitude || recipients[0].lat));
+    const fallbackLng = searchCenter?.lng || (recipients[0] && (recipients[0].longitude || recipients[0].lng));
+    const locationCgIds = new Set(locationResults.map(cg => cg.id));
+
+    // Start with location results, applying fallback coords to assigned ones without lat/lng
+    const allMapCaregivers = locationResults.map(cg => {
+      if (!cg.latitude && !cg.longitude && assignedCgIds.has(cg.id) && fallbackLat) {
+        return { ...cg, latitude: fallbackLat, longitude: fallbackLng, isAssigned: true, distance: null };
+      }
+      return cg;
+    });
+
+    // Add assigned caregivers not already in location results
+    assignments.forEach(a => {
+      const cg = caregivers.find(c => c.id === a.caregiver_profile_id);
+      if (cg && !locationCgIds.has(cg.id)) {
+        const lat = cg.latitude || fallbackLat;
+        const lng = cg.longitude || fallbackLng;
+        if (lat && lng) {
+          allMapCaregivers.push({ ...cg, latitude: lat, longitude: lng, isAssigned: true, distance: null });
+        }
+      }
+    });
+
+    // Caregiver pins — offset colocated markers in a spiral
+    const cgLocCounts = {};
+    allMapCaregivers.forEach((cg) => {
+      if (!cg.latitude || !cg.longitude) return;
+
+      // Offset colocated markers so they don't stack
+      let pinLat = cg.latitude, pinLng = cg.longitude;
+      const locKey = parseFloat(cg.latitude).toFixed(4) + ',' + parseFloat(cg.longitude).toFixed(4);
+      cgLocCounts[locKey] = (cgLocCounts[locKey] || 0) + 1;
+      const cgIdx = cgLocCounts[locKey] - 1;
+      if (cgIdx > 0) {
+        const angle = (cgIdx * 137.5) * Math.PI / 180;
+        const dist = 0.0008 * Math.sqrt(cgIdx);
+        pinLat += dist * Math.cos(angle);
+        pinLng += dist * Math.sin(angle);
+      }
+
+      const isAssigned = cg.isAssigned || assignedCgIds.has(cg.id);
+      // v1.107.7 — everything below is built as an HTML string for Leaflet, and the name, the
+      // specialties and the bio are all typed by the caregiver. Escaped, every one.
+      const esc = (v) => String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+      const displayName = esc(privacyName(cg, isAssigned));
+      // Pete: "on a map her thumbnail and a quick bio can help customers choose who they want
+      // to hire." The first sentence or so of her own paragraph, in her own words.
+      const bioText = String(cg.bio || '').replace(/\s+/g, ' ').trim();
+      const quickBio = bioText.length > 110 ? bioText.slice(0, 110).replace(/\s+\S*$/, '') + '\u2026' : bioText;
+      const pinColor = isAssigned ? 'var(--accent-color)' : '#2563eb';
+      const distLabel = cg.distance != null ? ` &bull; ${cg.distance}mi` : '';
+      const photoHtml = cg.profilePhoto
+        ? `<img src="${esc(cg.profilePhoto)}" style="width:32px;height:32px;border-radius:50%;object-fit:cover;border:2px solid ${pinColor};margin-right:8px;flex-shrink:0" />`
+        : `<div style="width:32px;height:32px;border-radius:50%;background:${pinColor};color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;border:2px solid #fff;margin-right:8px;flex-shrink:0">${(displayName || '?').split(' ').map(n => n[0]).join('').slice(0, 2)}</div>`;
+
+      const icon = L.divIcon({
+        className: 'cg-map-pin',
+        html: `<div style="
+          background:${pinColor};color:#fff;padding:5px 10px;border-radius:8px 8px 8px 0;
+          font-size:11px;font-weight:600;white-space:nowrap;
+          box-shadow:0 2px 6px rgba(0,0,0,0.3);
+          font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;
+          display:inline-flex;align-items:center;gap:3px;
+        ">${isAssigned ? '<span style="font-size:10px;line-height:1">⭐</span>' : ''}${displayName}${distLabel}</div>`,
+        iconSize: [120, 28],
+        iconAnchor: [0, 28],
+      });
+
+      const marker = L.marker([pinLat, pinLng], { icon }).addTo(map);
+
+      // Hover tooltip with thumbnail
+      marker.bindTooltip(`
+        <div style="display:flex;align-items:center;font-family:sans-serif;padding:2px">
+          ${photoHtml}
+          <div>
+            <div style="font-weight:700;font-size:12px">${displayName}</div>
+            <div style="font-size:10px;color:#666">${isAssigned ? 'Assigned' : ''}${cg.distance != null ? `${isAssigned ? ' · ' : ''}${cg.distance}mi away` : ''}</div>
+            ${quickBio ? `<div style="font-size:11px;color:#333;max-width:200px;white-space:normal;margin-top:2px">${esc(quickBio)}</div>` : ''}
+          </div>
+        </div>
+      `, { direction: 'top', offset: [0, -35], className: 'caregiver-tooltip' });
+
+      // Click popup with full details + View Profile button
+      marker.bindPopup(`
+        <div style="min-width:180px;font-family:sans-serif">
+          <div style="display:flex;align-items:center;margin-bottom:6px">
+            ${photoHtml}
+            <div>
+              <div style="font-weight:700;font-size:13px">${displayName}</div>
+              ${isAssigned ? '<div style="font-size:10px;color:#e8724a;font-weight:600">⭐ Assigned</div>' : ''}
+            </div>
+          </div>
+          ${quickBio ? `<div style="font-size:12px;color:#333;line-height:1.35;margin:2px 0 6px">${esc(quickBio)}</div>` : ''}
+          ${cg.distance != null ? `<div style="font-size:11px;color:#666">${esc(cg.distance)} miles away</div>` : ''}
+          <div style="font-size:11px;color:#888;margin-top:2px"><span title="Family rating">⭐ ${esc(cg.rating || '—')}</span> &bull; Day $${esc(cg.rateDaytime || cg.hourlyRate)}${cg.rateNighttime && cg.rateNighttime !== cg.rateDaytime ? ` · Night $${esc(cg.rateNighttime)}` : ''}/hr</div>
+          <div style="font-size:10px;color:#1b6b5a;margin-top:4px">${esc((cg.specialties || []).join(', ')) || 'General care'}</div>
+          <button data-cg-id="${esc(cg.id)}" class="map-view-profile-btn" style="margin-top:8px;width:100%;padding:6px;background:#1b6b5a;color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer">View Profile</button>
+        </div>
+      `);
+      markersRef.current.push(marker);
+      bounds.push([cg.latitude, cg.longitude]);
+    });
+
+    if (bounds.length > 0) {
+      map.fitBounds(bounds, { padding: [40, 40], maxZoom: 14 });
+    }
+
+    // Event delegation for "View Profile" buttons in popups
+    const handlePopupClick = (e) => {
+      const btn = e.target.closest('.map-view-profile-btn');
+      if (btn) {
+        const cgId = btn.getAttribute('data-cg-id');
+        const cg = caregivers.find(c => c.id === cgId);
+        if (cg) scheduleCaregiver(cg);
+      }
+    };
+    const container = mapRef.current;
+    if (container) container.addEventListener('click', handlePopupClick);
+    markerCleanup.fn = () => { if (container) container.removeEventListener('click', handlePopupClick); };
+    };
+    waitForMap();
+    return () => {
+      cancelled = true;
+      if (waitTimer) clearTimeout(waitTimer);
+      if (markerCleanup.fn) markerCleanup.fn();
+    };
+  }, [locationResults, searchCenter, activeTab, assignments, caregivers, recipients]);
+
+  // Build a lookup: which caregiver profiles are assigned
+  const assignedMap = {};
+  assignments.forEach(a => {
+    const key = `${a.caregiver_profile_id}_${a.care_recipient_id}`;
+    assignedMap[key] = a;
+  });
+  const assignedCaregiverIds = [...new Set(assignments.map(a => a.caregiver_profile_id))];
+
+  if (loading) return <LoadingSpinner text="Loading caregivers..." />;
+
+  // ─── Caregiver Card (reused across tabs) ───
+  // v1.106.29 — the profile page reads the id off window rather than a route param, the
+  // same way CareTeamPage takes selectedTeamId. One page, one subject at a time.
+  const openCaregiverProfile = (cg) => {
+    window.__viewCaregiverId = cg.id;
+    if (typeof window.__navigateTo === 'function') window.__navigateTo('caregiver-profile');
+  };
+
+  const CaregiverCard = ({ cg, showDistance }) => {
+    const avail = CAREGIVER_AVAILABILITY[cg.name];
+    const isAssigned = assignedCaregiverIds.includes(cg.id);
+    return (
+      <div className="card" style={{ marginBottom: '10px', padding: '16px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px', flexWrap: 'wrap' }}>
+              {/* v1.106.29 — the name opens the profile. Pete: "if I click on Tina, I should
+                  see that she's in Christiansburg." A <button> rather than a styled div so
+                  it is reachable by keyboard and announced as an action. */}
+              <button onClick={() => openCaregiverProfile(cg)} style={{
+                background: 'none', border: 'none', padding: 0, font: 'inherit',
+                fontSize: '20px', fontWeight: 700, color: 'var(--text-primary)',
+                cursor: 'pointer', textAlign: 'left',
+              }}>{privacyName(cg, isAssigned)}</button>
+              {isAssigned && (
+                <span style={{ padding: '2px 8px', background: 'var(--color-success-bg)', color: 'var(--color-success)', borderRadius: '10px', fontSize: '10px', fontWeight: 600 }}>Assigned</span>
+              )}
+              {showDistance && cg.distance !== undefined && (
+                <span style={{ padding: '2px 8px', background: 'var(--color-warning-bg)', color: 'var(--color-warning)', borderRadius: '10px', fontSize: '10px', fontWeight: 600 }}>
+                  {cg.distance} mi away
+                </span>
+              )}
+            </div>
+            <div style={{ fontSize: '12px', color: 'var(--text-tertiary)', marginBottom: '4px' }}>
+              <span title="Family rating of this caregiver">⭐ {cg.rating || '—'}</span> &bull; {cg.reviewCount || 0} reviews &bull;
+              {(cg.rateDaytime && cg.rateNighttime && cg.rateDaytime !== cg.rateNighttime)
+                ? <> Day ${cg.rateDaytime} · Night ${cg.rateNighttime} · Overnight ${cg.rateOvernight}/hr</>
+                : <> ${cg.hourlyRate || '—'}/hr</>
+              }
+              {cg.city && <> • {cg.city}, {cg.state || ''}</>}
+            </div>
+            {cg.bio && (
+              <div onClick={() => openCaregiverProfile(cg)}
+                style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '4px', lineHeight: '1.4', cursor: 'pointer' }}>
+                {cg.bio.length > 120 ? cg.bio.slice(0, 120) + '\u2026' : cg.bio}
+                {cg.bio.length > 120 && (
+                  <span style={{ color: 'var(--role-color)', fontWeight: 700 }}> More</span>
+                )}
+              </div>
+            )}
+            <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+              {(cg.specialties || []).map((s, i) => (
+                <span key={i} style={{ padding: '2px 8px', background: 'var(--bg-highlight)', color: 'var(--role-color)', borderRadius: '10px', fontSize: '10px', fontWeight: 500 }}>{s}</span>
+              ))}
+              {cg.isBackgroundChecked ? (
+                <span style={{ padding: '2px 8px', background: 'var(--color-info-bg)', color: 'var(--color-info)', borderRadius: '10px', fontSize: '10px', fontWeight: 500 }}>✓ Background checked</span>
+              ) : cg.familyBrought ? (
+                // v1.105.186 — the family added this person themselves. Say that, not "approved".
+                <span style={{ padding: '2px 8px', background: 'var(--color-warning-bg, #fff8e1)', color: 'var(--color-warning, #f57f17)', borderRadius: '10px', fontSize: '10px', fontWeight: 500 }} title="You added this caregiver yourself. InPlace has not checked their background.">🤝 Your caregiver · no background check</span>
+              ) : cg.vouchedForYou ? (
+                <span style={{ padding: '2px 8px', background: 'var(--color-warning-bg, #fff8e1)', color: 'var(--color-warning, #f57f17)', borderRadius: '10px', fontSize: '10px', fontWeight: 500 }} title="An InPlace admin personally vouched for this caregiver working with your family. No background check has been completed.">🤝 Admin-approved for your family · no background check</span>
+              ) : null}
+            </div>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginLeft: '12px' }}>
+            <button onClick={() => scheduleCaregiver(cg)} style={{
+              padding: '8px 14px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none',
+              borderRadius: 8, fontWeight: 600, fontSize: 12, cursor: 'pointer', whiteSpace: 'nowrap',
+            }}>Schedule</button>
+            {!isAssigned && recipients.length > 0 && (
+              <select onChange={(e) => {
+                if (e.target.value) handleAssign(cg.id, e.target.value);
+                e.target.value = '';
+              }} style={{
+                padding: '6px 8px', border: '1px solid #1b6b5a', borderRadius: '6px',
+                fontSize: '11px', color: 'var(--role-color)', cursor: 'pointer', background: 'var(--bg-surface)',
+              }}>
+                <option value="">+ Assign to...</option>
+                {recipients.map(r => (
+                  <option key={r.id} value={r.id}>{r.first_name} {r.last_name}</option>
+                ))}
+              </select>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <>
+      <div className="page-header">
+        <h1 className="page-title">Caregivers</h1>
+        <p className="page-subtitle">Manage your care team and find nearby caregivers</p>
+      </div>
+
+      {/* v1.105.186 — the second door. "Find a caregiver" is the other two tabs; this is
+          for a neighbour, a friend from church, someone who has helped before. */}
+      <div className="card" style={{ marginBottom: '14px', border: '1.5px solid var(--role-color)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '16px', fontWeight: 700, color: 'var(--role-color)', marginBottom: '4px' }}>
+          <span>&#129309;</span> Add someone you already know
+        </div>
+        <p style={{ margin: '0 0 12px', fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.45 }}>
+          A neighbour, a friend from church, someone who{'\u2019'}s helped before. We{'\u2019'}ll set them up as {recipients[0] ? (recipients[0].first_name || recipients[0].firstName) + '\u2019s' : 'your loved one\u2019s'} caregiver so you can book and pay them here.
+        </p>
+        {!knownOpen ? (
+          <button onClick={() => setKnownOpen(true)} style={{
+            width: '100%', padding: '11px', background: 'var(--role-color)', color: 'var(--text-on-primary)',
+            border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: 700, cursor: 'pointer',
+          }}>Add a caregiver</button>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            {recipients.length > 1 && (
+              <label style={{ fontSize: '12px', fontWeight: 500, color: 'var(--text-secondary)' }}>
+                For
+                <select value={knownForm.recipientId || recipients[0].id} onChange={(e) => setKnownForm({ ...knownForm, recipientId: e.target.value })}
+                  style={{ display: 'block', width: '100%', marginTop: '4px', padding: '9px 10px', borderRadius: '6px', border: '1px solid var(--input-border)', background: 'var(--input-bg)', color: 'var(--text-primary)', fontSize: '14px' }}>
+                  {recipients.map((r) => <option key={r.id} value={r.id}>{r.first_name || r.firstName} {r.last_name || r.lastName || ''}</option>)}
+                </select>
+              </label>
+            )}
+            <label style={{ fontSize: '12px', fontWeight: 500, color: 'var(--text-secondary)' }}>
+              Their name
+              <input type="text" value={knownForm.name} onChange={(e) => setKnownForm({ ...knownForm, name: e.target.value })} autoComplete="off"
+                style={{ display: 'block', width: '100%', marginTop: '4px', padding: '9px 10px', borderRadius: '6px', border: '1px solid var(--input-border)', background: 'var(--input-bg)', color: 'var(--text-primary)', fontSize: '14px', boxSizing: 'border-box' }} />
+            </label>
+            <label style={{ fontSize: '12px', fontWeight: 500, color: 'var(--text-secondary)' }}>
+              Email
+              <input type="email" inputMode="email" value={knownForm.email} onChange={(e) => setKnownForm({ ...knownForm, email: e.target.value })} autoComplete="off"
+                style={{ display: 'block', width: '100%', marginTop: '4px', padding: '9px 10px', borderRadius: '6px', border: '1px solid var(--input-border)', background: 'var(--input-bg)', color: 'var(--text-primary)', fontSize: '14px', boxSizing: 'border-box' }} />
+            </label>
+            <label style={{ fontSize: '12px', fontWeight: 500, color: 'var(--text-secondary)' }}>
+              Phone <span style={{ fontWeight: 400, color: 'var(--text-muted)' }}>optional {'\u00B7'} saved to their profile, we won{'\u2019'}t text them</span>
+              <input type="tel" inputMode="tel" value={knownForm.phone} onChange={(e) => setKnownForm({ ...knownForm, phone: e.target.value })} autoComplete="off"
+                style={{ display: 'block', width: '100%', marginTop: '4px', padding: '9px 10px', borderRadius: '6px', border: '1px solid var(--input-border)', background: 'var(--input-bg)', color: 'var(--text-primary)', fontSize: '14px', boxSizing: 'border-box' }} />
+            </label>
+            {/* Plain words about what InPlace did and did not check. This paragraph is the
+                posture; keep it honest before keeping it short. */}
+            <div style={{ fontSize: '12px', lineHeight: 1.45, color: 'var(--text-secondary)', background: 'var(--bg-highlight)', borderRadius: '8px', padding: '10px 12px' }}>
+              <strong style={{ color: 'var(--role-color)' }}>{knownForm.name.trim() ? knownForm.name.trim().split(/\s+/)[0] : 'They'} will be your caregiver{recipients[0] ? ' for ' + (recipients[0].first_name || recipients[0].firstName) : ''}.</strong>{' '}
+              You know them; InPlace hasn{'\u2019'}t checked their background. You can book them as soon as they{'\u2019'}re set up to be paid. To take work from other families on InPlace they{'\u2019'}ll need the full safety check, same as everyone.
+            </div>
+            {knownError && <div style={{ fontSize: '13px', color: 'var(--color-error)' }}>{knownError}</div>}
+            <button onClick={sendKnownInvite} disabled={knownSaving} style={{
+              width: '100%', padding: '11px', background: 'var(--role-color)', color: 'var(--text-on-primary)',
+              border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: 700, cursor: 'pointer', opacity: knownSaving ? 0.7 : 1,
+            }}>{knownSaving ? 'Sending\u2026' : `Send ${knownForm.name.trim() ? knownForm.name.trim().split(/\s+/)[0] : 'them'} an email`}</button>
+            <button onClick={() => { setKnownOpen(false); setKnownError(''); }} style={{
+              width: '100%', padding: '10px', background: 'transparent', color: 'var(--text-primary)',
+              border: '1px solid var(--border-light)', borderRadius: '8px', fontSize: '14px', cursor: 'pointer',
+            }}>Cancel</button>
+          </div>
+        )}
+      </div>
+
+      {/* Tabs */}
+      <div style={{ display: 'flex', gap: '4px', marginBottom: '20px', borderBottom: '2px solid #e0e0e0' }}>
+        {[
+          { id: 'assigned', label: `Assigned (${assignments.length})`, icon: '⭐' },
+          { id: 'browse', label: 'Browse All', icon: '🔍' },
+          { id: 'nearby', label: 'Find Nearby', icon: '📍' },
+        ].map(tab => (
+          <button key={tab.id} onClick={() => setActiveTab(tab.id)} style={{
+            padding: '10px 16px', border: 'none', background: 'none', cursor: 'pointer',
+            fontSize: '13px', fontWeight: activeTab === tab.id ? 700 : 400,
+            color: activeTab === tab.id ? 'var(--role-color)' : 'var(--text-tertiary)',
+            borderBottom: activeTab === tab.id ? '3px solid #1b6b5a' : '3px solid transparent',
+            marginBottom: '-2px',
+          }}>
+            {tab.icon} {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* ─── Assigned Tab ─── */}
+      {activeTab === 'assigned' && (
+        <div>
+          {/* Invited, not yet bookable. Honest state per row: waiting on them, or expired. */}
+          {knownInvites.filter((i) => i.status !== 'accepted' || (!(i.progress && i.progress.ready) && !assignments.some((a) => a.caregiver_user_id === i.progress?.userId))).length > 0 && (
+            <div className="card" style={{ marginBottom: '14px', padding: '6px 16px' }}>
+              <div style={{ fontSize: '11px', fontWeight: 500, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-muted)', padding: '10px 0 2px' }}>Invited</div>
+              {knownInvites.filter((i) => i.status !== 'accepted' || (!(i.progress && i.progress.ready) && !assignments.some((a) => a.caregiver_user_id === i.progress?.userId))).map((inv) => {
+                const first = (inv.name || inv.email).split(/\s+/)[0];
+                const p = inv.progress;
+                const line = inv.status === 'expired' ? 'Link expired'
+                  : inv.status === 'accepted' ? `${p ? p.done : 1} of ${p ? p.of : 4} done`
+                  : 'Sent \u00B7 not opened yet';
+                const pill = inv.status === 'expired'
+                  ? { text: 'Expired', bg: 'var(--color-error-bg)', fg: 'var(--color-error)' }
+                  : { text: `Waiting on ${first}`, bg: 'var(--color-warning-bg, #fff8e1)', fg: 'var(--color-warning, #b7791f)' };
+                return (
+                  <div key={inv.id} style={{ borderTop: '1px solid var(--border-color)', padding: '10px 0' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'var(--bg-accent-light)', color: 'var(--accent-color)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 13, flexShrink: 0 }}>
+                        {(inv.name || inv.email).split(/\s+/).map((n) => n[0]).join('').slice(0, 2).toUpperCase()}
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)' }}>{inv.name || inv.email}</div>
+                        <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>For {inv.recipientFirstName} {'\u00B7'} {line}</div>
+                      </div>
+                      <span style={{ fontSize: '10.5px', fontWeight: 500, borderRadius: '999px', padding: '3px 8px', whiteSpace: 'nowrap', background: pill.bg, color: pill.fg }}>{pill.text}</span>
+                    </div>
+                    {inv.status !== 'accepted' && (
+                      <div style={{ display: 'flex', gap: '8px', paddingTop: '8px' }}>
+                        <button onClick={() => resendKnownInvite(inv)} style={{ fontSize: '11px', fontWeight: 500, background: 'var(--role-color-light)', color: 'var(--role-color)', border: 'none', borderRadius: '999px', padding: '4px 10px', cursor: 'pointer' }}>Resend email</button>
+                        <button onClick={() => withdrawKnownInvite(inv)} style={{ fontSize: '11px', fontWeight: 500, background: 'var(--badge-muted-bg)', color: 'var(--badge-muted-text)', border: 'none', borderRadius: '999px', padding: '4px 10px', cursor: 'pointer' }}>Withdraw</button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {assignments.length > 0 ? assignments.map((a, idx) => {
+            const cg = caregivers.find(c => c.id === a.caregiver_profile_id);
+            return (
+              <div key={idx} className="card" style={{ marginBottom: '10px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+                  {/* Caregiver avatar */}
+                  {cg?.profilePhoto ? (
+                    <div style={{ width: 40, height: 40, borderRadius: '50%', overflow: 'hidden', flexShrink: 0 }}><img src={cg.profilePhoto} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /></div>
+                  ) : (
+                    <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'var(--role-color)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-on-primary)', fontSize: 14, fontWeight: 600, flexShrink: 0 }}>
+                      {(cg?.name || '?').split(' ').map(n => n[0]).join('').slice(0, 2)}
+                    </div>
+                  )}
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                      <span style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)' }}>
+                        {cg?.name || (a.first_name ? `${a.first_name} ${a.last_name || ''}`.trim() : 'Caregiver')}
+                      </span>
+                      <button onClick={() => handleToggleFavorite(a.id)} style={{
+                        background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px', padding: 0,
+                      }} title={a.is_favorite ? 'Remove favorite' : 'Mark as favorite'}>
+                        {a.is_favorite ? '⭐' : '☆'}
+                      </button>
+                    </div>
+                    <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
+                      Assigned to: <strong>{a.recipient_first_name || ''} {a.recipient_last_name || ''}</strong>
+                    </div>
+                    {/* v1.105.186 — what actually happened, in the family's own words. Never
+                        "approved": nobody at InPlace checked anything. */}
+                    {Number(a.family_brought) > 0 && !a.is_background_checked && (() => {
+                      const inv = knownInvites.find((i) => i.progress && i.progress.userId === a.caregiver_user_id);
+                      const p = inv && inv.progress;
+                      return (
+                        <div style={{ fontSize: '12px', color: 'var(--text-tertiary)', marginTop: '2px' }}>
+                          Your caregiver {'\u00B7'} {a.recipient_first_name || 'this family'} only {'\u00B7'} no background check
+                          {p && !p.ready && (
+                            <span style={{ color: 'var(--color-warning, #b7791f)', fontWeight: 500 }}> {'\u00B7'} still setting up, {p.done} of {p.of} done</span>
+                          )}
+                        </div>
+                      );
+                    })()}
+                    {cg && (
+                      <div style={{ fontSize: '12px', color: 'var(--text-tertiary)', marginTop: '4px' }}>
+                        <span title="Family rating of this caregiver">⭐ {cg.rating || '—'}</span> &bull;
+                        {(cg.rateDaytime && cg.rateNighttime && cg.rateDaytime !== cg.rateNighttime)
+                          ? <> Day ${cg.rateDaytime} · Night ${cg.rateNighttime} · Overnight ${cg.rateOvernight}/hr</>
+                          : <> ${cg.hourlyRate || '—'}/hr</>
+                        } &bull; {(cg.specialties || []).join(', ') || 'General care'}
+                      </div>
+                    )}
+                  </div>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    {cg && (
+                      <button onClick={() => scheduleCaregiver(cg)} style={{
+                        padding: '6px 14px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none',
+                        borderRadius: '6px', fontSize: '12px', cursor: 'pointer', fontWeight: 600,
+                      }}>Schedule</button>
+                    )}
+                    <button onClick={() => handleUnassign(a.id)} style={{
+                      padding: '6px 14px', background: 'var(--bg-surface)', color: 'var(--color-red-strong)', border: '1px solid #fcc',
+                      borderRadius: '6px', fontSize: '12px', cursor: 'pointer',
+                    }}>Remove</button>
+                  </div>
+                </div>
+              </div>
+            );
+          }) : (
+            <div className="card" style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
+              No caregivers yet. Add someone you already know above, or find one nearby.
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ─── Browse All Tab ─── */}
+      {activeTab === 'browse' && (
+        <div>
+          {caregivers.length > 0 ? caregivers.map((cg, idx) => (
+            <CaregiverCard key={idx} cg={cg} showDistance={false} />
+          )) : (
+            <div className="card" style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
+              No caregivers available right now.
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ─── Find Nearby Tab ─── */}
+      {activeTab === 'nearby' && (
+        <div>
+          {/* Search bar */}
+          <div style={{
+            display: 'flex', gap: '8px', marginBottom: '16px', alignItems: 'flex-end', flexWrap: 'wrap',
+          }}>
+            <div style={{ flex: '1 1 250px' }}>
+              <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>
+                Location (address, city, or zip)
+              </label>
+              <input
+                type="text"
+                value={searchAddress}
+                onChange={(e) => setSearchAddress(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleLocationSearch()}
+                placeholder="Blacksburg, VA or 24060"
+                style={{
+                  width: '100%', padding: '10px 12px', border: '1px solid #ddd', borderRadius: '8px',
+                  fontSize: '14px', boxSizing: 'border-box',
+                }}
+              />
+            </div>
+            <div>
+              <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>
+                Radius
+              </label>
+              <select value={searchRadius} onChange={(e) => setSearchRadius(parseInt(e.target.value))} style={{
+                padding: '10px 12px', border: '1px solid #ddd', borderRadius: '8px', fontSize: '14px', background: 'var(--bg-surface)',
+              }}>
+                <option value={5}>5 miles</option>
+                <option value={10}>10 miles</option>
+                <option value={15}>15 miles</option>
+                <option value={25}>25 miles</option>
+                <option value={50}>50 miles</option>
+                <option value={100}>100 miles</option>
+              </select>
+            </div>
+            <button onClick={handleLocationSearch} disabled={locationLoading} style={{
+              padding: '10px 20px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none',
+              borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: 'pointer',
+              opacity: locationLoading ? 0.7 : 1,
+            }}>
+              {locationLoading ? 'Searching...' : '🔍 Search'}
+            </button>
+          </div>
+
+          {/* Map */}
+          <div style={{
+            borderRadius: '12px', overflow: 'hidden', border: '1px solid #e0e0e0',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.08)', marginBottom: '16px',
+          }}>
+            <div ref={mapRef} style={{ height: '350px', width: '100%' }} />
+          </div>
+
+          {/* Results list */}
+          {hasSearched && (
+            <div>
+              <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '10px' }}>
+                {locationResults.length > 0
+                  ? `${locationResults.length} caregiver${locationResults.length !== 1 ? 's' : ''} within ${searchRadius} miles`
+                  : searchFailed
+                    ? "That search didn't go through. Check your connection and try again."
+                    : 'No caregivers found in this area. Try expanding the search radius.'
+                }
+              </div>
+              {locationResults.map((cg, idx) => (
+                <CaregiverCard key={idx} cg={cg} showDistance={true} />
+              ))}
+            </div>
+          )}
+
+          {!hasSearched && (
+            <div className="card" style={{ textAlign: 'center', padding: '30px', color: 'var(--text-muted)' }}>
+              Enter an address above and search to find caregivers nearby.
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Scheduling uses the main RequestCareModal via window.__openRequestCareModal */}
+    </>
+  );
+};

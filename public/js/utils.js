@@ -1,0 +1,1896 @@
+const { useState, useEffect, useRef, useCallback, useMemo, createContext, useContext } = React;
+const API_BASE = window.location.origin;
+
+// ─── Accessibility: Text size ───
+const applyTextSize = window.applyTextSize = (size) => {
+  document.body.classList.remove('text-size-large', 'text-size-xlarge');
+  if (size === 'large') document.body.classList.add('text-size-large');
+  else if (size === 'xlarge') document.body.classList.add('text-size-xlarge');
+  try { localStorage.setItem('inplace_textSize', size || 'default'); } catch {}
+};
+// Apply immediately from localStorage (before API loads) for instant visual
+try {
+  const savedSize = localStorage.getItem('inplace_textSize');
+  if (savedSize && savedSize !== 'default') applyTextSize(savedSize);
+} catch {}
+
+// ─── Phone formatting: (555) 123-4567 or international passthrough ───
+const formatPhone = window.formatPhone = (value, isInternational) => {
+  if (!value) return '';
+  if (isInternational) {
+    // Free-form: allow +, digits, spaces, dashes — no forced formatting
+    return String(value).replace(/[^\d\s\-\+]/g, '').slice(0, 30);
+  }
+  const d = String(value).replace(/\D/g, '');
+  if (!d) return '';
+  if (d.length <= 3) return '(' + d;
+  if (d.length <= 6) return '(' + d.slice(0, 3) + ') ' + d.slice(3);
+  return '(' + d.slice(0, 3) + ') ' + d.slice(3, 6) + '-' + d.slice(6, 10);
+};
+
+// ─── International phone disclaimer text ───
+const INTL_PHONE_DISCLAIMER = window.INTL_PHONE_DISCLAIMER = 'InPlace is primarily US-based. With an international number, you should not expect to receive calls from a caregiver. Plan on using the in-app chat feature primarily. Voice and video options are coming soon.';
+
+const SERVICE_TYPE_LABELS = {
+  companionship: 'Companionship', companion: 'Companionship',
+  personal_care: 'Personal Care', meal_prep: 'Meal Prep',
+  transportation: 'Transportation', rides: 'Rides', meals: 'Meals',
+  health_wellness: 'Health & Wellness', full_day: 'Full Day',
+  overnight: 'Overnight', respite: 'Respite Care',
+  housekeeping: 'Housekeeping',
+};
+// ─── What a job pays, computed once (v1.105.106) ───
+//
+// Julia, dc5e86b5: "$24 and then $29 listed on same job (doesn't match up)."
+//
+// She was right, and it was not a display preference — it was arithmetic that could not be
+// reconciled. The two job cards each computed the money inline, twice over, like this:
+//
+//   basePerHour   = Math.round(baseCost / hours)     ← whole dollars
+//   effectiveTotal = baseCost                        ← then rendered with .toFixed(0)
+//
+// Two independent roundings of the same money. A 1.2-hour job at $29 showed a "$24/hr" pill
+// and a bare "$29", and 24 x 1.2 is 28.8, not 29 — so multiplying what she could see never
+// gave what she could see. Worse, the $29 carried NO LABEL at all: a rate and a total sitting
+// side by side, one of them unexplained. Of course it didn't match up.
+//
+// So: derive everything from ONE total, round only at the very end, and never round a rate
+// independently of the total it came from.
+//
+// `estimated_cost` IS the caregiver's take — sessions.js sets
+// `caregiver_payout: estimatedCost` with the comment "caregiver gets the full amount"; the
+// platform fee is added ON TOP for the family. So it is honest to label this as what she earns.
+const jobPay = window.jobPay = (job) => {
+  const hours = parseFloat(job && job.durationHours) || 0;
+  const surcharge = parseFloat(job && job.shortNoticeSurcharge) || 0;
+  const proposedRate = parseFloat(job && job.proposedRate) || 0;
+  const baseCost = parseFloat(job && job.estimatedCost) || 0;
+
+  // One total. Everything below is derived from it.
+  const total = proposedRate > 0 ? (proposedRate * hours) + surcharge : baseCost;
+  const perHour = hours > 0 ? total / hours : 0;
+  // What it would pay without the short-notice bonus — from the SAME total, not a
+  // separately-rounded figure.
+  const basePerHour = hours > 0 ? (total - surcharge) / hours : 0;
+
+  return {
+    hours,
+    surcharge,
+    hasBonus: surcharge > 0,
+    total,
+    perHour,
+    basePerHour,
+  };
+};
+
+// ─── Which hours a calendar needs to show (v1.105.110) ───
+//
+// Tyler, 16328059: "Calendar starts at 0am and looks odd on the dashboard."
+//
+// CaregiverCalendar drew a fixed `hourStart = 0, hourEnd = 24` grid. Twenty-four rows, of
+// which the overnight ten are almost always empty, so the thing you actually came to look at
+// starts a screen and a half down.
+//
+// The tempting fix is to hardcode 7–21 instead. That is wrong here: overnight supervision is
+// a service type InPlace sells, and a caregiver working 10pm–6am would find her own shift
+// clipped off the top of the calendar with nothing to say it had been.
+//
+// So: a comfortable default window, WIDENED by whatever is really on the grid. A normal week
+// shows a third fewer rows; an overnight week shows midnight. Nothing is ever hidden, which is
+// the property that matters — a calendar that silently omits a booked visit is worse than a
+// tall one.
+const DEFAULT_CALENDAR_HOURS = { start: 7, end: 21 };
+
+/**
+ * @param {Array<{hour:number, span?:number}>} spans  things occupying the grid
+ * @param {{start:number, end:number}} [fallback]
+ * @returns {{start:number, end:number}} half-open [start, end), clamped to 0..24
+ */
+const calendarHourRange = window.calendarHourRange = (spans, fallback = DEFAULT_CALENDAR_HOURS) => {
+  let start = fallback.start;
+  let end = fallback.end;
+  for (const s of spans || []) {
+    // `Number(null)` is 0, and 0 is a perfectly good hour — so a missing time would silently
+    // drag the window back to midnight, which is the exact complaint being fixed.
+    if (s == null || s.hour == null || s.hour === '') continue;
+    const h = Number(s.hour);
+    if (!Number.isFinite(h)) continue;
+    const span = Number(s.span);
+    const finish = h + (Number.isFinite(span) && span > 0 ? Math.ceil(span) : 1);
+    if (h < start) start = h;
+    if (finish > end) end = finish;
+    // A shift that runs past midnight has a tail in the early hours of the next day. Show
+    // them: an overnight caregiver looking at a calendar that stops at midnight cannot see
+    // half her own week.
+    if (finish > 24) start = 0;
+  }
+  start = Math.max(0, Math.min(23, Math.floor(start)));
+  end = Math.max(start + 1, Math.min(24, Math.ceil(end)));
+  return { start, end };
+};
+
+// How long an exclusive ("Just for You") offer has left, and whether it has lapsed —
+// both from a `now` the CALLER controls (v1.105.106).
+//
+// These used to be inlined four times in CaretakerHub, each calling `new Date()` during
+// render: twice in the two filters that decide which section a job belongs to, and once per
+// card for the countdown. List membership therefore depended on the wall clock at the instant
+// React happened to render, so any unrelated re-render could move a card from "Just for You"
+// into Find Work mid-tap. Passing `now` in makes one render see one moment.
+const exclusiveMinutesLeft = window.exclusiveMinutesLeft = (job, nowMs) => {
+  const until = job && job.exclusiveUntil ? new Date(job.exclusiveUntil).getTime() : null;
+  if (!until || Number.isNaN(until)) return null;
+  return Math.max(0, Math.floor((until - nowMs) / 60000));
+};
+
+const isExclusiveExpired = window.isExclusiveExpired = (job, nowMs) => {
+  const left = exclusiveMinutesLeft(job, nowMs);
+  return left !== null && left <= 0;
+};
+
+// Money the reader can check with a calculator. Whole dollars stay whole ($29, not $29.00);
+// anything else keeps its cents ($24.17), because rounding a rate to the dollar is exactly
+// what stopped the numbers reconciling.
+const formatMoney = window.formatMoney = (n) => {
+  const v = Math.round((Number(n) || 0) * 100) / 100;
+  return Number.isInteger(v) ? `$${v}` : `$${v.toFixed(2)}`;
+};
+
+// ─── v1.106.30 — an address you can tap ───
+//
+// Pete: "I would like to also be able to put addresses in the appointment so that when Tina
+// opens it. She can just click the link and it gives her where the appointment is on the map."
+//
+// care_events.location has existed since 011_care_events and the form has always collected
+// it — it was just printed as text, so the caregiver read it off the screen and typed it into
+// Maps herself, standing in a car park.
+//
+// Apple Maps on iOS, Google Maps everywhere else. Not because Google's URL fails on iOS, but
+// because it opens a browser tab asking to install the app rather than the map she wanted;
+// the point is one tap to directions, and on an iPhone that means maps.apple.com.
+const mapsUrlFor = window.mapsUrlFor = (address) => {
+  const q = String(address || "").trim();
+  if (!q) return null;
+  const isIOS = typeof navigator !== "undefined"
+    && (/iPad|iPhone|iPod/.test(navigator.userAgent || "")
+        // iPadOS 13+ reports as Macintosh; the touch points give it away.
+        || (/Macintosh/.test(navigator.userAgent || "") && (navigator.maxTouchPoints || 0) > 1));
+  return isIOS
+    ? `https://maps.apple.com/?q=${encodeURIComponent(q)}`
+    : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`;
+};
+
+// ─── v1.106.27 — a link someone typed should be a link ───
+//
+// Pete: "I texted a link and it came through plain Tex. I want it to be a clickable link."
+// Nothing in this codebase linkified anything, except one regex in Messages.js that matched
+// https://meet.google.com/ and nothing else — written for call invites, so a pharmacy URL, a
+// doctor's booking page or a Maps pin all arrived as text to be retyped by hand.
+//
+// Returns REACT NODES, not an HTML string. That is the whole safety design: message bodies
+// are user input, and React escapes text children, so there is no path from what someone
+// types to markup. A dangerouslySetInnerHTML version of this would need its own escaping and
+// would be one missed case away from stored XSS in a thread a family and a stranger share.
+//
+// Returns the plain string unchanged when there is nothing to link, so callers that render
+// it directly keep behaving exactly as before.
+const LINKIFY_RE = /\b(?:https?:\/\/|www\.)[^\s<>"']+|\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/gi;
+
+// A URL at the end of a sentence swallows the punctuation. Closing brackets are only trimmed
+// when unbalanced, because plenty of real URLs contain them (Wikipedia, Maps).
+const trimTrailing = window.__linkifyTrim = (raw) => {
+  let url = raw;
+  for (;;) {
+    const last = url.slice(-1);
+    if (".,;:!?".includes(last)) { url = url.slice(0, -1); continue; }
+    if (last === ")" && (url.match(/\(/g) || []).length < (url.match(/\)/g) || []).length) { url = url.slice(0, -1); continue; }
+    if (last === "]" && (url.match(/\[/g) || []).length < (url.match(/\]/g) || []).length) { url = url.slice(0, -1); continue; }
+    break;
+  }
+  return url;
+};
+
+const linkify = window.linkify = (text, opts) => {
+  const str = typeof text === "string" ? text : (text == null ? "" : String(text));
+  if (!str || !LINKIFY_RE.test(str)) { LINKIFY_RE.lastIndex = 0; return str; }
+  LINKIFY_RE.lastIndex = 0;
+
+  const style = Object.assign({
+    color: "var(--role-color)", textDecoration: "underline", fontWeight: 600, wordBreak: "break-word",
+  }, (opts && opts.style) || {});
+
+  const out = [];
+  let last = 0;
+  let m;
+  let key = 0;
+  while ((m = LINKIFY_RE.exec(str)) !== null) {
+    const matched = trimTrailing(m[0]);
+    if (!matched) continue;
+    const start = m.index;
+    const end = start + matched.length;
+
+    // Only these three schemes are ever produced. `javascript:` and `data:` cannot appear
+    // because the pattern never matches them and the href is BUILT here rather than copied
+    // from the match — a bare "www.x" becomes "https://www.x", never "www.x", which the
+    // browser would resolve as a relative path inside the app.
+    const isEmail = matched.indexOf("@") !== -1 && !/^https?:\/\//i.test(matched);
+    const href = isEmail
+      ? `mailto:${matched}`
+      : (/^https?:\/\//i.test(matched) ? matched : `https://${matched}`);
+
+    if (start > last) out.push(str.slice(last, start));
+    out.push(React.createElement("a", {
+      key: `lnk-${key++}`,
+      href,
+      target: "_blank",
+      rel: "noopener noreferrer",
+      style,
+      onClick: (e) => e.stopPropagation(),
+    }, matched));
+    last = end;
+  }
+  if (last < str.length) out.push(str.slice(last));
+  return out;
+};
+
+// ─── v1.106.24 — a recurring offer is one arrangement, not N jobs ───
+//
+// A recurring direct offer inserts one care_sessions row per occurrence, each carrying
+// offered_to_caregiver_id, so each surfaced as its own full-height "Just for You" card.
+// Twelve Tuesdays meant twelve cards and twelve taps — and eleven of them sitting above the
+// check-in Tina was standing at the door trying to reach. Pete: "Appointments grouped on
+// recurring basis should not require individual acceptance."
+//
+// In utils rather than in the component because the caregiver hub and Find Work both list
+// offers, and a grouping rule that exists twice is a grouping rule that disagrees with
+// itself. Order is preserved: a group takes the position of its earliest visit, so the list
+// still reads soonest-first.
+const groupExclusiveOffers = window.groupExclusiveOffers = (jobs) => {
+  const out = [];
+  const byGroup = new Map();
+  for (const job of jobs || []) {
+    // ─── v1.106.34 — group by SHAPE when there is no series id ───
+    //
+    // Pete booked twenty separate one-off days before "Certain days" existed, so none of
+    // them carry a recurrence_group_id and v1.106.24's grouping could not see them: twenty
+    // full-height tiles that buried her check-in. Offers that match on recipient, time,
+    // duration and service are the same arrangement from her side whatever the booking
+    // history says, so they collapse into one card with one accept.
+    //
+    // Keyed on the shape rather than on adjacency of dates, because "every weekday" and
+    // "Mondays and Thursdays" should both fold. A real recurrence_group_id still wins — it
+    // is a stated intent rather than an inferred one.
+    // The shape key needs a recipient AND a time to mean anything. Without them every
+    // incomplete job hashes to the same empty string and unrelated offers merge — which is
+    // exactly what the first cut did, and what a one-off with missing fields would still do
+    // if this guard were dropped.
+    const shapeable = !job.recurrenceGroupId && job.careRecipientId && job.time;
+    const gid = job.recurrenceGroupId
+      || (shapeable
+        ? ['shape', job.careRecipientId, job.time, job.durationHours || '', job.serviceType || ''].join('|')
+        : null);
+    if (!gid) { out.push({ kind: 'single', key: job.id, job }); continue; }
+    let g = byGroup.get(gid);
+    if (!g) {
+      // A group holds its position from the FIRST occurrence encountered, which is the
+      // earliest one given the caller sorts by date.
+      g = { kind: 'series', key: gid, groupId: job.recurrenceGroupId || null, jobs: [] };
+      byGroup.set(gid, g);
+      out.push(g);
+    }
+    g.jobs.push(job);
+  }
+  // A "series" that turned out to hold one visit — eleven of twelve already taken, say — is
+  // a single job wearing a group id, and rendering a date list with one checkbox for it
+  // would be silly. Collapse it back.
+  return out.map((e) =>
+    e.kind === 'series' && e.jobs.length === 1
+      ? { kind: 'single', key: e.jobs[0].id, job: e.jobs[0] }
+      : e
+  );
+};
+
+const formatServiceType = window.formatServiceType = (type) => {
+  if (!type) return '';
+  // Handle "other:Custom text" format
+  if (type.startsWith('other:')) return type.slice(6).trim() || 'Other';
+  if (type === 'other') return 'Other';
+  return SERVICE_TYPE_LABELS[type] || type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+};
+
+let AUTH_TOKEN = null;
+const setAuthToken = window.setAuthToken = (token) => {
+  AUTH_TOKEN = token;
+  // Token is now stored in httpOnly cookie by the server — no localStorage
+  // Keep in-memory for WebSocket auth and in-flight requests
+};
+const getAuthToken = window.getAuthToken = () => AUTH_TOKEN;
+
+// Active role for dual-role users (which view/mode they're in)
+// v1.105.35 — guarded. This runs at MODULE SCOPE in the 2nd file of the concatenated
+// bundle, so a throw here stops the single shared scope from ever defining a component or
+// app.js: a blank page, before React exists, with no ErrorBoundary to catch it. Storage
+// throws in Safari private mode and in locked-down webviews, which is exactly the
+// population least able to tell us what they saw.
+let ACTIVE_ROLE = (() => { try { return localStorage.getItem('active_role') || null; } catch { return null; } })();
+const setActiveRole = window.setActiveRole = (role) => {
+  ACTIVE_ROLE = role;
+  // v1.105.35 — the in-memory value is what the app actually reads; persistence is a
+  // convenience. Losing it must never cost the user the click.
+  try {
+    if (role) localStorage.setItem('active_role', role);
+    else localStorage.removeItem('active_role');
+  } catch {}
+};
+const getActiveRole = window.getActiveRole = () => ACTIVE_ROLE;
+
+// Read CSRF token from cookie (set by server, JS-readable)
+const getCsrfToken = window.getCsrfToken = () => {
+  const match = document.cookie.match(/(?:^|;\s*)csrf_token=([^;]+)/);
+  return match ? match[1] : null;
+};
+
+// Track whether a refresh is already in flight (prevent thundering herd)
+let _refreshPromise = null;
+let _proactiveRefreshTimer = null;
+
+// Proactive token refresh — silently renew the JWT before it expires
+// so the user never sees a logout. Fires once per day (well within 7d expiry).
+const startProactiveRefresh = window.startProactiveRefresh = () => {
+  if (_proactiveRefreshTimer) clearInterval(_proactiveRefreshTimer);
+  const REFRESH_INTERVAL = 24 * 60 * 60 * 1000; // 24 hours
+  _proactiveRefreshTimer = setInterval(async () => {
+    try {
+      const res = await fetch(API_BASE + '/api/auth/refresh', {
+        method: 'POST', credentials: 'same-origin',
+        headers: getCsrfToken() ? { 'X-CSRF-Token': getCsrfToken() } : {},
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.token) setAuthToken(data.token);
+        console.log('Auth: proactive token refresh succeeded');
+      }
+    } catch (e) {
+      console.warn('Auth: proactive refresh failed:', e.message);
+    }
+  }, REFRESH_INTERVAL);
+  // Also refresh immediately on visibility change (app comes to foreground)
+  document.addEventListener('visibilitychange', _onVisibilityRefresh);
+};
+
+// When app returns to foreground after being backgrounded, refresh the token
+// This covers the Android case where the app was suspended for hours
+let _lastVisibilityRefresh = 0;
+const _onVisibilityRefresh = async () => {
+  if (document.visibilityState !== 'visible') return;
+  const now = Date.now();
+  // Don't refresh more than once per hour
+  if (now - _lastVisibilityRefresh < 60 * 60 * 1000) return;
+  _lastVisibilityRefresh = now;
+  try {
+    const res = await fetch(API_BASE + '/api/auth/refresh', {
+      method: 'POST', credentials: 'same-origin',
+      headers: getCsrfToken() ? { 'X-CSRF-Token': getCsrfToken() } : {},
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.token) setAuthToken(data.token);
+      console.log('Auth: visibility refresh succeeded');
+    }
+  } catch (e) { /* silent */ }
+};
+
+// ─── Admin Impersonation (View As) ───
+// When set, apiFetch uses this token instead of the admin's own token.
+// This makes all API calls return data as the impersonated user would see it.
+// v1.105.35 — guarded for the same reason as ACTIVE_ROLE above (module scope, no boundary).
+let IMPERSONATION_TOKEN = (() => { try { return sessionStorage.getItem('inplace_impersonation_token') || null; } catch { return null; } })();
+const setImpersonationToken = window.setImpersonationToken = (token) => {
+  IMPERSONATION_TOKEN = token;
+  try {
+    if (token) sessionStorage.setItem('inplace_impersonation_token', token);
+    else sessionStorage.removeItem('inplace_impersonation_token');
+  } catch {}
+};
+const getImpersonationToken = window.getImpersonationToken = () => IMPERSONATION_TOKEN;
+
+// ─── v1.105.46 — every request gets a deadline ───
+//
+// Pete, standing in Betty's kitchen: "I clicked ok, but it's just loading." Nothing in
+// Sentry, nothing in the server logs — because the request never arrived. A phone on one
+// bar opens a socket that never answers, and `fetch` has NO default timeout: it waits
+// essentially forever. So the spinner spins forever, no catch block runs, no error is
+// reported, and the person is left holding a phone that is doing nothing and saying
+// nothing. Every save in this app could do that; the visit log is just where he found it.
+//
+// A deadline turns an invisible hang into an ordinary error that existing catch blocks
+// already handle ("check your connection and try again"). Uploads get a long one — a
+// receipt photo on cellular legitimately takes a while — and a caller can override.
+const API_TIMEOUT_MS = 25000;
+const API_UPLOAD_TIMEOUT_MS = 120000;
+
+// ─── v1.105.49 — showing a notification from the page, safely ───
+//
+// `new Notification(...)` is not implemented on iOS. Not "returns false" — the constructor
+// is absent in WKWebView and, in an iOS 16.4+ home-screen web app, `'Notification' in
+// window` is TRUE and permission can be 'granted' while constructing one still throws.
+// So the usual guard passes and the call blows up, taking the rest of the handler with it.
+//
+// That cost two real things: an incoming call fired nothing on iPhone AND skipped the
+// navigation on the line after it; and inside a useEffect the throw reached the
+// ErrorBoundary, so a call arriving while the app was backgrounded replaced the message
+// thread with "Something went wrong".
+//
+// The portable path is the service worker's showNotification, which WebKit does support in
+// an installed app — and it routes clicks through sw.js's existing notificationclick
+// handler, so pass `data.page` rather than an onclick. Never throws; returns whether
+// anything was actually shown.
+const showLocalNotification = window.showLocalNotification = async (title, options = {}) => {
+  try {
+    // v1.105.54 — the native shell first, when the build has @capacitor/local-notifications.
+    // v1.105.49 routed these through the service worker because `new Notification` throws on
+    // iOS; but a WKWebView may have no usable service-worker notification path either, so
+    // an incoming call could still be silent there. This is the one that definitely works.
+    const ln = _capPlugin('LocalNotifications');
+    if (ln?.schedule) {
+      try {
+        // v1.105.57 — authorization first. iOS accepts schedule() from an unauthorized app
+        // and simply displays nothing, so returning true off a resolved promise would be
+        // this week's "Exported!" toast again: reporting success for something the person
+        // never saw. Falls through to the service-worker path rather than lying.
+        if (ln.checkPermissions) {
+          const perm = await ln.checkPermissions();
+          if (perm?.display !== 'granted') return false;
+        }
+        await ln.schedule({
+          notifications: [{
+            id: Math.abs((options.tag || title).split('').reduce((a, c) => ((a << 5) - a + c.charCodeAt(0)) | 0, 0)) % 2147483647,
+            title,
+            body: options.body || '',
+            extra: options.data || {},
+          }],
+        });
+        return true;
+      } catch { /* fall through */ }
+    }
+    if (typeof Notification === 'function' && Notification.permission !== 'granted') return false;
+    const reg = await navigator.serviceWorker?.getRegistration?.();
+    if (reg?.showNotification) {
+      await reg.showNotification(title, options);
+      return true;
+    }
+    // No service worker (a plain tab, a dev page) — the constructor is fine there.
+    if (typeof Notification === 'function' && Notification.permission === 'granted') {
+      new Notification(title, options);
+      return true;
+    }
+  } catch { /* a notification is never worth taking the view down */ }
+  return false;
+};
+
+// Close whatever we opened under a tag. Needed because showNotification hands back no
+// handle — you have to go and find it again.
+const closeLocalNotification = window.closeLocalNotification = async (tag) => {
+  try {
+    const reg = await navigator.serviceWorker?.getRegistration?.();
+    const open = await reg?.getNotifications?.({ tag });
+    (open || []).forEach((n) => n.close());
+  } catch { /* nothing to do */ }
+};
+
+// ─── v1.105.54 — one way to ask this phone where it is ───
+//
+// Pete's diagnostic, from the card that now reports itself:
+//     web:ceiling:timeout → watch:ceiling:timeout in 42s
+//
+// "ceiling" is OUR outer deadline, which means neither the success NOR the error callback
+// was ever invoked — by getCurrentPosition or by watchPosition — for 42 seconds. A denial
+// would have come back as denied(1); a real failure as timeout(3). Nothing came back at
+// all. That is the signature of a stub: Capacitor's WKWebView does not connect the browser
+// Geolocation API to Core Location, and @capacitor/geolocation — the plugin that does —
+// WAS NOT INSTALLED AT THE TIME. Not permission, not signal, not GPS, not indoors.
+//
+// ⚠️ Tense matters. **The plugin has been installed since v1.105.67** (`^8.2.1`, wired through
+// `_capPlugin('Geolocation')` below, Info.plist strings added v1.105.58 after Apple's
+// ITMS-90683 on Build 8). Read in the present tense, the paragraph above says a dependency is
+// missing that is not — an Aug 19 handoff did exactly that. What is still open is the NATIVE
+// path on a real device, which is a different sentence.
+//
+// This matters well beyond the visit nudge. Caregiver CHECK-IN and CHECK-OUT called
+// navigator.geolocation directly too, so the location evidence that proves a caregiver
+// was at the home has never been captured on an iPhone — it just sat there with a null
+// location and no error, which is why nobody noticed.
+//
+// So: one helper, used everywhere. It prefers the native plugin when a build provides one,
+// falls back to the browser API, and always answers — with the reason and a trace of what
+// it tried, so the next failure explains itself instead of being inferred from a photo.
+const _geoReason = (err) => {
+  if (!err) return 'timeout';
+  if (err.code === 1) return 'denied';       // PERMISSION_DENIED
+  if (err.code === 2) return 'unavailable';  // POSITION_UNAVAILABLE
+  if (err.code === 3) return 'timeout';      // TIMEOUT
+  if (/denied|permission/i.test(err.message || '')) return 'denied';
+  return 'unknown';
+};
+
+const _capPlugin = (name) => {
+  try {
+    if (!window.Capacitor?.isNativePlatform?.()) return null;
+    return window.Capacitor?.Plugins?.[name] || null;
+  } catch { return null; }
+};
+window.__capPlugin = _capPlugin;
+
+const _geoWeb = (options, ceilingMs, useWatch) => new Promise((resolve) => {
+  const api = navigator.geolocation;
+  const stage = useWatch ? 'watch' : 'web';
+  if (!api || (useWatch && !api.watchPosition)) return resolve({ pos: null, reason: 'unsupported', stage: `${stage}:absent` });
+  let settled = false, id = null;
+  const done = (v) => {
+    if (settled) return;
+    settled = true;
+    clearTimeout(timer);
+    if (id !== null) { try { api.clearWatch(id); } catch {} }
+    resolve(v);
+  };
+  const timer = setTimeout(() => done({ pos: null, reason: 'timeout', stage: `${stage}:ceiling` }), ceilingMs);
+  const ok = (p) => done({ pos: p, reason: null, stage });
+  const bad = (e) => done({ pos: null, reason: _geoReason(e), stage, code: e?.code, detail: e?.message });
+  try {
+    if (useWatch) id = api.watchPosition(ok, bad, options);
+    else api.getCurrentPosition(ok, bad, options);
+  } catch (e) { done({ pos: null, reason: 'unsupported', stage: `${stage}:threw`, detail: e?.message }); }
+});
+
+const _geoNative = async (options, ceilingMs) => {
+  const plugin = _capPlugin('Geolocation');
+  if (!plugin?.getCurrentPosition) return { pos: null, reason: 'unsupported', stage: 'native:absent' };
+  try {
+    const p = await Promise.race([
+      plugin.getCurrentPosition(options),
+      new Promise((r) => setTimeout(() => r(null), ceilingMs)),
+    ]);
+    if (p?.coords) return { pos: p, reason: null, stage: 'native' };
+    return { pos: null, reason: 'timeout', stage: 'native:ceiling' };
+  } catch (e) {
+    return { pos: null, reason: _geoReason(e), stage: 'native', detail: e?.message };
+  }
+};
+
+// Can this device be asked at all? Note this must NOT be a bare `navigator.geolocation`
+// check: that object EXISTS in the native webview (it's the stub that never answers), and
+// conversely a plugin build could answer without it. Ask about both.
+const canAskLocation = window.canAskLocation = () =>
+  !!(_capPlugin('Geolocation') || (typeof navigator !== 'undefined' && navigator.geolocation));
+
+/**
+ * Ask this device where it is. Always settles.
+ * @returns {{pos: GeolocationPosition|null, reason: string|null, tried: string[], elapsedMs: number}}
+ */
+const getDeviceLocation = window.getDeviceLocation = async ({ highAccuracy = false, timeoutMs = 20000 } = {}) => {
+  const started = Date.now();
+  const tried = [];
+  const opts = { enableHighAccuracy: highAccuracy, timeout: timeoutMs, maximumAge: 60000 };
+  const record = (r) => {
+    tried.push(`${r.stage}:${r.reason || 'ok'}${r.code ? `(${r.code})` : ''}`);
+    return { ...r, tried, elapsedMs: Date.now() - started };
+  };
+
+  if (_capPlugin('Geolocation')) {
+    const n = record(await _geoNative(opts, timeoutMs + 2000));
+    if (n.pos || n.reason === 'denied') return n;
+  }
+  const first = record(await _geoWeb(opts, timeoutMs + 2000, false));
+  if (first.pos || first.reason === 'denied' || first.reason === 'unsupported') return first;
+  // A watch sometimes answers where getCurrentPosition won't — though not on a stubbed API.
+  return record(await _geoWeb(opts, timeoutMs, true));
+};
+
+// ─── v1.105.49 — opening an external URL that was fetched first ───
+//
+// `window.open(url, '_blank')` after an `await` is silently blocked on Safari and in
+// WKWebView: the transient user activation from the tap is spent by the time the URL comes
+// back from the server. Chrome is far more permissive, which is why this pattern passed
+// review and then did nothing on the platform most of these users are on. The casualties
+// were the Stripe payout dashboard and the background-check invitation — i.e. a caregiver
+// could not finish getting paid or get vetted from an iPhone, with no error to report.
+//
+// The native shell has @capacitor/browser (already used for OAuth); everywhere else,
+// navigating the current window is not subject to the popup blocker.
+const openExternalUrl = window.openExternalUrl = (url) => {
+  if (!url) return false;
+  try {
+    if (window.Capacitor?.isNativePlatform?.() && window.Capacitor?.Plugins?.Browser) {
+      window.Capacitor.Plugins.Browser.open({ url, presentationStyle: 'popover' });
+      return true;
+    }
+    const w = window.open(url, '_blank');
+    if (w) return true;
+    // Blocked (Safari after an await) — go there in this window instead of doing nothing.
+    window.location.href = url;
+    return true;
+  } catch {
+    try { window.location.href = url; return true; } catch { return false; }
+  }
+};
+
+// ─── v1.105.49 — saving a file, and knowing whether it worked ───
+//
+// `<a download>` is not implemented in WKWebView. Capacitor installs no download delegate,
+// so the click is dropped on the floor — and every export in this app then showed a green
+// "Exported 34 reimbursements" toast on the very next line. That is the worst version of
+// a silent failure: the app actively asserting something happened that didn't.
+//
+// Returns TRUE only if the file was really handed off. Callers must gate their success
+// message on it. On the native shell the honest route is the OS share sheet; if that isn't
+// available we say so rather than pretending.
+// ─── v1.105.69 — copying text, and knowing whether it worked ───
+//
+// Four sites did this by hand and all four could lie. `navigator.clipboard` is undefined in a
+// non-secure context and in older WebViews, so `navigator.clipboard.writeText(...)` throws a
+// TypeError SYNCHRONOUSLY — before any .then/.catch is attached, which means an attached
+// fallback never runs. Two sites used `navigator.clipboard?.writeText(url)` instead: no throw,
+// but the promise is discarded and a success toast fires on the very next line regardless.
+//
+// The 2FA backup codes were the worst of them. Its fallback selected `#backup-codes-text`, an
+// element that exists nowhere in this repo, and those codes are the only way back into an
+// account whose authenticator is lost.
+//
+// Returns true only when the text is actually on the clipboard.
+const copyText = window.copyText = async (text) => {
+  if (!text) return false;
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch { /* fall through — permission denied, insecure context, or no user activation */ }
+  // execCommand('copy') is deprecated and still the only thing that works in some WebViews.
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly', '');
+    ta.style.position = 'fixed';
+    ta.style.top = '0';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    ta.setSelectionRange(0, text.length); // iOS ignores select() alone
+    const ok = document.execCommand('copy');
+    document.body.removeChild(ta);
+    return !!ok;
+  } catch { return false; }
+};
+
+const saveBlob = window.saveBlob = async (blob, filename) => {
+  const isNative = !!window.Capacitor?.isNativePlatform?.();
+  if (!isNative) {
+    try {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      return true;
+    } catch { return false; }
+  }
+  // v1.105.54 — the native shell, when the build has @capacitor/filesystem and
+  // @capacitor/share: write the file, then hand it to the OS share sheet. This is what
+  // actually makes "Save" and "Export CSV" produce a file on an iPhone.
+  const fs = _capPlugin('Filesystem');
+  const share = _capPlugin('Share');
+  if (fs?.writeFile && share?.share) {
+    try {
+      const b64 = await new Promise((resolve, reject) => {
+        const r = new FileReader();
+        r.onerror = () => reject(new Error('read failed'));
+        r.onload = () => resolve(String(r.result).split(',')[1] || '');
+        r.readAsDataURL(blob);
+      });
+      const written = await fs.writeFile({ path: filename, data: b64, directory: 'CACHE' });
+      await share.share({ title: filename, url: written?.uri, dialogTitle: filename });
+      return true;
+    } catch (e) {
+      if (e?.message && /cancel/i.test(e.message)) return false;
+      /* fall through to the Web Share API */
+    }
+  }
+  try {
+    const file = new File([blob], filename, { type: blob.type || 'application/octet-stream' });
+    if (navigator.canShare?.({ files: [file] })) {
+      await navigator.share({ files: [file], title: filename });
+      return true;
+    }
+  } catch (e) {
+    if (e?.name === 'AbortError') return false; // they closed the share sheet; not an error
+  }
+  return false;
+};
+
+// Report a client-side problem to the server's Sentry sink. Raw fetch on purpose — routing
+// this through apiFetch would let a timeout report time out. keepalive so it survives the
+// view being torn down.
+// ─── v1.105.150 — a dropped network is not a bug ───
+//
+// Sentry INPLACE-H: "[client] Load failed", 12 events in four hours, escalating, all from one
+// iPhone on 1.105.149, all `page: dashboard`. "Load failed" is WebKit's message for a fetch
+// that did not complete — and the commonest cause on a phone is not a broken server, it is
+// iOS cancelling in-flight requests when the app goes to the background, or a signal that came
+// and went.
+//
+// I built this pile myself, from both ends: .146 started reporting the dashboard's final
+// failure (correctly — three retries failing used to go nowhere), and .148 added a catch-up
+// that re-fetches on every reconnect and every return to the foreground. More fetches at
+// exactly the moments iOS is most likely to kill one.
+//
+// So: an error raised while the tab is hidden or the device is offline is not reported. It
+// says nothing about the app, and an alert channel that fills with weather is one nobody reads
+// when something real happens — which is the same argument that put the port-scan filter in
+// utils/sentry.js.
+//
+// Everything else still reports, and now carries whether the page was visible and online, so
+// the next one of these can be read rather than guessed at.
+const reportClientError = window.reportClientError = (err, extra = {}) => {
+  try {
+    const online = typeof navigator.onLine === 'boolean' ? navigator.onLine : true;
+    const visible = typeof document !== 'undefined' ? document.visibilityState !== 'hidden' : true;
+    const name = err?.name || '';
+    // An abort is something WE or the browser did on purpose.
+    const aborted = name === 'AbortError' || /aborted|cancell?ed/i.test(String(err?.message || ''));
+    if (!online || !visible || aborted) return;
+    fetch(API_BASE + '/api/client-error', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      keepalive: true,
+      body: JSON.stringify({
+        message: String(err?.message || err || 'unknown').slice(0, 300),
+        stack: String(err?.stack || '').slice(0, 4000),
+        version: window.APP_VERSION || null,
+        userAgent: navigator?.userAgent || null,
+        url: (window.location.hash || window.location.pathname) || null,
+        online, visible,
+        ...extra,
+      }),
+    }).catch(() => {});
+  } catch {}
+};
+
+const apiFetch = window.apiFetch = async (url, options = {}) => {
+  // For FormData (file uploads), don't set Content-Type — browser sets multipart boundary automatically
+  const isFormData = options.body instanceof FormData;
+  const headers = isFormData ? { ...options.headers } : { 'Content-Type': 'application/json', ...options.headers };
+  // Use impersonation token if active (admin viewing as another user)
+  const effectiveToken = IMPERSONATION_TOKEN || AUTH_TOKEN;
+  if (effectiveToken) headers['Authorization'] = `Bearer ${effectiveToken}`;
+  if (ACTIVE_ROLE && !IMPERSONATION_TOKEN) headers['X-Active-Role'] = ACTIVE_ROLE;
+  if (window.APP_VERSION) headers['X-App-Version'] = window.APP_VERSION;
+  const csrf = getCsrfToken();
+  if (csrf) headers['X-CSRF-Token'] = csrf;
+
+  // v1.106.13 — any write to the user's own record invalidates the cached identity. Put here
+  // rather than at the call sites because a missed invalidation is invisible until someone
+  // sees a stale name or an old photo, and there are eight such writes.
+  if (options.method && options.method !== 'GET' && url.startsWith('/api/auth/me')) invalidateMe();
+
+  // Respect a signal the caller already supplied; otherwise impose our own deadline.
+  const timeoutMs = options.timeoutMs || (isFormData ? API_UPLOAD_TIMEOUT_MS : API_TIMEOUT_MS);
+  let timer = null;
+  let controller = null;
+  if (!options.signal && typeof AbortController === 'function') {
+    controller = new AbortController();
+    timer = setTimeout(() => controller.abort(), timeoutMs);
+  }
+
+  let response;
+  try {
+    response = await fetch(API_BASE + url, {
+      ...options, headers, credentials: 'same-origin',
+      ...(controller ? { signal: controller.signal } : {}),
+    });
+  } catch (err) {
+    if (timer) clearTimeout(timer);
+    // An abort is our deadline firing, not a bug in the caller. Make it legible in the
+    // logs, since a hang like this leaves no trace anywhere else.
+    if (err?.name === 'AbortError') {
+      const e = new Error(`Request timed out after ${Math.round(timeoutMs / 1000)}s: ${url}`);
+      e.name = 'ApiTimeoutError';
+      try { reportClientError(e, { page: url }); } catch {}
+      throw e;
+    }
+    throw err;
+  }
+  if (timer) clearTimeout(timer);
+
+  // ─── v1.106.7 — 426 means "you are the old bundle"; reload rather than fail oddly ───
+  //
+  // The server only sends this when a release genuinely broke old clients (see MIN_APP_VERSION
+  // in server.js), which is rare. When it does, the honest response is to go get the new
+  // bundle — index.html is no-store, so one reload is enough.
+  //
+  // Bounded, because a reload triggered by a server response is one bad deploy away from being
+  // an infinite loop: at most three reloads per tab session and never twice inside a minute.
+  // Past that, stop reloading, tell the console why, and let the "Update available" pill and
+  // the service worker's safe-moment path handle it — a stuck app the user can still read
+  // beats a tab that reloads forever.
+  if (response.status === 426) {
+    try {
+      const KEY = 'inplace_upgrade_reloads';
+      const now = Date.now();
+      const prior = JSON.parse(sessionStorage.getItem(KEY) || '[]').filter((t) => now - t < 10 * 60 * 1000);
+      if (prior.length < 3 && (prior.length === 0 || now - prior[prior.length - 1] > 60000)) {
+        prior.push(now);
+        sessionStorage.setItem(KEY, JSON.stringify(prior));
+        console.warn('Server requires a newer app version — reloading to get it.');
+        window.location.reload();
+        return null;
+      }
+      console.error('Server keeps asking for a newer app version but reloading is not fixing it. ' +
+                    'Stopping to avoid a reload loop; try a hard refresh.');
+    } catch { /* storage unavailable — do not reload blind */ }
+    return null;
+  }
+
+  // ─── IP Verification Challenge ───
+  // If admin endpoint returns 403 with IP_VERIFICATION_REQUIRED, trigger passkey re-auth
+  if (response.status === 403 && url.startsWith('/api/admin')) {
+    try {
+      const errBody = await response.clone().json();
+      if (errBody.code === 'IP_VERIFICATION_REQUIRED') {
+        // Dispatch event so AdminPanel can show the verification modal
+        window.dispatchEvent(new CustomEvent('ip-verification-required', { detail: { ip: errBody.ip, originalUrl: url, originalOptions: options } }));
+        return null; // Return null so callers handle gracefully
+      }
+    } catch (e) { /* not JSON, fall through */ }
+  }
+
+  // ─── v1.112.0 — the identity gate ───
+  // Any care-data route answers 403 ID_REQUIRED for a person whose ID is not yet approved (past
+  // their grace period). Tell the app once, so it can swap the page for the "Verify your ID"
+  // screen instead of every card on it showing its own error. The response still goes back to
+  // the caller, which handles a non-OK answer as it always has.
+  if (response.status === 403 && !url.startsWith('/api/admin')) {
+    try {
+      const errBody = await response.clone().json();
+      if (errBody && errBody.code === 'ID_REQUIRED') {
+        window.dispatchEvent(new CustomEvent('inplace:id-required', { detail: { status: errBody.status || null } }));
+      }
+      // v1.114.0 — care tools come with care booked through InPlace (utils/careTools.js). One
+      // friendly sheet (CareToolsSheet) instead of each screen's own error toast.
+      if (errBody && errBody.code === 'CARE_TOOLS_LOCKED') {
+        window.dispatchEvent(new CustomEvent('inplace:care-tools-locked', { detail: errBody }));
+      }
+    } catch (e) { /* not JSON — not the gate */ }
+  }
+
+  if (response.status === 401 && url !== '/api/auth/refresh') {
+    // If impersonation token expired, end impersonation instead of refreshing
+    if (IMPERSONATION_TOKEN) {
+      console.warn('Impersonation token expired — ending test mode');
+      setImpersonationToken(null);
+      sessionStorage.removeItem('inplace_impersonation_user');
+      const backup = sessionStorage.getItem('inplace_admin_token_backup');
+      sessionStorage.removeItem('inplace_admin_token_backup');
+      if (backup) setAuthToken(backup);
+      window.location.reload();
+      return null;
+    }
+    // Attempt silent token refresh before logging out
+    try {
+      if (!_refreshPromise) {
+        _refreshPromise = fetch(API_BASE + '/api/auth/refresh', {
+          method: 'POST', credentials: 'same-origin',
+          headers: getCsrfToken() ? { 'X-CSRF-Token': getCsrfToken() } : {},
+        });
+      }
+      const refreshRes = await _refreshPromise;
+      _refreshPromise = null;
+      if (refreshRes.ok) {
+        const data = await refreshRes.json();
+        setAuthToken(data.token);
+        // Retry the original request with new token
+        const retryHeaders = { 'Content-Type': 'application/json', ...options.headers };
+        if (data.token) retryHeaders['Authorization'] = `Bearer ${data.token}`;
+        if (ACTIVE_ROLE) retryHeaders['X-Active-Role'] = ACTIVE_ROLE;
+        const newCsrf = getCsrfToken();
+        if (newCsrf) retryHeaders['X-CSRF-Token'] = newCsrf;
+        return fetch(API_BASE + url, { ...options, headers: retryHeaders, credentials: 'same-origin' });
+      }
+    } catch (e) { _refreshPromise = null; }
+    // Refresh failed — log out
+    setAuthToken(null);
+    const _lcsrf = getCsrfToken();
+    fetch(API_BASE + '/api/auth/logout', { method: 'POST', credentials: 'same-origin', headers: _lcsrf ? { 'X-CSRF-Token': _lcsrf } : {} }).catch(() => {});
+    return null;
+  }
+  return response;
+};
+
+// ─── v1.106.19 — the platform fee, read rather than retyped ───
+//
+// Pete: "if I change that later... I don't want a bunch of old hard-coded 20s to wreak havoc."
+// The number lived in six pieces of user-facing copy, including the logged-out splash page.
+//
+// PRICING_FALLBACK_FEE_PERCENT is the ONE place the client states it, used only until the
+// fetch lands and when the network is gone — a marketing page must never render "a flat
+// undefined%". tests/pricingPromise.test.js pins it equal to the server's
+// DEFAULT_PLATFORM_FEE_PERCENT, so the two cannot drift.
+//
+// Note the three unrelated 20s nearby that this must NOT touch: the short-notice surcharge,
+// the 20% tip preset, and aiMatching's scoring weights. Same digits, different facts.
+const PRICING_FALLBACK_FEE_PERCENT = window.PRICING_FALLBACK_FEE_PERCENT = 20;
+
+let _pricing = null, _pricingPromise = null;
+
+/** Resolves to { platformFeePercent, caregiverSharePercent }. Never rejects. */
+const fetchPricing = window.fetchPricing = () => {
+  if (_pricing) return Promise.resolve(_pricing);
+  if (_pricingPromise) return _pricingPromise;
+  _pricingPromise = fetch(API_BASE + '/api/pricing', { credentials: 'same-origin' })
+    .then((r) => (r && r.ok ? r.json() : null))
+    .then((j) => {
+      const pct = Number(j && j.platformFeePercent);
+      _pricing = Number.isFinite(pct)
+        ? { platformFeePercent: pct, caregiverSharePercent: 100 - pct }
+        : { platformFeePercent: PRICING_FALLBACK_FEE_PERCENT, caregiverSharePercent: 100 - PRICING_FALLBACK_FEE_PERCENT };
+      return _pricing;
+    })
+    .catch(() => ({
+      platformFeePercent: PRICING_FALLBACK_FEE_PERCENT,
+      caregiverSharePercent: 100 - PRICING_FALLBACK_FEE_PERCENT,
+    }))
+    .finally(() => { _pricingPromise = null; });
+  return _pricingPromise;
+};
+
+/**
+ * Hook form. Renders the fallback on the first paint and corrects itself when the fetch lands,
+ * so the splash page never flashes a gap where a number should be. Today both are 20 and
+ * nothing visibly changes; the day Pete moves the dial, the copy moves with it.
+ */
+const usePlatformFee = window.usePlatformFee = () => {
+  const [pct, setPct] = useState((_pricing && _pricing.platformFeePercent) || PRICING_FALLBACK_FEE_PERCENT);
+  useEffect(() => {
+    let alive = true;
+    fetchPricing().then((p) => { if (alive && p && p.platformFeePercent !== pct) setPct(p.platformFeePercent); });
+    return () => { alive = false; };
+  }, []);
+  return { feePercent: pct, caregiverSharePercent: 100 - pct };
+};
+
+// ─── v1.106.13 — one identity read, however many components ask ───
+//
+// Sixteen places called GET /api/auth/me and each one fetched it independently. In production
+// that shows up as bursts — four calls inside the same second on a logged-in boot, as Dashboard,
+// Messages, the verification banner and MyAccount all mount and each asks who the user is. Not
+// a crisis (they are mostly 304s), but it is the same answer fetched four times, and it grows by
+// one every time a screen is added.
+//
+// The cache is keyed on the EFFECTIVE TOKEN, not on a timer alone. That is the part that makes
+// it safe: an admin starting or ending impersonation is a different token, so it is a different
+// key and a different fetch. There is no invalidation to remember and therefore none to forget —
+// which matters here, because the failure mode of forgetting is an admin seeing their own
+// identity while impersonating, or keeping someone else's after they stop.
+//
+// The TTL is short on top of that, so a server-side change (an account approved, an ID verified)
+// is never stale for long. The goal is only to collapse the burst, not to hold identity.
+//
+// Returns exactly what `await res.json()` returned before — { user, ... } — so every call site
+// is a straight swap and no caller has to learn a new shape.
+const ME_TTL_MS = 10000;
+let _meKey = null, _mePromise = null, _meCache = null;
+
+const _meCacheKey = () =>
+  IMPERSONATION_TOKEN
+    ? `imp:${IMPERSONATION_TOKEN}`
+    : `own:${AUTH_TOKEN || ''}|${ACTIVE_ROLE || ''}`;
+
+const fetchMe = window.fetchMe = (opts = {}) => {
+  const key = _meCacheKey();
+  if (!opts.force && key === _meKey) {
+    if (_mePromise) return _mePromise;
+    if (_meCache && Date.now() - _meCache.at < ME_TTL_MS) return Promise.resolve(_meCache.body);
+  }
+  _meKey = key;
+  _meCache = null;
+  _mePromise = apiFetch('/api/auth/me')
+    .then(async (res) => {
+      if (!res || !res.ok) return null;
+      const body = await res.json().catch(() => null);
+      if (!body || !(body.user || body.id)) return null;
+      // Only cache under the key that was current when the request went out. If the token
+      // changed mid-flight (login completing, impersonation starting) this answer belongs to
+      // the old identity and must not be served to the new one.
+      if (_meCacheKey() === key) _meCache = { at: Date.now(), body };
+      return body;
+    })
+    .catch(() => null)
+    .finally(() => { if (_meKey === key) _mePromise = null; });
+  return _mePromise;
+};
+
+// Anything that changes who the user is, or what the server would say about them, drops it.
+const invalidateMe = window.invalidateMe = () => { _meKey = null; _mePromise = null; _meCache = null; };
+
+
+// ─── Auth/Flow Event Tracking ───
+// Fire-and-forget event tracker for login, registration, password reset, demo, etc.
+// Never blocks UI. Silently fails. Used across all auth-related pages.
+const trackAuthEvent = window.trackAuthEvent = (flow, eventType, extra = {}) => {
+  try {
+    const headers = { 'Content-Type': 'application/json' };
+    if (AUTH_TOKEN) headers['Authorization'] = `Bearer ${AUTH_TOKEN}`;
+    // v1.97.0 — CSRF header was missing here: once an auth cookie exists (right
+    // after login), verifyCsrf 403'd every tracking POST from the native app
+    const _csrf = typeof getCsrfToken === 'function' ? getCsrfToken() : null;
+    if (_csrf) headers['X-CSRF-Token'] = _csrf;
+    fetch('/api/onboarding-events', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        flow,
+        eventType,
+        email: extra.email || null,
+        step: extra.step || null,
+        stepName: extra.stepName || null,
+        errorMessage: extra.error || null,
+        errorSource: extra.source || null,
+        metadata: {
+          ...extra,
+          online: navigator.onLine,
+          screenWidth: window.innerWidth,
+          userAgent: navigator.userAgent,
+          timestamp: new Date().toISOString(),
+        },
+      }),
+    }).catch(() => {});
+  } catch (e) { /* ignore tracking errors */ }
+};
+
+// ─── Global error capture — sends JS errors to onboarding_events table ───
+window.onerror = function(msg, source, line, col) {
+  trackAuthEvent('frontend-error', 'error', {
+    error: String(msg).slice(0, 200),
+    source: (source || '').split('/').pop(),
+    line, col,
+  });
+};
+window.addEventListener('unhandledrejection', function(e) {
+  trackAuthEvent('frontend-error', 'unhandled_rejection', {
+    error: String(e.reason?.message || e.reason || '').slice(0, 200),
+  });
+});
+
+// ─── Shared timestamp parser ───
+// PostgreSQL TIMESTAMPTZ comes back as "2026-02-20 01:29:26.086383+00"
+// Some browsers choke on the space (need T) and bare "+00" (need +00:00 or Z).
+// This normalizes to ISO 8601 so new Date() works everywhere.
+const parseTimestamp = window.parseTimestamp = (ts) => {
+  if (!ts) return null;
+  let d = String(ts);
+  // Replace space with T if no T present
+  if (!d.includes('T')) d = d.replace(' ', 'T');
+  // If bare offset like +00 or -05 (no colon, no minutes), append :00
+  d = d.replace(/([+-]\d{2})$/, '$1:00');
+  // If no timezone indicator at all, assume UTC
+  if (!/[Zz]$/.test(d) && !/[+-]\d{2}:\d{2}$/.test(d)) d += 'Z';
+  const date = new Date(d);
+  return isNaN(date.getTime()) ? null : date;
+};
+
+// Caregiver Availability Data (simulated)
+const CAREGIVER_AVAILABILITY = window.CAREGIVER_AVAILABILITY = {
+  'Maria Santos': {
+    skills: ['Dementia Care', 'Meal Prep', 'Companionship', 'Medication Reminders'],
+    rate: '$34/hr',
+    weeklySchedule: {
+      'Mon': [{ start: '8:00 AM', end: '4:00 PM' }],
+      'Tue': [{ start: '8:00 AM', end: '2:00 PM' }],
+      'Wed': [{ start: '10:00 AM', end: '6:00 PM' }],
+      'Thu': [{ start: '8:00 AM', end: '4:00 PM' }],
+      'Fri': [{ start: '8:00 AM', end: '12:00 PM' }],
+      'Sat': [],
+      'Sun': [],
+    },
+    bookedSlots: [
+      { date: '2026-02-16', start: '10:00 AM', end: '12:00 PM', client: 'Barbara Lowe' },
+      { date: '2026-02-17', start: '8:00 AM', end: '10:00 AM', client: 'Another Client' },
+      { date: '2026-02-18', start: '2:00 PM', end: '4:00 PM', client: 'Barbara Lowe' },
+      { date: '2026-02-19', start: '8:00 AM', end: '11:00 AM', client: 'Another Client' },
+    ],
+  },
+  'Sarah Chen': {
+    skills: ['Meal Prep', 'Companionship', 'Light Housekeeping', 'Personal Care'],
+    rate: '$28/hr',
+    weeklySchedule: {
+      'Mon': [{ start: '9:00 AM', end: '5:00 PM' }],
+      'Tue': [{ start: '9:00 AM', end: '5:00 PM' }],
+      'Wed': [],
+      'Thu': [{ start: '9:00 AM', end: '3:00 PM' }],
+      'Fri': [{ start: '9:00 AM', end: '5:00 PM' }],
+      'Sat': [{ start: '10:00 AM', end: '2:00 PM' }],
+      'Sun': [],
+    },
+    bookedSlots: [
+      { date: '2026-02-16', start: '9:00 AM', end: '11:00 AM', client: 'Another Client' },
+      { date: '2026-02-20', start: '1:00 PM', end: '3:00 PM', client: 'Barbara Lowe' },
+    ],
+  },
+  'James Okafor': {
+    skills: ['Companionship', 'Transportation', 'Health & Wellness', 'Errands'],
+    rate: '$32/hr',
+    weeklySchedule: {
+      'Mon': [{ start: '7:00 AM', end: '3:00 PM' }],
+      'Tue': [{ start: '7:00 AM', end: '3:00 PM' }],
+      'Wed': [{ start: '7:00 AM', end: '3:00 PM' }],
+      'Thu': [],
+      'Fri': [{ start: '7:00 AM', end: '1:00 PM' }],
+      'Sat': [{ start: '8:00 AM', end: '12:00 PM' }],
+      'Sun': [],
+    },
+    bookedSlots: [
+      { date: '2026-02-17', start: '7:00 AM', end: '9:00 AM', client: 'Barbara Lowe' },
+      { date: '2026-02-18', start: '11:00 AM', end: '1:00 PM', client: 'Another Client' },
+    ],
+  },
+};
+
+// Helper: get next 7 days starting from today (care-location timezone)
+const getNextSevenDays = window.getNextSevenDays = () => {
+  const days = [];
+  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  // Use care-location timezone if TimezoneHelper is loaded, else local
+  const todayStr = (typeof TimezoneHelper !== 'undefined') ? TimezoneHelper.getToday() : (() => { const n = new Date(); return n.getFullYear() + '-' + String(n.getMonth() + 1).padStart(2, '0') + '-' + String(n.getDate()).padStart(2, '0'); })();
+  const [ty, tm, td] = todayStr.split('-').map(Number);
+  const today = new Date(ty, tm - 1, td);
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(today);
+    d.setDate(today.getDate() + i);
+    const dateStr = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    days.push({
+      date: dateStr,
+      dayName: dayNames[d.getDay()],
+      label: i === 0 ? 'Today' : i === 1 ? 'Tomorrow' : dayNames[d.getDay()],
+      shortDate: `${d.getMonth() + 1}/${d.getDate()}`,
+    });
+  }
+  return days;
+};
+
+// Helper: generate available time slots for a caregiver on a given day
+const getAvailableSlots = window.getAvailableSlots = (caregiverName, dayInfo) => {
+  const avail = CAREGIVER_AVAILABILITY[caregiverName];
+  if (!avail) return [];
+  const daySchedule = avail.weeklySchedule[dayInfo.dayName] || [];
+  if (daySchedule.length === 0) return [];
+
+  const slots = [];
+  daySchedule.forEach(block => {
+    const parseTime = (t) => {
+      const [time, ampm] = t.split(' ');
+      let [h, m] = time.split(':').map(Number);
+      if (ampm === 'PM' && h !== 12) h += 12;
+      if (ampm === 'AM' && h === 12) h = 0;
+      return h * 60 + m;
+    };
+    const startMin = parseTime(block.start);
+    const endMin = parseTime(block.end);
+    for (let m = startMin; m + 60 <= endMin; m += 60) {
+      const h = Math.floor(m / 60);
+      const ampm = h >= 12 ? 'PM' : 'AM';
+      const displayH = h > 12 ? h - 12 : h === 0 ? 12 : h;
+      const slotStart = `${displayH}:00 ${ampm}`;
+      const endH = Math.floor((m + 60) / 60);
+      const endAmpm = endH >= 12 ? 'PM' : 'AM';
+      const displayEndH = endH > 12 ? endH - 12 : endH === 0 ? 12 : endH;
+      const slotEnd = `${displayEndH}:00 ${endAmpm}`;
+
+      const isBooked = (avail.bookedSlots || []).some(b => {
+        if (b.date !== dayInfo.date) return false;
+        const bStart = parseTime(b.start);
+        const bEnd = parseTime(b.end);
+        return m < bEnd && (m + 60) > bStart;
+      });
+
+      slots.push({ start: slotStart, end: slotEnd, booked: isBooked, startMin: m });
+    }
+  });
+  return slots;
+};
+
+// Helper: check if caregiver has matching skills for a service type
+const caregiverMatchesService = window.caregiverMatchesService = (caregiverName, serviceType) => {
+  const avail = CAREGIVER_AVAILABILITY[caregiverName];
+  if (!avail) return false;
+  const serviceMap = {
+    'companionship': ['Companionship'],
+    'personal_care': ['Personal Care'],
+    'housekeeping': ['Light Housekeeping', 'Housekeeping'],
+    'meal_prep': ['Meal Prep'],
+    'transportation': ['Transportation', 'Errands'],
+    'health_wellness': ['Health & Wellness', 'Medication Reminders'],
+  };
+  const matchSkills = serviceMap[serviceType] || [];
+  return avail.skills.some(s => matchSkills.some(ms => s.toLowerCase().includes(ms.toLowerCase())));
+};
+
+// ─── Loading Spinner Component ───
+const LoadingSpinner = window.LoadingSpinner = ({ text = 'Loading...' }) => {
+  return React.createElement('div', { className: 'loading-spinner-container' },
+    React.createElement('div', { className: 'loading-spinner' }),
+    React.createElement('div', { className: 'loading-spinner-text' }, text)
+  );
+};
+
+// ─── Empty State Component ───
+const EmptyState = window.EmptyState = ({ icon = '📭', title, text, actionLabel, onAction }) => {
+  return React.createElement('div', { className: 'empty-state' },
+    React.createElement('div', { className: 'empty-state-icon' }, icon),
+    title && React.createElement('div', { className: 'empty-state-title' }, title),
+    text && React.createElement('div', { className: 'empty-state-text' }, text),
+    actionLabel && onAction && React.createElement('button', {
+      onClick: onAction,
+      style: { marginTop: 16, padding: '10px 24px', background: '#1b6b5a', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: 'pointer' }
+    }, actionLabel)
+  );
+};
+
+// ─── Toast Notification System ───
+const ToastContext = window.ToastContext = createContext(null);
+
+const useToast = window.useToast = () => {
+  const ctx = useContext(ToastContext);
+  if (!ctx) {
+    // Fallback: return a no-op if context is not available
+    return { showToast: () => {} };
+  }
+  return ctx;
+};
+
+const ToastProvider = window.ToastProvider = ({ children }) => {
+  const [toasts, setToasts] = useState([]);
+  const toastId = useRef(0);
+
+  const showToast = useCallback((message, type = 'success') => {
+    const id = ++toastId.current;
+    setToasts(prev => [...prev, { id, message, type }]);
+    setTimeout(() => {
+      setToasts(prev => prev.filter(t => t.id !== id));
+    }, 3500);
+  }, []);
+
+  const removeToast = useCallback((id) => {
+    setToasts(prev => prev.filter(t => t.id !== id));
+  }, []);
+
+  // v1.105.193 — `window.__showToast` had two callers (the push handlers above) and no
+  // definition, so the "new notification" toast never once showed. Now it exists, and the
+  // locked Find Work button uses it too.
+  useEffect(() => {
+    window.__showToast = showToast;
+    return () => { if (window.__showToast === showToast) window.__showToast = null; };
+  }, [showToast]);
+
+  const icons = { success: '✓', error: '✕', info: 'ℹ' };
+
+  return React.createElement(ToastContext.Provider, { value: { showToast } },
+    children,
+    React.createElement('div', { className: 'toast-container' },
+      toasts.map(t =>
+        React.createElement('div', { key: t.id, className: `toast toast-${t.type}` },
+          React.createElement('span', { className: 'toast-icon' }, icons[t.type] || icons.info),
+          React.createElement('span', { className: 'toast-message' }, t.message),
+          React.createElement('button', { className: 'toast-close', onClick: () => removeToast(t.id) }, '×')
+        )
+      )
+    )
+  );
+};
+
+// ─── WebSocket Real-Time Connection ───
+let _socket = null;
+const _socketListeners = new Map(); // event -> Set of callbacks
+
+// ─── v1.105.175 — a socket that says it is connected is not evidence that it is ───
+//
+// Pete: "I didn't see any of the messages until all 5 were there."
+//
+// A phone that locks, or a tab that is frozen and later thawed, comes back holding an object
+// that still reports `connected: true` over a connection that died minutes ago. Nothing in the
+// client ever questioned that, so there was no reconnect, no 'connect' event, and therefore no
+// catch-up — the screen simply stopped receiving, indefinitely, with no error anywhere.
+//
+// So: on the way back to the foreground, ask the server and require an answer. Silence is the
+// signal. This is the only reliable test from inside the page.
+const SOCKET_PROBE_TIMEOUT_MS = 3000;
+
+// The thread currently on screen, so a probe can re-assert it as the same round trip (see
+// `ping_check` in server.js). Set by Messages; null everywhere else.
+window.__openConversationId = window.__openConversationId || null;
+
+function probeSocket() {
+  const sock = _socket;
+  if (!sock) return;
+  // Never connected, or knows it is gone: just reconnect. socket.io will not do this by itself
+  // if it believes the disconnect was deliberate.
+  // Refused for the connection cap: reconnecting is exactly the wrong reaction — it is what
+  // the cap is there to stop. The user has to close a tab; a probe cannot fix it.
+  if (_refusedForConnectionCap) return;
+  if (!sock.connected) { try { sock.connect(); } catch {} return; }
+  if (typeof sock.timeout !== 'function') return; // older client build; nothing to ask with
+  try {
+    sock.timeout(SOCKET_PROBE_TIMEOUT_MS).emit(
+      'ping_check',
+      { conversationId: window.__openConversationId || null },
+      (err) => {
+        if (!err) return; // answered — genuinely alive
+        // No answer inside the window. Tear it down and rebuild: the 'connect' that follows is
+        // what every screen's catch-up already listens for.
+        try { sock.disconnect(); } catch {}
+        try { sock.connect(); } catch {}
+      }
+    );
+  } catch { /* a probe must never be the thing that breaks messaging */ }
+}
+window.__probeSocket = probeSocket;
+
+// ─── v1.106.6 — a poll that runs in a hidden tab is a request nobody asked for ───
+//
+// Three background polls in app.js (unread messages 30s, admin alerts 60s, notification count
+// 30s) ran forever regardless of whether anyone was looking. A phone in a pocket with the PWA
+// open, or a laptop tab left open overnight, made thousands of authenticated requests a day
+// each — every one a database round trip — to keep a badge current that nobody was reading.
+// That is most of the app's idle load and all of it is waste.
+//
+// Two rules: skip the tick while the page is hidden, and fetch once on becoming visible, so
+// the badge is right the moment it is actually seen. Not a hook — an ordinary function called
+// from inside useEffect, returning the cleanup — so it carries no rules-of-hooks baggage.
+const startVisiblePoll = window.startVisiblePoll = (fn, ms) => {
+  let stopped = false;
+  const run = () => { if (!stopped && document.visibilityState === 'visible') fn(); };
+  run();
+  const interval = setInterval(run, ms);
+  const onVisible = () => { if (document.visibilityState === 'visible') run(); };
+  document.addEventListener('visibilitychange', onVisible);
+  return () => {
+    stopped = true;
+    clearInterval(interval);
+    document.removeEventListener('visibilitychange', onVisible);
+  };
+};
+
+// ─── v1.106.6 — warm the video SDK the moment a call starts, not when it is answered ───
+//
+// twilio-video.min.js is 624 KB and used to be a synchronous <script> on every page load, for
+// everyone, whether or not they ever placed a call. It is lazy now (VideoCallOverlay has had
+// its own loader with CDN fallbacks since v1.105.140), and the only cost of that is the
+// download landing at answer time. So don't wait for answer time: the instant a call is
+// ringing — outgoing or incoming — start fetching in the background. By the time a human has
+// reached for the phone the SDK is there.
+//
+// Deliberately fire-and-forget. If it fails, VideoCallOverlay's loader tries again with its
+// full fallback chain and reports properly; this is a head start, not a dependency.
+let _twilioWarming = false;
+const warmVideoSdk = window.warmVideoSdk = () => {
+  if (_twilioWarming || (window.Twilio && window.Twilio.Video)) return;
+  _twilioWarming = true;
+  try {
+    const s = document.createElement('script');
+    s.src = '/vendor/twilio-video.min.js';
+    s.async = true;
+    s.onerror = () => { _twilioWarming = false; };
+    document.head.appendChild(s);
+  } catch { _twilioWarming = false; }
+};
+
+let _refusedForConnectionCap = false;
+
+const connectSocket = window.connectSocket = (token) => {
+  if (_socket) _socket.disconnect();
+  if (!token || typeof io === 'undefined') return;
+  _socket = io(API_BASE, {
+    // v1.105.175 — a FUNCTION, not a captured value. `auth: { token }` freezes whatever token
+    // was current at connect time, so once it expires every reconnection attempt fails the
+    // handshake forever and the app goes quiet with no way back short of a reload. Tokens last
+    // seven days, which is exactly long enough for nobody to connect this to the symptom.
+    auth: (cb) => cb({ token: (typeof getAuthToken === 'function' && getAuthToken()) || token }),
+    transports: ['websocket', 'polling'],
+  });
+  window._socket = _socket;
+  _socket.on('connect', () => { _refusedForConnectionCap = false; console.log('WS connected'); });
+  _socket.on('disconnect', () => console.log('WS disconnected'));
+  // v1.106.5 — the server now caps how many sockets one account may hold and disconnects the
+  // one over the line. socket.io's default reaction to being disconnected is to reconnect, so
+  // without this the refused tab would knock politely every few seconds forever. Stop trying,
+  // and say why in the console so the next person to see it does not have to guess.
+  _socket.on('connect_error_reason', (d) => {
+    if (d && d.reason === 'too_many_connections') {
+      _refusedForConnectionCap = true;
+      console.warn('WS refused: this account already has the maximum number of open connections. ' +
+                   'Close another tab or device, then reload.');
+      try { _socket.io.opts.reconnection = false; } catch {}
+    }
+  });
+  // Re-register all listeners
+  for (const [event, callbacks] of _socketListeners) {
+    for (const cb of callbacks) {
+      _socket.on(event, cb);
+    }
+  }
+  bindLivenessChecks();
+};
+
+// Bound once for the life of the page, not per connection: these listeners have to survive the
+// socket being replaced, which is the situation they exist to cause.
+let _livenessBound = false;
+function bindLivenessChecks() {
+  if (_livenessBound) return;
+  _livenessBound = true;
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') probeSocket();
+  });
+  // Coming back onto a network is the other way this happens, and it does not always produce a
+  // visibilitychange — a phone that never locked but lost signal in a lift.
+  window.addEventListener('online', probeSocket);
+  window.addEventListener('focus', probeSocket);
+}
+
+const disconnectSocket = window.disconnectSocket = () => {
+  if (_socket) { _socket.disconnect(); _socket = null; window._socket = null; }
+};
+
+const onSocketEvent = window.onSocketEvent = (event, callback) => {
+  if (!_socketListeners.has(event)) _socketListeners.set(event, new Set());
+  _socketListeners.get(event).add(callback);
+  if (_socket) _socket.on(event, callback);
+  // Return cleanup function
+  return () => {
+    _socketListeners.get(event)?.delete(callback);
+    if (_socket) _socket.off(event, callback);
+  };
+};
+
+// ─── Push Notification Helpers ───
+
+// Convert URL-safe base64 VAPID key to Uint8Array
+const _urlBase64ToUint8Array = (base64String) => {
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding).replace(/\-/g, '+').replace(/_/g, '/');
+  const rawData = atob(base64);
+  return Uint8Array.from([...rawData].map(c => c.charCodeAt(0)));
+};
+
+// Compare two ArrayBuffers for equality
+const _arrayBuffersEqual = (buf1, buf2) => {
+  if (!buf1 || !buf2) return false;
+  const a = new Uint8Array(buf1);
+  const b = new Uint8Array(buf2);
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) { if (a[i] !== b[i]) return false; }
+  return true;
+};
+
+// Subscribe to push notifications (requires user gesture for permission prompt)
+const subscribeToPush = window.subscribeToPush = async () => {
+  try {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+      console.warn('Push: not supported in this browser');
+      return null;
+    }
+
+    const reg = await navigator.serviceWorker.ready;
+
+    // Get current VAPID public key from server
+    const keyRes = await apiFetch('/api/push/vapid-key');
+    if (!keyRes || !keyRes.ok) {
+      console.warn('Push: server VAPID key not available');
+      return null;
+    }
+    const { publicKey } = await keyRes.json();
+    if (!publicKey) {
+      console.warn('Push: server returned empty VAPID key');
+      return null;
+    }
+    const currentKeyBytes = _urlBase64ToUint8Array(publicKey);
+
+    // Check if already subscribed
+    let sub = await reg.pushManager.getSubscription();
+    if (sub) {
+      // Verify the subscription was created with the current VAPID key
+      const subKey = sub.options && sub.options.applicationServerKey;
+      if (subKey && _arrayBuffersEqual(subKey, currentKeyBytes.buffer)) {
+        // Keys match — sync to server
+        await apiFetch('/api/push/subscribe', {
+          method: 'POST',
+          body: JSON.stringify({ subscription: sub }),
+        });
+        console.log('Push: existing subscription synced (key matches)');
+        return sub;
+      } else {
+        // VAPID key changed — unsubscribe old and re-subscribe with new key
+        console.log('Push: VAPID key changed — re-subscribing...');
+        await sub.unsubscribe();
+        sub = null; // fall through to create new subscription
+      }
+    }
+
+    // Create new subscription (triggers browser permission prompt if needed)
+    sub = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: currentKeyBytes,
+    });
+
+    // Save subscription to server
+    await apiFetch('/api/push/subscribe', {
+      method: 'POST',
+      body: JSON.stringify({ subscription: sub }),
+    });
+
+    console.log('Push: subscribed successfully with current VAPID key');
+    return sub;
+  } catch (err) {
+    if (err.name === 'NotAllowedError') {
+      console.warn('Push: user denied notification permission');
+    } else {
+      console.error('Push subscription error:', err);
+    }
+    return null;
+  }
+};
+
+// ─── v1.107.7 — one set of native push listeners per page ───
+// Registration (and every later token rotation) saves the token and settles anyone waiting on
+// subscribeNativePush. A foreground push shows ONE toast: badge-only pushes (utils/badgeSync,
+// no title and no body) show nothing, and the same title within a few seconds is shown once.
+const _nativePush = window.__nativePush || (window.__nativePush = { ready: null, waiters: [], lastToast: { text: '', at: 0 } });
+const ensureNativePushListeners = window.ensureNativePushListeners = (PushNotifications) => {
+  if (_nativePush.ready) return _nativePush.ready;
+  _nativePush.ready = (async () => {
+    // Leftovers from an earlier copy of this page (a web-layer reload keeps the native plugin).
+    try { await PushNotifications.removeAllListeners(); } catch { /* nothing to remove */ }
+
+    PushNotifications.addListener('registration', async (token) => {
+      console.log('NativePush: registered with token', token.value?.substring(0, 20) + '...');
+      await saveNativePushToken(token.value, window.Capacitor.getPlatform(), { label: 'token' });
+      _nativePush.waiters.slice().forEach((w) => w(token));
+    });
+
+    PushNotifications.addListener('registrationError', (err) => {
+      console.error('NativePush: registration error:', err);
+      _nativePush.waiters.slice().forEach((w) => w(null));
+    });
+
+    PushNotifications.addListener('pushNotificationReceived', (notification) => {
+      const nData = notification.data || {};
+      const text = notification.title || notification.body || '';
+      // A badge-only push has nothing to say; it used to toast "New notification".
+      if (!text) return;
+      // Suppress toast if user is already viewing this conversation
+      if (nData.type === 'message' && nData.conversationId && window.__activeConversationId === nData.conversationId) return;
+      const now = Date.now();
+      if (_nativePush.lastToast.text === text && now - _nativePush.lastToast.at < 4000) return;
+      _nativePush.lastToast = { text, at: now };
+      try { window.__showToast?.(text, 'info'); } catch { /* a toast is a courtesy */ }
+    });
+
+    PushNotifications.addListener('pushNotificationActionPerformed', (action) => {
+      const data = action.notification?.data;
+      // v1.97.0 — central router: same deep-link handling as web push and the in-app list
+      if (window.__handlePushNavigate) window.__handlePushNavigate(data || {});
+      else if (data?.page) window.__navigateTo?.(data.page);
+    });
+  })();
+  return _nativePush.ready;
+};
+
+// Subscribe to native push notifications via Capacitor plugin
+// Used in native Android/iOS apps where Web Push (PushManager) isn't available
+const subscribeNativePush = window.subscribeNativePush = async () => {
+  try {
+    const PushNotifications = window.Capacitor?.Plugins?.PushNotifications;
+    if (!PushNotifications) {
+      console.warn('NativePush: Capacitor PushNotifications plugin not available');
+      return null;
+    }
+
+    // Request permission from OS
+    const permResult = await PushNotifications.requestPermissions();
+    if (permResult.receive !== 'granted') {
+      console.warn('NativePush: permission denied by user');
+      return null;
+    }
+
+    // v1.107.7 — listeners are installed ONCE per page (ensureNativePushListeners). This used
+    // to add four fresh listeners on every call, and ensurePushRegistered calls it on every
+    // resume AND every visibilitychange — so after six trips away from the app one push drew
+    // twelve identical toasts. Pete: "when I get a notification I get like 12 of them at once."
+    await ensureNativePushListeners(PushNotifications);
+    return new Promise((resolve) => {
+      let done = false;
+      const finish = (v) => {
+        if (done) return;
+        done = true;
+        _nativePush.waiters = _nativePush.waiters.filter((w) => w !== finish);
+        resolve(v);
+      };
+      _nativePush.waiters.push(finish);
+      // Trigger the registration; the one 'registration' listener saves the token and settles us.
+      PushNotifications.register();
+      setTimeout(() => {
+        if (!done) console.warn('NativePush: registration timed out');
+        finish(null);
+      }, 15000);
+    });
+  } catch (err) {
+    console.error('NativePush: error:', err);
+    return null;
+  }
+};
+
+// ─── Native push token refresh handler ───
+// FCM/APNS may rotate the device token at any time. This listener catches
+// ─── v1.106.48 — a push token that failed to save must be tried again ───
+//
+// Pete's iPhone logged five of these in one session while his internet was patchy:
+//   "NativePush: failed to save refreshed token: ApiTimeoutError"
+// He has not noticed a missing notification, and the likeliest reading is the honest one — a
+// flaky connection, not a server fault.
+//
+// But both save paths gave up after one attempt and logged. That is the bad half regardless of
+// what caused it: APNs hands the device a NEW token when it rotates, the server keeps the old
+// one, and every push from then on goes to an address nobody is at. Nothing on the phone or
+// the server would say so. A caregiver stops being reachable and finds out by missing a visit.
+//
+// Three attempts with a widening gap, then a genuine complaint. Deliberately no queue and no
+// persistence: a token is only worth saving while the app is open and holding it, and a stale
+// one replayed later is worse than none.
+const saveNativePushToken = window.saveNativePushToken = async (token, platform, { label = 'token' } = {}) => {
+  const waits = [0, 3000, 12000];
+  let lastErr = null;
+  for (let attempt = 0; attempt < waits.length; attempt++) {
+    if (waits[attempt]) await new Promise((r) => setTimeout(r, waits[attempt]));
+    try {
+      const res = await apiFetch('/api/push/subscribe-native', {
+        method: 'POST',
+        body: JSON.stringify({ token, platform }),
+      });
+      // apiFetch resolves for a 4xx/5xx too, and a token the server refused is not saved.
+      if (res && res.ok) {
+        if (attempt > 0) console.log(`NativePush: ${label} saved on attempt ${attempt + 1}`);
+        else console.log(`NativePush: ${label} saved to server`);
+        return true;
+      }
+      lastErr = new Error(`server answered ${res ? res.status : 'nothing'}`);
+      // A refusal is a decision, not a blip — retrying it just repeats the answer.
+      if (res && res.status >= 400 && res.status < 500) break;
+    } catch (err) {
+      lastErr = err;
+    }
+  }
+  console.error(`NativePush: gave up saving ${label} after ${waits.length} attempts:`,
+    lastErr && lastErr.message ? lastErr.message : lastErr);
+  return false;
+};
+
+// the new token and re-registers it with the server. Should be called once
+// on app startup (after login) — separate from the initial subscribe flow.
+const initNativeTokenRefresh = window.initNativeTokenRefresh = () => {
+  try {
+    const PushNotifications = window.Capacitor?.Plugins?.PushNotifications;
+    if (!PushNotifications) return;
+    // v1.107.7 — the same single set of listeners as subscribeNativePush. This used to
+    // removeAllListeners() and re-add, racing the listeners subscribeNativePush was adding.
+    ensureNativePushListeners(PushNotifications).catch(() => {});
+  } catch (err) {
+    console.warn('NativePush: token refresh init error:', err);
+  }
+};
+
+// Check push subscription health and re-sync if needed
+// Call periodically (e.g., every 30 min) to keep subscriptions fresh
+// ─── App-icon badge (v1.105.40) ───
+//
+// Pete: "notification on the app icon when there are unread events that need attention.
+// For instance, if Sara needs to approve reimbursements."
+//
+// A push carries the number down (see sw.js and utils/apns.js), but the thing people
+// actually notice is the badge NOT clearing after they've dealt with something. So the app
+// re-asks the server whenever it comes to the front, which is exactly when a stale badge
+// would be visible and annoying.
+//
+// ⚠️ v1.105.43 — this used to return early unless navigator.setAppBadge existed, and that
+// was the second reason Pete's icon stayed at 78. iOS WKWebView has no Badging API at all,
+// so inside the native app this function bailed on its first line: it never called the
+// endpoint, so the server never learned the app was open, so the silent badge correction
+// added in v1.105.42 never fired. The guard was written for a browser tab, where doing
+// nothing is right, and it quietly disabled the one platform that needed it most.
+//
+// So: ALWAYS ask the server. That call is what triggers the server-side correction for
+// native (see routes/push.js syncBadgeToDevices). Only the local setAppBadge — the part
+// that genuinely needs the API — is conditional.
+const refreshAppBadge = window.refreshAppBadge = async () => {
+  try {
+    const res = await apiFetch('/api/push/attention');
+    if (!res?.ok) return;
+    const { total } = await res.json();
+    const n = Number(total) || 0;
+    // v1.105.54 — the native shell, when the build provides @capacitor/badge. This is the
+    // half of the badge fix that has been waiting on a build since v1.105.42: it sets the
+    // icon directly on open/resume, instead of depending on a push arriving to correct it.
+    const badgePlugin = _capPlugin('Badge');
+    if (badgePlugin) {
+      try {
+        if (n > 0) await badgePlugin.set({ count: n });
+        else await badgePlugin.clear();
+        return;
+      } catch { /* fall through to the web API */ }
+    }
+    if (typeof navigator === 'undefined' || typeof navigator.setAppBadge !== 'function') return;
+    if (n > 0) await navigator.setAppBadge(n);
+    else await navigator.clearAppBadge();
+  } catch { /* a badge must never be load-bearing */ }
+};
+
+// Re-check whenever the app comes back to the front — installed PWA, browser tab, or
+// native WebView alike. That is exactly when a stale badge is on screen, and on iOS it is
+// the only signal the server gets that the app is open. Registered unconditionally for the
+// same reason the guard came out of refreshAppBadge above.
+if (typeof document !== 'undefined') {
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') refreshAppBadge();
+  });
+  // Capacitor fires 'resume' on the document when the native app returns to the
+  // foreground. On iOS this is more reliable than visibilitychange in a WKWebView.
+  document.addEventListener('resume', () => { refreshAppBadge(); });
+}
+
+const checkPushHealth = window.checkPushHealth = async () => {
+  try {
+    // ─── v1.105.49 — the native branch, which never existed ───
+    //
+    // The two guards below are the setAppBadge bug again, twenty lines from the comment
+    // warning about it. `PushManager` and `Notification` are both absent in WKWebView, so
+    // inside the iOS app this function returned on its first line — every 30 minutes,
+    // forever. And it is the ONLY thing that notices the server has no devices for you and
+    // re-registers. So an iPhone whose APNs token rotated or got pruned stopped receiving
+    // notifications entirely and never recovered, short of a fresh login.
+    //
+    // Native devices don't have a PushManager subscription to inspect; the check that makes
+    // sense for them is "does the server still know about a device for me", and the repair
+    // is to re-register the token.
+    if (window.Capacitor?.isNativePlatform?.()) {
+      if (!AUTH_TOKEN) return;
+      const res = await apiFetch('/api/push/status');
+      if (!res?.ok) return;
+      const status = await res.json();
+      // ─── v1.105.151 — ask about THIS device, not about any device ───
+      //
+      // Pete: "why don't i get push notifications… i know the other people get notifications,
+      // but I don't." He had three registered devices — two web and an android — and no iOS
+      // token at all, while testing on an iPhone. Every message push he was owed went out
+      // successfully, to a laptop and an Android build he was not holding.
+      //
+      // This repair existed to catch exactly that, and could never fire: it asked whether
+      // `userSubscriptions === 0`, and his was 3. The other devices were what kept his phone
+      // unregistered — the more devices you have, the more certain this check was that
+      // everything was fine. "Does the server know about ANY device for me" is the wrong
+      // question; the one that decides whether a phone buzzes is "does it know about THIS one".
+      //
+      // Registration is an upsert on the endpoint, so re-registering when we are already
+      // known costs one request and changes nothing.
+      const mine = window.Capacitor?.getPlatform?.();
+      const platforms = Array.isArray(status.platforms) ? status.platforms : null;
+      const missing = platforms ? (mine ? !platforms.includes(mine) : platforms.length === 0)
+        : status.userSubscriptions === 0; // older server: fall back to the old question
+      if (missing && typeof subscribeNativePush === 'function') {
+        console.log(`Push health: no ${mine || 'native'} device registered for this user — registering`);
+        await subscribeNativePush();
+      }
+      return;
+    }
+
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+    if (!('Notification' in window) || Notification.permission !== 'granted') return;
+
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription();
+
+    if (!sub) {
+      // Subscription lost (e.g., browser cleared it, or SW was updated) — re-subscribe
+      console.log('Push health: no active subscription — re-subscribing...');
+      await subscribeToPush();
+      return;
+    }
+
+    // Verify server knows about this subscription
+    if (!AUTH_TOKEN) return; // not logged in
+
+    const statusRes = await apiFetch('/api/push/status');
+    if (statusRes && statusRes.ok) {
+      const status = await statusRes.json();
+      if (status.userSubscriptions === 0) {
+        // Server has no subscriptions for this user — re-sync
+        console.log('Push health: server has no subscriptions — syncing...');
+        await apiFetch('/api/push/subscribe', {
+          method: 'POST',
+          body: JSON.stringify({ subscription: sub }),
+        });
+      }
+    }
+  } catch (err) {
+    console.warn('Push health check error:', err.message);
+  }
+};
+
+// ─── Automatic photo downscaling (v1.104.0, Sentry INPLACE-1) ───
+// Phone cameras produce 3–10MB photos; base64 in a JSON body inflates that by
+// ~33%, blowing past server body limits (the /api/notes 413s), and raw files
+// can exceed multer's 5MB multipart cap. Every photo upload path downscales
+// through here automatically so no user ever hits a size wall.
+//
+// downscaleImage(file, {maxDim, quality}) → Promise<dataURL|null>
+//   null = not a downscalable image (non-image, GIF, or decode failure) —
+//   caller decides whether to pass the original through or reject.
+// downscaleImageFile(file, {maxDim, quality}) → Promise<File>
+//   Always resolves: JPEG File when downscaling helps, otherwise the original
+//   untouched (never blocks an upload). Safe to map over mixed file lists.
+const downscaleImage = window.downscaleImage = (file, opts = {}) => new Promise((resolve) => {
+  const { maxDim = 1600, quality = 0.85 } = opts;
+  if (!file || !file.type || !file.type.startsWith('image/') || file.type === 'image/gif') {
+    return resolve(null); // GIFs skipped — canvas would strip animation
+  }
+  const img = new Image();
+  const url = URL.createObjectURL(file);
+  img.onload = () => {
+    URL.revokeObjectURL(url);
+    try {
+      let { width, height } = img;
+      if (width > maxDim || height > maxDim) {
+        const sc = maxDim / Math.max(width, height);
+        width = Math.round(width * sc);
+        height = Math.round(height * sc);
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = width; canvas.height = height;
+      canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+      resolve(canvas.toDataURL('image/jpeg', quality));
+    } catch (e) { resolve(null); }
+  };
+  img.onerror = () => { URL.revokeObjectURL(url); resolve(null); };
+  img.src = url;
+});
+
+const downscaleImageFile = window.downscaleImageFile = async (file, opts = {}) => {
+  try {
+    const dataUrl = await downscaleImage(file, opts);
+    if (!dataUrl) return file;
+    const blob = await (await fetch(dataUrl)).blob();
+    if (blob.size >= file.size) return file; // already small/optimized — keep original
+    const name = (file.name || 'photo').replace(/\.[^.]+$/, '') + '.jpg';
+    return new File([blob], name, { type: 'image/jpeg' });
+  } catch (e) { return file; }
+};
+

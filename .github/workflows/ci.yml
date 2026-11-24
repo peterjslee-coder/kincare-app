@@ -1,0 +1,122 @@
+# CI — runs on every push and pull request.
+# Unit suite (jest, mocked) → integration suite (embedded PostgreSQL, real SQL)
+# → client bundle build. With Railway "Wait for CI" enabled, a red run here
+# blocks the production deploy.
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest # non-root runner user, so embedded-postgres initdb works
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Catches the class of bug in-browser Babel can't: an undeclared identifier
+      # (e.g. an onClick wired to a function that doesn't exist) that ships silently
+      # and white-screens at render. Runs first — cheapest, fails fastest.
+      - name: Client lint (undeclared identifiers / dupe keys / dead code)
+        run: npm run lint:client
+
+      # The server-side twin of the above. A require() inside a function body
+      # doesn't fail at boot — it fails the first time that line runs, and inside
+      # a try/catch it fails silently forever. That's how Sentry INPLACE-3 hid
+      # twelve dropped push notifications, and how eleven more broken paths
+      # survived the v1.92.0 admin split (incl. admin document preview 500ing).
+      - name: Server require paths resolve
+        run: npm run lint:requires
+
+      # The third member of the same family. A column that does not exist raises a perfectly
+      # clear Postgres error — which nobody ever sees, because these call sites sit inside a
+      # catch that logs "(non-blocking)" and returns []. The Aug 11 sweep found SIX features
+      # that had never worked once in production for exactly this reason: iPAi coaching,
+      # Kindred's visit context, natural-language scheduling, the admin iPAi toggle, and two
+      # admin session repairs. Tests cannot catch these — the unit suites use a fake db, which
+      # will happily return rows for a column that isn't there.
+      - name: SQL columns exist
+        run: npm run lint:sql-columns
+
+      # The visual member of the same family, and the one a user reports rather than a log.
+      # Pete, twice now: "the color scheme in dark mode does not work well...unreadable. again."
+      # A hardcoded hex text colour on a theme-variable background is fine in light mode and
+      # 3:1 in dark, and nothing in the build could see it. Hardcoded-on-hardcoded is left
+      # alone — that pair is self-consistent; only the mixed case flips.
+      # The legacy migrations array is '000_legacy_baseline' and runs once, on a database
+      # that has never seen it. A schema change added there reaches the tests and never
+      # reaches prod — which is how location_source was broken for three weeks.
+      # A role in the caller's own token is not an authorization check. Twice this shape
+      # let any account act on any session by id — Aug 4 and again Sep 13.
+      - name: No route authorizes on a role string
+        run: npm run lint:authz
+
+      - name: Identity is resolved in one place
+        run: npm run lint:identity-reads
+
+      - name: Impersonation cannot write credentials
+        run: npm run lint:impersonation
+
+      - name: Copy doesn't guess anyone's pronouns
+        run: npm run lint:pronouns
+
+      - name: The committed bundle matches its source
+        run: npm run lint:bundle-fresh
+
+      - name: Frozen migration baseline untouched
+        run: npm run lint:frozen-migrations
+
+      # Photos-in-Postgres has been the same outage twice. storage.js has existed since
+      # v1.91.0 to end it and five writers never used it, which is what filled the volume on
+      # Sept 2. A review finds that once; a gate finds the sixth one.
+      - name: Blobs go to object storage, not Postgres
+        run: npm run lint:blobs
+
+      # 36 fields are read as `x.foo_bar || x.fooBar` because /api/sessions spreads raw rows
+      # and /api/dashboard hand-builds. Renaming breaks ~200 unguarded reads either way, so the
+      # debt is frozen rather than paid: no NEW pairs. The other half is
+      # tests/integration/apiFieldContract.itest.js, which checks the existing fallbacks
+      # actually resolve — an unmatched one is a blank cell, not an error.
+      - name: No new dual-name API reads
+        run: npm run lint:dual-names
+
+      # v1.106.23 — lint-requires catches a bad require PATH. This catches the other half:
+      # a module that never requires something it uses. Ten of those were live in src/, all
+      # inside try/catch, all invisible. See scripts/lint-server-undef.js.
+      - name: No undefined identifiers in src/
+        run: npm run lint:server-undef
+
+      - name: Dark-mode contrast
+        run: npm run lint:contrast
+
+      # docs/ARCHITECTURE.md is generated from the code. If a new route, poller or
+      # socket event lands without regenerating it, the map every session reads is
+      # already wrong. Fail here instead.
+      - name: Architecture doc is current
+        run: npm run gen:architecture -- --check
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Integration tests (embedded PostgreSQL)
+        run: npm run test:integration
+
+      - name: Client bundle build
+        run: node scripts/build-client.js
+
+      # v1.106.5 — the review found 40 advisories, 3 of them critical, on a stack nobody had
+      # audited. Fixing them once is worthless without a gate: the next critical arrives on
+      # its own schedule, not ours. Runs LAST so an advisory published overnight fails the
+      # build after the real signal, never instead of it. Production dependencies only —
+      # a ReDoS in a dev-only test helper is not reachable from the internet.
+      - name: No high or critical advisories in production dependencies
+        run: npm audit --omit=dev --audit-level=high

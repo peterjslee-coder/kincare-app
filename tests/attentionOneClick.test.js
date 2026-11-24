@@ -1,0 +1,581 @@
+// "Needs you", as a thing you can answer rather than a number you can read. (v1.105.129)
+//
+// Pete, 8/24: "I'm not happy with how the 'needs you' is displayed… if something needs me
+// let's get it clear on WHAT they're needed for and make it a one-click event to clear it
+// out or open it up for more."
+//
+// Two properties are worth pinning, and neither is the styling:
+//
+//   1. Each item says what it IS — whose, how much, for when — and carries the ONE request
+//      that ends it. The request is named on the server, beside the query that found the
+//      row, so a client cannot put the right-looking id in the wrong path.
+//   2. Nothing is irreversible on the first tap. The card holds every action for five
+//      seconds and flushes what is still held on pagehide, with keepalive — otherwise
+//      "tap Approve, close the app" silently does nothing at all.
+//
+// The render half is a render test, not a string match, for the reason in
+// cancelSessionModal.test.js: an item that draws its title is not the same as one whose
+// title is present in the source.
+
+const fs = require("fs");
+const path = require("path");
+const babel = require("@babel/core");
+const React = require("react");
+const { renderToStaticMarkup } = require("react-dom/server");
+const { attentionItemsFor } = require("../src/utils/attention");
+
+const read = (...p) => fs.readFileSync(path.join(__dirname, "..", ...p), "utf8");
+
+// ─── the server: one row of each kind, as the database would hand it over ───
+
+const REIMBURSEMENT = {
+  id: "reim-1", amount: "24.60", description: "Groceries", category: "food",
+  expense_date: "2026-08-21", care_team_id: "team-1",
+  payee_first: "Edwina", payee_last: "Hall", recipient_first: "Betty",
+};
+const OFFER = {
+  id: "tp-1", session_id: "sess-9", proposed_date: "2026-08-26", proposed_time: "14:00",
+  message: "I could do the afternoon", caregiver_first: "Julia", caregiver_last: "Huth",
+  service_type: "companion", tz: "America/New_York", recipient_first: "Betty",
+};
+const CHANGE = {
+  id: "tcp-1", session_id: "sess-4", proposed_by: "caregiver",
+  original_time: "09:00", proposed_time: "11:00", original_duration: 2, proposed_duration: 2,
+  reason: "Dentist ran long", is_within_24h: true, scheduled_date: "2026-08-25",
+  scheduled_time: "09:00", service_type: "companion", tz: "America/New_York",
+  recipient_first: "Betty", caregiver_first: "Julia", caregiver_last: "Huth",
+  family_first: "Pete", family_last: "Lee",
+};
+const TASK = {
+  id: "occ-1", due_at: "2026-08-24T22:00:00Z", due_date: "2026-08-24",
+  title: "Evening medication", task_type: "medication", tz: "America/New_York",
+  care_recipient_id: "cr-1", recipient_first: "Betty",
+};
+
+const PENDING_USER = {
+  id: "u-9", first_name: "Rebecca", last_name: "Nolan", email: "rebecca@example.com",
+  role: "caregiver", created_at: "2026-08-29",
+};
+
+function fakeDb({ reimbursements = [], offers = [], changes = [], tasks = [], approvals = [], isAdmin = false, messages = 0 } = {}) {
+  return {
+    prepare(sql) {
+      const norm = sql.replace(/\s+/g, " ");
+      return {
+        async get() {
+          // v1.112.0 — a verified person: the identity gate is not what these tests measure.
+          if (norm.includes("id_gate_grace_until")) return { is_admin: 0, is_demo: 0, id_gate_grace_until: null };
+          if (norm.includes("SELECT is_admin FROM users")) return { is_admin: isAdmin ? 1 : 0 };
+          return { count: norm.includes("FROM messages") ? messages : 0 };
+        },
+        async all() {
+          if (norm.includes("FROM verified_documents")) return [{ status: "approved", is_verified: 1 }];
+          // v1.119.1 — the "did it arrive / did you send it" nudges read approved rows; these
+          // stubs model pending ones only. tests/integration/reimbursementReceived covers them.
+          if (norm.includes("FROM reimbursements") && norm.includes("r.status = 'approved'")) return [];
+          if (norm.includes("FROM reimbursements")) return reimbursements;
+          if (norm.includes("FROM time_proposals")) return offers;
+          // v1.124.1 — the "waiting on them" query (proposed_by_user_id) is the proposer's view;
+          // these fixtures are all asks of Pete, so it finds none.
+          if (norm.includes("FROM time_change_proposals") && norm.includes("tcp.proposed_by_user_id = ?")) return [];
+          if (norm.includes("FROM time_change_proposals")) return changes;
+          if (norm.includes("FROM care_task_occurrences")) return tasks;
+          if (norm.includes("FROM users") && norm.includes("account_approved")) return approvals;
+          return [];
+        },
+      };
+    },
+  };
+}
+
+const only = async (kind, seed) => {
+  const { items } = await attentionItemsFor(fakeDb(seed), "pete");
+  return items.find((i) => i.kind === kind);
+};
+
+describe("each item says what it is", () => {
+  test("a reimbursement names the amount and the person being paid back", async () => {
+    const item = await only("reimbursement", { reimbursements: [REIMBURSEMENT] });
+    expect(item.title).toBe("Approve $24.60 to Edwina Hall");
+    expect(item.detail).toBe("Groceries · food");
+    expect(item.forWhom).toBe("Betty");
+  });
+
+  test("and says plainly that approving is not paying", async () => {
+    // Pete's money rule: copy must say where money moves. Approval marks it approved;
+    // nothing leaves an account until someone picks how to pay.
+    const item = await only("reimbursement", { reimbursements: [REIMBURSEMENT] });
+    expect(item.note).toMatch(/doesn't send money/);
+  });
+
+  test("a time change carries both times, not just the new one", async () => {
+    const item = await only("timeChange", { changes: [CHANGE] });
+    // v1.123.0 — the verb names which way it moves (same length, two hours later).
+    expect(item.title).toBe("Julia Huth asked to move a visit later");
+    expect(item.fromTime).toBe("09:00");
+    expect(item.toTime).toBe("11:00");
+    expect(item.isWithin24h).toBe(true);
+  });
+
+  test("a care task is the task, in the words the family wrote", async () => {
+    const item = await only("careTask", { tasks: [TASK] });
+    expect(item.title).toBe("Evening medication");
+    expect(item.verb).toBe("Mark done");
+  });
+
+  test("every item has a verb and exactly one action", async () => {
+    const { items } = await attentionItemsFor(
+      fakeDb({ reimbursements: [REIMBURSEMENT], offers: [OFFER], changes: [CHANGE], tasks: [TASK] }),
+      "pete"
+    );
+    expect(items).toHaveLength(4);
+    for (const item of items) {
+      expect(typeof item.verb).toBe("string");
+      expect(item.verb.length).toBeGreaterThan(0);
+      expect(item.action.path).toMatch(/^\/api\//);
+      expect(["POST", "PUT"]).toContain(item.action.method);
+    }
+  });
+});
+
+describe("the action is the real endpoint, with the real id", () => {
+  test("reimbursement → the approve route for THAT reimbursement", async () => {
+    const item = await only("reimbursement", { reimbursements: [REIMBURSEMENT] });
+    expect(item.action).toEqual({ method: "POST", path: "/api/reimbursements/reim-1/approve" });
+  });
+
+  test("time change → respond with accept, on the proposal's own session", async () => {
+    const item = await only("timeChange", { changes: [CHANGE] });
+    expect(item.action).toEqual({
+      method: "PUT",
+      path: "/api/sessions/sess-4/time-change/tcp-1/respond",
+      body: { action: "accept" },
+    });
+  });
+
+  test("a caregiver's offered time → accept that proposal, not the session", async () => {
+    const item = await only("timeOffer", { offers: [OFFER] });
+    expect(item.action).toEqual({ method: "PUT", path: "/api/sessions/sess-9/proposals/tp-1/accept" });
+  });
+
+  test("care task → check it off, and it is the one kind with a real undo", async () => {
+    const item = await only("careTask", { tasks: [TASK] });
+    expect(item.action).toEqual({ method: "POST", path: "/api/care-tasks/occurrences/occ-1/check" });
+    expect(item.undo).toEqual({ method: "POST", path: "/api/care-tasks/occurrences/occ-1/undo" });
+    expect(item.undoable).toBe(true);
+  });
+
+  test("every action path names a route that exists", () => {
+    // The class of bug this guards is the one the app has shipped twice: a client-built URL
+    // that looks right and 404s. Each path is checked against the router that serves it.
+    const routes = {
+      "src/routes/reimbursements.js": ['router.post("/:id/approve"'],
+      "src/routes/sessions.js": [
+        'router.put("/:id/time-change/:proposalId/respond"',
+        'router.put("/:id/proposals/:proposalId/accept"',
+      ],
+      "src/routes/careTasks.js": [
+        'router.post("/occurrences/:id/check"',
+        'router.post("/occurrences/:id/undo"',
+      ],
+    };
+    for (const [file, decls] of Object.entries(routes)) {
+      const src = read(file);
+      for (const decl of decls) expect(src).toContain(decl);
+    }
+  });
+
+  test("EVERY item opens the thing, not the page it lives on", async () => {
+    // v1.105.139. Pete (51d4226c): "Need you alerts shouldn't open a generic page…they should
+    // open the task or event. I went to log Betty's meds… it just took me to the care team
+    // page… ie I gotta scroll down and find the task."
+    //
+    // My own regression: .129 gave the schedule rows a `focus` and left reimbursements and
+    // care tasks with only a page name — which is a dead end wearing a destination's clothes,
+    // the same finding as v1.105.105 one card later. This test is the one that would have
+    // caught it: it asks of EVERY kind, not of the kinds I happened to wire.
+    const { items } = await attentionItemsFor(
+      fakeDb({ reimbursements: [REIMBURSEMENT], offers: [OFFER], changes: [CHANGE], tasks: [TASK] }),
+      "pete"
+    );
+    expect(items).toHaveLength(4);
+    for (const item of items) {
+      expect(typeof item.focus).toBe("string");
+      expect(item.focus).toMatch(/^(session|reimbursement|careTask):.+/);
+    }
+  });
+
+  test("a care task opens its check sheet on the dashboard", async () => {
+    const item = await only("careTask", { tasks: [TASK] });
+    expect(item.focus).toBe("careTask:occ-1");
+    expect(item.page).toBe("dashboard"); // where today's tasks and the sheet actually are
+  });
+
+  test("a reimbursement opens the row that was already waiting for it", async () => {
+    // Reimbursements.js has consumed this focus since v1.97.0 — scroll, flash, open approve.
+    const item = await only("reimbursement", { reimbursements: [REIMBURSEMENT] });
+    expect(item.focus).toBe("reimbursement:reim-1");
+    expect(read("public/js/components/Reimbursements.js")).toMatch(/startsWith\('reimbursement:'\)/);
+  });
+
+  test("and the dashboard knows how to open a care task", () => {
+    const dash = read("public/js/components/Dashboard.js");
+    expect(dash).toMatch(/f\.startsWith\('careTask:'\)/);
+    expect(dash).toMatch(/setTaskSheet\(\{ occ, group: g \}\);/);
+    // A focus can arrive before today's tasks do — a push tap, or a cold dashboard load.
+    expect(dash).toMatch(/if \(window\.__pendingFocus\) window\.dispatchEvent\(new Event\('inplace:focus'\)\);/);
+  });
+
+  test("the visit-opening rows still know which visit", async () => {
+    const { items } = await attentionItemsFor(fakeDb({ offers: [OFFER], changes: [CHANGE] }), "pete");
+    expect(items.map((i) => i.focus).sort()).toEqual(["session:sess-4", "session:sess-9"]);
+  });
+});
+
+describe("somebody waiting to get in", () => {
+  // v1.105.145. Pete, after Rebecca signed up: "I never got a push notification that something
+  // was waiting on me as an admin, and there was no indication inside the app that I needed
+  // attention to approve her account… I got an email that made me go to the app… It needs to
+  // be faster than that."
+  //
+  // The admin push fan-out does exist and is keyed on is_admin, correctly. But a push is gone
+  // the moment it is missed, and nothing persistent ever said so — the one surface whose whole
+  // job is "you are the blocker" did not know approvals existed. A person who signed up and
+  // cannot get in is the purest case this file's definition describes.
+
+  test("an admin sees the person who is stuck", async () => {
+    const item = await only("approval", { approvals: [PENDING_USER], isAdmin: true });
+    expect(item.title).toBe("Approve Rebecca Nolan — waiting to get in");
+    expect(item.note).toBe("They can't use InPlace until you do.");
+    expect(item.action).toEqual({ method: "PUT", path: "/api/admin/users/u-9/approve" });
+    expect(item.page).toBe("admin");
+    expect(item.focus).toBe("approval:u-9");
+  });
+
+  test("everyone else sees nothing — this is not their decision", async () => {
+    const payload = await attentionItemsFor(fakeDb({ approvals: [PENDING_USER], isAdmin: false }), "julia");
+    expect(payload.items).toEqual([]);
+    expect(payload.total).toBe(0);
+  });
+
+  test("admin-ness is is_admin, never role", async () => {
+    // Pete is role 'family' AND is_admin. A check on role would skip the only admin there is.
+    const util = read("src/utils/attention.js");
+    expect(util).toMatch(/SELECT is_admin FROM users WHERE id = \?/);
+    expect(util).not.toMatch(/role = 'admin'/);
+  });
+
+  test("it counts toward the same total the app icon reads", async () => {
+    const payload = await attentionItemsFor(
+      fakeDb({ tasks: [TASK], approvals: [PENDING_USER], isAdmin: true }), "pete"
+    );
+    expect(payload.approvals).toBe(1);
+    expect(payload.total).toBe(2);
+    expect(payload.total).toBe(payload.items.length);
+  });
+
+  test("the push that announces it can now land on it", () => {
+    // Without page/focus the tap fell through to the default and opened the dashboard —
+    // a notification about a blocked person that does not show you the blocked person.
+    const auth = read("src/routes/auth.js");
+    expect(auth).toMatch(/page: "admin", focus: `approval:\$\{id\}`/);
+  });
+});
+
+describe("the count is the list, not a second opinion of it", () => {
+  test("total is exactly the number of items", async () => {
+    const payload = await attentionItemsFor(
+      fakeDb({ reimbursements: [REIMBURSEMENT], offers: [OFFER], changes: [CHANGE], tasks: [TASK], messages: 7 }),
+      "pete"
+    );
+    expect(payload.total).toBe(payload.items.length);
+    expect(payload.total).toBe(4);
+  });
+
+  test("unread messages are reported and still not counted", async () => {
+    const payload = await attentionItemsFor(fakeDb({ messages: 7 }), "pete");
+    expect(payload.messages).toBe(7);
+    expect(payload.total).toBe(0);
+    expect(payload.items).toEqual([]);
+  });
+
+  test("a query that throws costs its own rows and nothing else", async () => {
+    const half = {
+      prepare(sql) {
+        const norm = sql.replace(/\s+/g, " ");
+        return {
+          async get() { return { count: 0 }; },
+          async all() {
+            if (norm.includes("FROM verified_documents")) return [{ status: "approved", is_verified: 1 }]; // v1.112.0
+            if (norm.includes("FROM reimbursements")) throw new Error("db down");
+            if (norm.includes("FROM care_task_occurrences")) return [TASK];
+            return [];
+          },
+        };
+      },
+    };
+    const payload = await attentionItemsFor(half, "pete");
+    expect(payload.reimbursements).toBe(0);
+    expect(payload.careTasks).toBe(1);
+    expect(payload.total).toBe(1);
+  });
+});
+
+// ─── the card, rendered ───
+
+const cardSrc = read("public", "js", "components", "AttentionCard.js");
+const compiled = babel.transformSync(cardSrc, {
+  presets: [["@babel/preset-react"]],
+  configFile: false,
+}).code;
+
+function build(seeds) {
+  const win = {};
+  let i = 0;
+  const shim = {
+    ...React,
+    useState: (init) => {
+      const v = i < seeds.length ? seeds[i] : init;
+      i += 1;
+      return [v, () => {}];
+    },
+    useEffect: () => {}, // effects don't run in static rendering
+  };
+  const doc = { addEventListener: () => {}, removeEventListener: () => {}, visibilityState: "visible" };
+  const TimezoneHelper = { DEFAULT_TZ: "America/New_York", getDateLabel: (d) => `on ${d}` };
+  const fn = new Function(
+    "window", "document", "React", "apiFetch", "TimezoneHelper", "TimeChange",
+    compiled + "\nreturn window.AttentionCard;"
+  );
+  return fn(win, doc, shim, async () => ({ ok: true, json: async () => ({}) }), TimezoneHelper, require("../public/js/timeChange"));
+}
+
+// seeds are useState calls in declaration order: payload, loadFailed, busy, done, failed
+const draw = (payload, { busy = {}, done = {}, failed = {} } = {}) => {
+  const C = build([payload, false, busy, done, failed]);
+  const out = renderToStaticMarkup(React.createElement(C, { onNavigate: () => {} }));
+  return { html: out, text: out.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim() };
+};
+
+const payloadOf = async (seed) => attentionItemsFor(fakeDb(seed), "pete");
+
+describe("the card draws the thing, not the count of the thing", () => {
+  test("a reimbursement draws its amount, its payee and its button", async () => {
+    const { text } = draw(await payloadOf({ reimbursements: [REIMBURSEMENT] }));
+    expect(text).toContain("Approve $24.60 to Edwina Hall");
+    expect(text).toContain("Groceries");
+    expect(text).toContain("for Betty");
+    expect(text).toMatch(/MONEY/);
+  });
+
+  test("the old shape — a bare category count — is gone", async () => {
+    const { text } = draw(await payloadOf({ reimbursements: [REIMBURSEMENT] }));
+    expect(text).not.toMatch(/reimbursements? waiting for your approval/);
+  });
+
+  test("a time change draws both times so you can answer without opening it", async () => {
+    const { text } = draw(await payloadOf({ changes: [CHANGE] }));
+    expect(text).toContain("Julia Huth asked to move a visit later");
+    // v1.123.0 — what moves, in words; never the bare start-time arrow (Pete, 10/19: "9am to 9am").
+    expect(text).toContain("Start at 11:00 AM instead of 9:00 AM");
+    expect(text).toContain("Same 2 hr, now ends 1:00 PM");
+    expect(text).not.toContain("→");
+    expect(text).toContain("Within 24 hours");
+  });
+
+  test("every item offers exactly one primary action and one way in", async () => {
+    const { html } = draw(await payloadOf({ reimbursements: [REIMBURSEMENT], tasks: [TASK] }));
+    const buttons = html.match(/<button/g) || [];
+    // v1.105.161 — five now: two items × (act + open), plus "Not today" on the care task.
+    // A care task is the one kind you can answer by NOT doing it; an approval or a schedule
+    // change has somebody waiting on a reply.
+    expect(buttons).toHaveLength(5);
+    expect(html).toContain("Approve<");
+    expect(html).toContain("Mark done<");
+  });
+
+  test("nothing waiting draws nothing at all", async () => {
+    const { html } = draw(await payloadOf({}));
+    expect(html).toBe("");
+  });
+
+  test("a load that failed says so — it never draws as caught up", () => {
+    const C = build([null, true, {}, {}]);
+    const out = renderToStaticMarkup(React.createElement(C, { onNavigate: () => {} }))
+      .replace(/<[^>]+>/g, " ").replace(/&#x27;/g, "'").replace(/\s+/g, " ").trim();
+    expect(out).toContain("Couldn't load what needs you.");
+    expect(out).toContain("Retry");
+  });
+
+  test("a completed undoable action shows what was done and how to take it back", async () => {
+    // v1.105.142 — this row appears AFTER the server confirmed, not instead of the request.
+    const payload = await payloadOf({ tasks: [TASK] });
+    const item = payload.items[0];
+    const { text } = draw(payload, { done: { [item.id]: { item, verbPast: "Marked done." } } });
+    expect(text).toContain("Marked done.");
+    expect(text).toContain("Undo");
+  });
+
+  test("a busy row stays on screen and says it is working", async () => {
+    // The row used to vanish before anything had happened, which is how a reload could put it
+    // straight back and make one tap look like a failure.
+    const payload = await payloadOf({ reimbursements: [REIMBURSEMENT] });
+    const item = payload.items[0];
+    const { text } = draw(payload, { busy: { [item.id]: true } });
+    expect(text).toContain("Approve $24.60 to Edwina Hall");
+    expect(text).toMatch(/Working/);
+  });
+
+  test("a failed action puts the row back, with the reason", async () => {
+    const payload = await payloadOf({ reimbursements: [REIMBURSEMENT] });
+    const item = payload.items[0];
+    const { text } = draw(payload, { failed: { [item.id]: "Cannot approve a declined request" } });
+    expect(text).toContain("Approve $24.60 to Edwina Hall");
+    expect(text).toContain("Cannot approve a declined request");
+  });
+
+  test("the tap targets clear 44px", () => {
+    // v1.105.101: a 10x18px dismiss button was why "does not go away at all" was literally
+    // true. Every button on this card is a decision; none of them may be that button.
+    const hits = cardSrc.match(/<button/g) || [];
+    const minHeights = cardSrc.match(/minHeight: 44/g) || [];
+    expect(hits.length).toBeGreaterThan(0);
+    expect(minHeights.length).toBe(hits.length); // every one of them, including Retry
+  });
+});
+
+describe("one tap is one request, and the row leaves when the server says so", () => {
+  // v1.105.142. Pete (ab4fb08c, dictated): "I click off that her medication was delivered and
+  // it goes away, but then it reasserts. I click on it again. It goes away and then I can go
+  // click completed below in the care team panel, but then it says it's already been checked
+  // off."
+  //
+  // .129 held every action for 5s so one tap could be taken back — undo for actions with no
+  // server-side undo, bought by hiding the row before anything had happened. That lie does not
+  // survive the rest of the app: the card unmounts when he navigates, the unmount flushes the
+  // request and remounts with fresh state, the reload beats the write, and the row he cleared
+  // comes back. His second tap then 409s and the error path returns the row a third time.
+
+  test("the hold window is gone", () => {
+    expect(cardSrc).not.toMatch(/ATTENTION_HOLD_MS/);
+    expect(cardSrc).not.toMatch(/setTimeout\(\(\) => send\(item\)/);
+    // ...and with it the pagehide/keepalive machinery that only existed to serve it.
+    expect(cardSrc).not.toMatch(/keepalive: true/);
+    expect(cardSrc).not.toMatch(/pagehide/);
+  });
+
+  test("the row stays put, busy, until the server answers", () => {
+    // v1.109.4 — `visible` now splits the server's soft nudges out of the blocker list. What
+    // this test is about is unchanged: the filter reads a flag the SERVER set, and nothing
+    // local hides a row. A row leaves when the server stops returning it, not when tapped.
+    expect(cardSrc).toMatch(/const visible = items\.filter\(\(i\) => !i\.soft\);/);
+    expect(cardSrc).not.toMatch(/items\.filter\([^)]*done\[/);
+    expect(cardSrc).not.toMatch(/items\.filter\([^)]*hidden/);
+    expect(cardSrc).toMatch(/setBusy\(\(prev\) => \(\{ \.\.\.prev, \[item\.id\]: true \}\)\)/);
+    expect(cardSrc).toMatch(/busy\[item\.id\] \? 'Working/);
+  });
+
+  test("a second tap cannot start a second request", () => {
+    expect(cardSrc).toMatch(/if \(busy\[item\.id\]\) return; \/\/ one tap is one request/);
+  });
+
+  test("409 means it is already how you wanted it — that is success", () => {
+    // "Already checked off" is the endpoint agreeing with the user. Handing it back as an
+    // error is what turned one tap into three.
+    expect(cardSrc).toMatch(/if \(!ok && res\?\.status === 409\) ok = true;/);
+  });
+
+  test("Undo only where the server really has one, and it calls it", () => {
+    expect(cardSrc).toMatch(/\(item\.undoable && item\.undo\)/);
+    // v1.117.0 — a "done" line can now appear without an undo (a declined card that went
+    // through); the Undo button is drawn only when the item really carries one.
+    expect(cardSrc).toMatch(/done\[id\]\.item && done\[id\]\.item\.undo && \(/);
+    expect(cardSrc).toMatch(/apiFetch\(entry\.item\.undo\.path/);
+  });
+
+  test("the other surfaces are told, because they draw the same task", () => {
+    // v1.105.162 — this moved onto the shared channel in js/careTaskSync.js, and became
+    // two-way: the card announces its own writes AND re-reads when Next Up or the care-team
+    // panel writes. The full rule is pinned in careTaskOneSource.test.js.
+    expect(cardSrc).toMatch(/CareTaskSync\.announce\(item\.id\)/);
+    expect(cardSrc).toMatch(/CareTaskSync\.onChange\(\(\) => load\(\)\)/);
+    const dash = read("public", "js", "components", "Dashboard.js");
+    expect(dash).toMatch(/CareTaskSync\.onChange\(\(\) => fetchCareTasks\(\)\)/);
+  });
+
+  test("a failed send still puts the row back, with the reason", () => {
+    expect(cardSrc).toMatch(/setFailed\(\(prev\) => \(\{ \.\.\.prev, \[item\.id\]: message \|\| "That didn't go through\. Try again\." \}\)\)/);
+  });
+
+  test("after a send the count is re-read from the server, not decremented locally", () => {
+    expect(cardSrc).toMatch(/load\(\);/);
+  });
+});
+
+// ─── v1.105.161 — "those buttons have to be workable" ───
+//
+// Pete, with a screenshot of the check sheet showing a red "Already checked off" across both
+// of its buttons: "it says it needs me, but I can't open the task from the needs you button.
+// I can only mark done, which actually opens the task, which then doesn't allow me to complete
+// the task or skip it because it will say it's already done… I either mark it done by hitting
+// the task and completing it, or I dismiss that needs me now. But it can't have me go multiple
+// places trying to get rid of the warning unsuccessfully."
+//
+// Three separate faults conspired to make one dead end.
+describe("every exit from a Needs-you task actually leaves", () => {
+  const sheet = read("public/js/components/CareTasks.js");
+  const dash = read("public/js/components/Dashboard.js");
+  const util = read("src/utils/attention.js");
+
+  test("the check sheet stops calling 409 a failure", () => {
+    // The endpoint answers 409 when the occurrence is already done or skipped — the server
+    // AGREEING with the person. v1.105.142 taught the card that; the sheet still painted it
+    // red across the only two buttons, so the task looked stuck from both directions.
+    // v1.105.162 — the decision moved into CareTaskSync.write, where every caller gets it.
+    expect(sheet).toMatch(/const r = await CareTaskSync\.write\(occ\.id, body\);/);
+    expect(sheet).toMatch(/if \(r\.ok\) \{ onDone\(\); onClose\(\); \}/);
+    expect(read("public", "js", "careTaskSync.js")).toMatch(/res\?\.ok \|\| res\?\.status === 409/);
+  });
+
+  test("Open never silently does nothing", () => {
+    // If today's tasks had not loaded — or loaded before this occurrence existed — the claim
+    // returned, kept the focus, and waited for a re-dispatch that only fires when the task
+    // list CHANGES. With a warm cache it never changed, so the tap did nothing, forever, with
+    // no error and no clue.
+    expect(dash).toMatch(/if \(!careTaskFocusRetry\.current\) \{/);
+    expect(dash).toMatch(/fetchCareTasks\(\);/);
+    expect(dash).toMatch(/That task isn't on today's list any more\./);
+  });
+
+  test("the retry cannot loop, and re-arms once it succeeds", () => {
+    expect(dash).toMatch(/careTaskFocusRetry\.current = true;/);
+    expect(dash).toMatch(/careTaskFocusRetry\.current = false;\s*\n\s*setTaskSheet/);
+  });
+
+  test("a care task can be skipped from the row that interrupted him", () => {
+    // Until now the only exits were finishing the task or opening it. Skipping is a real
+    // answer — it was not given, or someone handled it off-app — and the dashboard row has
+    // offered it all along. The row that INTERRUPTS should offer at least as much.
+    expect(util).toMatch(/dismiss: \{/);
+    expect(util).toMatch(/body: \{ status: "skipped" \}/);
+    expect(util).toMatch(/label: "Not today"/);
+  });
+
+  test("and the card renders that exit", () => {
+    expect(cardSrc).toMatch(/\{item\.dismiss && \(/);
+    expect(cardSrc).toMatch(/const dismiss = React\.useCallback\(\(item\) => \{/);
+    expect(cardSrc).toMatch(/send\(\{ \.\.\.item, action: item\.dismiss, verb: 'Skip' \}\)/);
+  });
+
+  test("skipping goes through the same send path — busy guard, 409, reload and all", () => {
+    // A second way to send would be a second place for this bug to come back.
+    expect(cardSrc).toMatch(/if \(!item\.dismiss \|\| busy\[item\.id\]\) return;/);
+    expect(cardSrc).toMatch(/Skip: 'Skipped for today\.'/);
+  });
+
+  test("only kinds that HAVE a dismiss show one", () => {
+    // An approval or a schedule change has no "not today" — someone is waiting on an answer.
+    const reimb = util.slice(util.indexOf('kind: "reimbursement"'), util.indexOf('kind: "timeOffer"'));
+    expect(reimb).not.toMatch(/dismiss:/);
+  });
+});

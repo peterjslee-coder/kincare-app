@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>5-Tab Nav + Admin in the Floater — InPlace</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #2b2f36; color: #eee; margin: 0; padding: 28px 16px 60px; }
+  h1 { text-align: center; font-size: 20px; font-weight: 700; }
+  p.sub { text-align: center; color: #aab; font-size: 13px; max-width: 660px; margin: 6px auto 30px; }
+  .row { display: flex; gap: 28px; justify-content: center; flex-wrap: wrap; }
+  .option { text-align: center; }
+  .option h2 { font-size: 14px; font-weight: 700; color: #fff; margin: 0 0 2px; }
+  .option p { font-size: 11.5px; color: #aab; max-width: 250px; margin: 0 auto 12px; line-height: 1.45; }
+  .phone { width: 260px; height: 300px; background: #f8f9fa; border-radius: 0 0 34px 34px; border: 7px solid #111;
+           border-top: none; position: relative; overflow: hidden; margin: 0 auto; box-shadow: 0 10px 30px rgba(0,0,0,.45); }
+  .content { position: absolute; inset: 0; padding: 12px; font-size: 11px; color: #666; }
+  .card { background: #fff; border: 1px solid #e4e4e4; border-radius: 10px; padding: 10px; margin-bottom: 8px; }
+  .indicator { position: absolute; bottom: 7px; left: 50%; transform: translateX(-50%); width: 96px; height: 4px;
+               background: #111; border-radius: 3px; z-index: 60; opacity: .85; }
+  /* the chosen bar: A (tinted inset) + C (13px clearance), five tabs */
+  .nav { position: absolute; left: 0; right: 0; bottom: 0; display: flex; justify-content: space-around; align-items: flex-start;
+         background: linear-gradient(#ffffff, #f4f6f5 78%); border-top: 1px solid #e2e2e2;
+         box-shadow: 0 -2px 8px rgba(0,0,0,.06); z-index: 50; padding: 6px 2px 13px; }
+  .item { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; color: #888; font-size: 9px; font-weight: 500; }
+  .item .ic { font-size: 18px; line-height: 1; }
+  .item.active { color: #1b6b5a; }
+  /* floater */
+  .fab { position: absolute; left: 12px; bottom: 78px; width: 40px; height: 40px; border-radius: 50%;
+         background: #1b6b5a; display: flex; align-items: center; justify-content: center;
+         font-size: 19px; box-shadow: 0 4px 12px rgba(0,0,0,.3); z-index: 55; }
+  .fab .badge { position: absolute; top: -3px; right: -3px; width: 15px; height: 15px; border-radius: 50%;
+                background: #e8724a; font-size: 9px; display: flex; align-items: center; justify-content: center; border: 2px solid #f8f9fa; }
+  .mini { position: absolute; left: 12px; display: flex; align-items: center; gap: 8px; z-index: 55; }
+  .mini .b { width: 40px; height: 40px; border-radius: 50%; background: #1b6b5a; display: flex; align-items: center;
+             justify-content: center; font-size: 18px; box-shadow: 0 4px 12px rgba(0,0,0,.3); }
+  .mini .lab { background: rgba(20,20,20,.82); color: #fff; font-size: 10px; padding: 4px 10px; border-radius: 10px; }
+  .scrim { position: absolute; inset: 0; background: rgba(0,0,0,.18); z-index: 52; }
+</style>
+</head>
+<body>
+  <h1>One bar for everyone + Admin lives in the floater</h1>
+  <p class="sub">The six-tab bar was a you-only problem — Admin renders only for admins. Move it into the
+     feedback floater and every account, including yours, gets the same five-tab bar
+     (shown here with the A+C treatment: tinted inset, 13px indicator clearance).</p>
+  <div class="row">
+
+    <div class="option">
+      <h2>1 · Everyone — the bar itself</h2>
+      <p>Five tabs, ~20% wider each. The tinted inset makes the safe area read as the
+         bottom of the bar, not white space. This is what Sara, Edwina, Debbie, and Betty see.</p>
+      <div class="phone">
+        <div class="content"><div class="card">Betty Lee · Care team</div><div class="card">Next up: no sessions</div><div class="card">Recent visit photos</div></div>
+        <div class="nav">
+          <div class="item active"><span class="ic">🏠</span><span>Home</span></div>
+          <div class="item"><span class="ic">🌷</span><span>Loved One</span></div>
+          <div class="item"><span class="ic">🤝</span><span>Caregivers</span></div>
+          <div class="item"><span class="ic">💬</span><span>Messages</span></div>
+          <div class="item"><span class="ic">👤</span><span>Account</span></div>
+        </div>
+        <div class="indicator"></div>
+      </div>
+    </div>
+
+    <div class="option">
+      <h2>2 · You — floater at rest</h2>
+      <p>Same five tabs. Your feedback lightbulb gains a small shield badge — the only visible
+         difference between your phone and everyone else's. Still draggable.</p>
+      <div class="phone">
+        <div class="content"><div class="card">Betty Lee · Care team</div><div class="card">Next up: no sessions</div><div class="card">Recent visit photos</div></div>
+        <div class="fab">💡<span class="badge">🛡️</span></div>
+        <div class="nav">
+          <div class="item active"><span class="ic">🏠</span><span>Home</span></div>
+          <div class="item"><span class="ic">🌷</span><span>Loved One</span></div>
+          <div class="item"><span class="ic">🤝</span><span>Caregivers</span></div>
+          <div class="item"><span class="ic">💬</span><span>Messages</span></div>
+          <div class="item"><span class="ic">👤</span><span>Account</span></div>
+        </div>
+        <div class="indicator"></div>
+      </div>
+    </div>
+
+    <div class="option">
+      <h2>3 · You — floater tapped</h2>
+      <p>One tap fans it open: Feedback and Admin. Second tap goes where you're headed.
+         Non-admins never see this — their lightbulb opens feedback directly, exactly as today.</p>
+      <div class="phone">
+        <div class="content"><div class="card">Betty Lee · Care team</div><div class="card">Next up: no sessions</div><div class="card">Recent visit photos</div></div>
+        <div class="scrim"></div>
+        <div class="mini" style="bottom: 178px;"><div class="b">🛡️</div><div class="lab">Admin</div></div>
+        <div class="mini" style="bottom: 128px;"><div class="b">💡</div><div class="lab">Send feedback</div></div>
+        <div class="fab" style="background:#0f4238;">✕</div>
+        <div class="nav">
+          <div class="item active"><span class="ic">🏠</span><span>Home</span></div>
+          <div class="item"><span class="ic">🌷</span><span>Loved One</span></div>
+          <div class="item"><span class="ic">🤝</span><span>Caregivers</span></div>
+          <div class="item"><span class="ic">💬</span><span>Messages</span></div>
+          <div class="item"><span class="ic">👤</span><span>Account</span></div>
+        </div>
+        <div class="indicator"></div>
+      </div>
+    </div>
+
+  </div>
+  <p class="sub" style="margin-top: 26px"><b>Tradeoff to be honest about:</b> Admin becomes two taps instead of one, and feedback
+     becomes two taps <i>for you only</i>. If you file feedback constantly (you do), we can flip the order —
+     tap opens feedback directly, and the Admin shield rides as a second small button that's just… always there next to it.
+     Say "ship it," "flip it," or tweak.</p>
+</body>
+</html>

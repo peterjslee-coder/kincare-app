@@ -1,0 +1,805 @@
+const express = require("express");
+const { hasActiveVouch, activeVouchesFor } = require("../utils/vouches");
+const { FAMILY_BROUGHT_NOTE } = require("../utils/knownCaregivers"); // v1.105.186
+const { userPhotoUrl, userHasPhoto } = require("./media");
+const { v4: uuid } = require("uuid");
+const { getDb } = require("../models/database");
+const { authenticate, requireRole } = require("../middleware/auth");
+const { geocodeAddress, buildAddressString, haversineDistance, coarsenCoordinate } = require("../utils/geocode");
+const { consumeDaily } = require("../utils/usageLimits");
+const { clampLimit, clampOffset } = require("../utils/queryLimits");
+
+const router = express.Router();
+router.use(authenticate);
+
+// ─── GET /api/caregivers ───
+// Search/list available caregivers with optional location filtering
+// Query params:
+//   specialty  — filter by specialty string
+//   available  — "true" to show only available
+//   lat, lng   — center point for radius search
+//   radius     — max distance in miles (default 25)
+//   address    — address string to geocode (alternative to lat/lng)
+//   limit      — max results (default 20)
+router.get("/", async (req, res) => {
+  const db = await getDb();
+  const { specialty, available, limit = 20, lat, lng, radius = 25, address } = req.query;
+
+  // Demo isolation: demo users see demo caregivers, real users see real caregivers
+  const me = await db.prepare("SELECT is_demo FROM users WHERE id = ?").get(req.user.id);
+  const isDemo = me && me.is_demo ? 1 : 0;
+
+  let query = `
+    SELECT cp.*, u.first_name, u.last_name, u.phone, u.avatar_url
+    FROM caregiver_profiles cp
+    JOIN users u ON cp.user_id = u.id
+    WHERE COALESCE(u.is_active, 1) = 1 AND COALESCE(u.is_demo, 0) = ?
+  `;
+  const params = [isDemo];
+
+  if (available === "true") {
+    query += " AND cp.is_available = 1";
+  }
+
+  query += " ORDER BY cp.rating_avg DESC LIMIT ?";
+  params.push(clampLimit(limit, 20, 100));
+
+  let caregivers = await db.prepare(query).all(...params);
+
+  // Filter by specialty in JS (JSON field)
+  if (specialty) {
+    caregivers = caregivers.filter((c) => {
+      const specs = JSON.parse(c.specialties || "[]");
+      return specs.some((s) => s.toLowerCase().includes(specialty.toLowerCase()));
+    });
+  }
+
+  // Resolve search center: explicit lat/lng, geocode address, or auto from care recipient/user location
+  let searchLat = lat ? parseFloat(lat) : null;
+  let searchLng = lng ? parseFloat(lng) : null;
+
+  if (!searchLat && address) {
+    // v1.106.5 — a per-account daily ceiling on address lookups. The cache in utils/geocode.js
+    // makes repeats free, so this only ever bites someone feeding us fresh strings, which is
+    // the abuse shape. Over the cap we skip geocoding rather than erroring: the search still
+    // returns caregivers, just without a distance-sorted centre.
+    const geoQuota = await consumeDaily(req.user.id, "geocode_lookup", 200);
+    if (geoQuota.allowed) {
+      const geo = await geocodeAddress(address);
+      if (geo) {
+        searchLat = geo.lat;
+        searchLng = geo.lng;
+      }
+    }
+  }
+
+  // Auto-resolve from care recipient location if no explicit search center
+  if (!searchLat) {
+    const recipient = await db.prepare(`
+      SELECT latitude, longitude FROM care_recipients
+      WHERE family_user_id = ? AND latitude IS NOT NULL AND longitude IS NOT NULL
+      ORDER BY created_at ASC LIMIT 1
+    `).get(req.user.id);
+    if (recipient) {
+      searchLat = parseFloat(recipient.latitude);
+      searchLng = parseFloat(recipient.longitude);
+    }
+    // Fallback: check shared care recipients
+    if (!searchLat) {
+      const shared = await db.prepare(`
+        SELECT cr.latitude, cr.longitude FROM care_recipient_shares crs
+        JOIN care_recipients cr ON crs.care_recipient_id = cr.id
+        WHERE crs.shared_with_user_id = ? AND cr.latitude IS NOT NULL AND cr.longitude IS NOT NULL
+        LIMIT 1
+      `).get(req.user.id);
+      if (shared) {
+        searchLat = parseFloat(shared.latitude);
+        searchLng = parseFloat(shared.longitude);
+      }
+    }
+  }
+
+  // Hard cap: 100 miles max regardless of what's requested
+  const maxRadius = Math.min(parseFloat(radius), 100);
+
+  // Vouches held by the requesting user's family (v1.64.0)
+  const vouchRows = await db.prepare(
+    "SELECT caregiver_user_id, note FROM bg_admin_vouches WHERE family_user_id = ? AND revoked_at IS NULL"
+  ).all(req.user.id);
+  const vouchedCaregiverIds = new Set(vouchRows.map((v) => v.caregiver_user_id));
+  // v1.105.186 — a caregiver the family brought in itself is not "admin-approved"; the badge
+  // must say what actually happened.
+  const familyBroughtIds = new Set(vouchRows.filter((v) => v.note === FAMILY_BROUGHT_NOTE).map((v) => v.caregiver_user_id));
+
+  const result = caregivers.map((c) => {
+    const entry = {
+      id: c.id,
+      name: `${c.first_name} ${c.last_name}`,
+      bio: c.bio,
+      yearsExperience: c.years_experience,
+      hourlyRate: c.hourly_rate,
+      rateDaytime: c.rate_daytime || c.hourly_rate,
+      rateNighttime: c.rate_nighttime || c.hourly_rate,
+      rateOvernight: c.rate_overnight || c.hourly_rate,
+      specialties: JSON.parse(c.specialties || "[]"),
+      certifications: JSON.parse(c.certifications || "[]"),
+      rating: c.rating_avg,
+      reviewCount: c.rating_count,
+      isAvailable: !!c.is_available,
+      isBackgroundChecked: !!c.is_background_checked,
+      // v1.64.0: admin vouch scoped to the REQUESTING family — "approved by
+      // admin for your family, no background check". Never shown to others.
+      vouchedForYou: vouchedCaregiverIds.has(c.user_id),
+      familyBrought: familyBroughtIds.has(c.user_id),
+      city: c.location_city,
+      state: c.location_state,
+      // v1.105.121 — COARSENED on the way out. Distances are still computed from the
+      // exact point server-side; what leaves the building is rounded to ~1 mile. A
+      // caregiver's precise coordinates are her home address, and every family browsing
+      // the platform was being handed it to about 11 metres.
+      latitude: coarsenCoordinate(c.latitude),
+      longitude: coarsenCoordinate(c.longitude),
+      maxTravelMiles: c.max_travel_miles,
+      profilePhoto: (c.avatar_url || c.profile_photo) ? `/api/media/user/${c.user_id}/photo` : null,
+    };
+
+    // Calculate distance if search center is provided
+    if (searchLat && searchLng && c.latitude && c.longitude) {
+      entry.distance = Math.round(haversineDistance(searchLat, searchLng, c.latitude, c.longitude) * 10) / 10;
+    }
+
+    return entry;
+  });
+
+  // Filter by radius if search center is available; otherwise show all caregivers
+  let filtered = result;
+  if (searchLat && searchLng) {
+    // Caregivers WITH location: filter by radius; WITHOUT location: include at end
+    const withDist = result.filter((c) => c.distance !== undefined && c.distance <= maxRadius);
+    const noDist = result.filter((c) => c.distance === undefined);
+    filtered = [...withDist.sort((a, b) => a.distance - b.distance), ...noDist];
+  } else {
+    // No location available — still show all caregivers (sorted by rating)
+    filtered = result.sort((a, b) => (b.rating || 0) - (a.rating || 0));
+  }
+
+  res.json({
+    caregivers: filtered,
+    searchCenter: searchLat ? { lat: searchLat, lng: searchLng } : null,
+    radiusMiles: searchLat ? maxRadius : null,
+    noLocation: !searchLat,
+  });
+});
+
+// ─── GET /api/caregivers/nearby ───
+// Get caregivers near a specific care recipient
+router.get("/nearby/:careRecipientId", async (req, res) => {
+  const db = await getDb();
+  const { radius = 25 } = req.query;
+
+  // Demo isolation
+  const me = await db.prepare("SELECT is_demo FROM users WHERE id = ?").get(req.user.id);
+  const isDemo = me && me.is_demo ? 1 : 0;
+
+  const recipient = await db.prepare(
+    "SELECT latitude, longitude, location_city, location_state FROM care_recipients WHERE id = ?"
+  ).get(req.params.careRecipientId);
+
+  if (!recipient) return res.status(404).json({ error: "Care recipient not found" });
+
+  if (!recipient.latitude || !recipient.longitude) {
+    return res.status(400).json({ error: "Care recipient has no location set" });
+  }
+
+  const allCaregivers = await db.prepare(`
+    SELECT cp.*, u.first_name, u.last_name, u.avatar_url
+    FROM caregiver_profiles cp
+    JOIN users u ON cp.user_id = u.id
+    WHERE COALESCE(u.is_active, 1) = 1 AND cp.is_available = 1
+      AND cp.latitude IS NOT NULL AND cp.longitude IS NOT NULL
+      AND COALESCE(u.is_demo, 0) = ?
+  `).all(isDemo);
+
+  const maxRadius = parseFloat(radius);
+
+  const nearbyVouchRows = await db.prepare(
+    "SELECT caregiver_user_id, note FROM bg_admin_vouches WHERE family_user_id = ? AND revoked_at IS NULL"
+  ).all(req.user.id);
+  const nearbyVouchedIds = new Set(nearbyVouchRows.map((v) => v.caregiver_user_id));
+  const nearbyFamilyBroughtIds = new Set(nearbyVouchRows.filter((v) => v.note === FAMILY_BROUGHT_NOTE).map((v) => v.caregiver_user_id));
+
+  const nearby = allCaregivers
+    .map((c) => ({
+      id: c.id,
+      name: `${c.first_name} ${c.last_name}`,
+      bio: c.bio,
+      yearsExperience: c.years_experience,
+      hourlyRate: c.hourly_rate,
+      rateDaytime: c.rate_daytime || c.hourly_rate,
+      rateNighttime: c.rate_nighttime || c.hourly_rate,
+      rateOvernight: c.rate_overnight || c.hourly_rate,
+      specialties: JSON.parse(c.specialties || "[]"),
+      certifications: JSON.parse(c.certifications || "[]"),
+      rating: c.rating_avg,
+      reviewCount: c.rating_count,
+      isBackgroundChecked: !!c.is_background_checked,
+      vouchedForYou: nearbyVouchedIds.has(c.user_id),
+      familyBrought: nearbyFamilyBroughtIds.has(c.user_id),
+      city: c.location_city,
+      state: c.location_state,
+      // v1.105.121 — coarsened out, exact in. `distance` below is still measured from the real
+      // point; the point itself leaves rounded to ~1 mile.
+      latitude: coarsenCoordinate(c.latitude),
+      longitude: coarsenCoordinate(c.longitude),
+      maxTravelMiles: c.max_travel_miles,
+      profilePhoto: (c.avatar_url || c.profile_photo) ? `/api/media/user/${c.user_id}/photo` : null,
+      distance: Math.round(
+        haversineDistance(recipient.latitude, recipient.longitude, c.latitude, c.longitude) * 10
+      ) / 10,
+    }))
+    .filter((c) => c.distance <= maxRadius)
+    .sort((a, b) => a.distance - b.distance);
+
+  res.json({
+    caregivers: nearby,
+    searchCenter: { lat: recipient.latitude, lng: recipient.longitude },
+    radiusMiles: maxRadius,
+    recipientLocation: `${recipient.location_city}, ${recipient.location_state}`,
+  });
+});
+
+// ─── GET /api/caregivers/me ───
+// Get the current caregiver's own profile (for map centering, etc.)
+// IMPORTANT: Must be defined BEFORE /:id route so Express doesn't treat "me" as an ID
+router.get("/me", requireRole("caregiver"), async (req, res) => {
+  const db = await getDb();
+  let profile = await db.prepare(`
+    SELECT cp.*, u.first_name, u.last_name, u.email, u.phone, u.avatar_url
+    FROM caregiver_profiles cp
+    JOIN users u ON cp.user_id = u.id
+    WHERE cp.user_id = ?
+  `).get(req.user.id);
+
+  // Auto-create caregiver profile if it doesn't exist yet (e.g. new registration)
+  if (!profile) {
+    const { v4: uuidv4 } = require("uuid");
+    const newId = uuidv4();
+    try {
+      // v1.104.2 — explicit is_available=0: a bare auto-created stub must never
+      // show as "Available for Jobs" in admin (Julia's signup surfaced this)
+      await db.prepare(`INSERT INTO caregiver_profiles (id, user_id, hourly_rate, is_available) VALUES (?, ?, 0, 0)`).run(newId, req.user.id);
+    } catch (err) {
+      console.error("Auto-create caregiver profile failed:", err);
+      return res.status(500).json({ error: "Failed to create caregiver profile" });
+    }
+    profile = await db.prepare(`
+      SELECT cp.*, u.first_name, u.last_name, u.email, u.phone, u.avatar_url
+      FROM caregiver_profiles cp
+      JOIN users u ON cp.user_id = u.id
+      WHERE cp.user_id = ?
+    `).get(req.user.id);
+    if (!profile) return res.status(404).json({ error: "Caregiver profile not found" });
+  }
+
+  // v1.104.7 — parse the JSON-TEXT columns to real arrays/objects before sending.
+  // Unlike the list endpoints (which JSON.parse), this handler returned the raw
+  // DB strings, so the client did `(certifications || []).filter(...)` on a
+  // STRING → ".filter is not a function" → caregiver Documents view white-screened
+  // (caught by the new ErrorBoundary beacon on Julia's account).
+  const parseJsonField = (v, fallback) => {
+    if (v == null) return fallback;
+    if (typeof v !== "string") return v; // already parsed
+    try { const p = JSON.parse(v); return p == null ? fallback : p; } catch { return fallback; }
+  };
+  profile.certifications = parseJsonField(profile.certifications, []);
+  profile.specialties = parseJsonField(profile.specialties, []);
+  profile.care_preferences = parseJsonField(profile.care_preferences, null);
+  profile.care_stoplight = parseJsonField(profile.care_stoplight, null);
+
+  res.json({ profile });
+});
+
+// ─── GET /api/caregivers/me/reviews ───
+// Get the current caregiver's own reviews
+router.get("/me/reviews", requireRole("caregiver"), async (req, res) => {
+  try {
+    const db = await getDb();
+    const profile = await db.prepare("SELECT id FROM caregiver_profiles WHERE user_id = ?").get(req.user.id);
+    if (!profile) return res.json({ reviews: [] });
+
+    const reviews = await db.prepare(`
+      SELECT r.*, u.first_name || ' ' || u.last_name AS reviewer_name
+      FROM reviews r
+      JOIN users u ON r.family_user_id = u.id
+      WHERE r.caregiver_id = ?
+      ORDER BY r.created_at DESC LIMIT 20
+    `).all(profile.id);
+
+    res.json({ reviews });
+  } catch (err) {
+    console.error("Fetch caregiver reviews error:", err);
+    res.status(500).json({ error: "Failed to fetch reviews" });
+  }
+});
+
+// ─── PUT /api/caregivers/me ───
+// Update caregiver's own profile fields (care preferences, rates, etc.)
+router.put("/me", requireRole("caregiver"), async (req, res) => {
+  const db = await getDb();
+  const profile = await db.prepare("SELECT id FROM caregiver_profiles WHERE user_id = ?").get(req.user.id);
+  if (!profile) return res.status(404).json({ error: "Caregiver profile not found" });
+
+  const { care_preferences, rateDaytime, rateNighttime, rateOvernight } = req.body;
+  const updates = [];
+  const params = [];
+
+  if (care_preferences !== undefined) { updates.push("care_preferences = ?"); params.push(care_preferences); updates.push("care_stoplight = ?"); params.push(care_preferences); }
+  if (rateDaytime !== undefined) { const v = parseFloat(rateDaytime); updates.push("rate_daytime = ?"); params.push(isNaN(v) ? null : v); }
+  if (rateNighttime !== undefined) { const v = parseFloat(rateNighttime); updates.push("rate_nighttime = ?"); params.push(isNaN(v) ? null : v); }
+  if (rateOvernight !== undefined) { const v = parseFloat(rateOvernight); updates.push("rate_overnight = ?"); params.push(isNaN(v) ? null : v); }
+  if (rateDaytime !== undefined) { const v = parseFloat(rateDaytime); updates.push("hourly_rate = ?"); params.push(isNaN(v) ? null : v); }
+
+  if (updates.length === 0) return res.json({ ok: true });
+
+  params.push(profile.id);
+  await db.prepare(`UPDATE caregiver_profiles SET ${updates.join(', ')} WHERE id = ?`).run(...params);
+
+  // Return updated profile so frontend can confirm save
+  const updated = await db.prepare(`
+    SELECT cp.*, u.first_name, u.last_name, u.email, u.phone, u.avatar_url
+    FROM caregiver_profiles cp
+    JOIN users u ON cp.user_id = u.id
+    WHERE cp.user_id = ?
+  `).get(req.user.id);
+  res.json({ ok: true, profile: updated });
+});
+
+// ─── POST /api/caregivers/me/location ───
+//
+// v1.105.121 — the other way to be locatable.
+//
+// The booking picker offers a family two lists: caregivers they already know, and caregivers
+// with coordinates within 25 miles (assignments.js). A caregiver with no coordinates is in
+// neither, so she cannot receive a FIRST booking from anyone — a cold start with no exit.
+// Onboarding does require an address today, but Nominatim is a best-effort free service with a
+// 4-second timeout, and when it returns null the profile saves anyway with NULL coordinates and
+// nobody is told. She finishes every step and is findable by nobody.
+//
+// Pete: "if they don't provide an address, they have to provide their location to search around
+// somehow... otherwise no jobs as a policy (and a reality). If they get to know where jobs are,
+// we get to know where they are."
+//
+// That reciprocity is the rule this endpoint exists to make keepable. Her phone can answer the
+// question her address didn't.
+//
+// Stored COARSENED — two decimals, roughly a mile (utils/geocode.js). It is precise enough for
+// a 25-mile match and deliberately not precise enough to be a home address. Note that a
+// geocoded address is NOT coarsened on the way in; it is coarsened on the way OUT to families,
+// below and in assignments.js.
+router.post("/me/location", requireRole("caregiver"), async (req, res) => {
+  const db = await getDb();
+  const lat = Number(req.body.latitude);
+  const lng = Number(req.body.longitude);
+
+  // 0,0 is Null Island — the Atlantic off Ghana, and the single most common value a broken
+  // geolocation call produces. Accepting it would put her 4,000 miles from every job and look
+  // exactly like a real answer.
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)
+      || Math.abs(lat) > 90 || Math.abs(lng) > 180
+      || (lat === 0 && lng === 0)) {
+    return res.status(400).json({ error: "That doesn't look like a real location. Try again, or add your address instead." });
+  }
+
+  const profile = await db.prepare("SELECT id FROM caregiver_profiles WHERE user_id = ?").get(req.user.id);
+  if (!profile) return res.status(404).json({ error: "Caregiver profile not found" });
+
+  const coarseLat = coarsenCoordinate(lat);
+  const coarseLng = coarsenCoordinate(lng);
+  await db.prepare(`
+    UPDATE caregiver_profiles
+    SET latitude = ?, longitude = ?, location_source = 'device'
+    WHERE id = ?
+  `).run(coarseLat, coarseLng, profile.id);
+
+  res.json({ ok: true, latitude: coarseLat, longitude: coarseLng, source: "device" });
+});
+
+// ─── GET /api/caregivers/:id ───
+// ─── GET /api/caregivers/platform-config ───
+// Returns which optional services are configured (for frontend graceful degradation)
+//
+// v1.106.29 — this was registered at the BOTTOM of the file, 370 lines below "/:id". Express
+// matches in registration order and "/:id" matches the word "platform-config" perfectly well,
+// so this endpoint has never once run: every call got {"error":"Caregiver not found"} with a
+// 404, and the caller's `r?.ok &&` swallowed it. Same class as the 426 version gate in
+// v1.106.7 and the reason tests/sessionsRouteOrder.test.js exists; this router now has the
+// same guard in tests/caregiversRouteOrder.test.js.
+router.get("/platform-config", async (req, res) => {
+  res.json({
+    stripeConfigured: !!(process.env.STRIPE_SECRET_KEY || process.env.stripe_secret_key),
+    checkrConfigured: !!process.env.CHECKR_API_KEY,
+  });
+});
+
+router.get("/:id", async (req, res) => {
+  const db = await getDb();
+  const cg = await db.prepare(`
+    SELECT cp.*, u.first_name, u.last_name, u.phone, u.avatar_url, u.profile_photo
+    FROM caregiver_profiles cp
+    JOIN users u ON cp.user_id = u.id
+    WHERE cp.id = ?
+  `).get(req.params.id);
+
+  if (!cg) return res.status(404).json({ error: "Caregiver not found" });
+
+  // Get recent reviews
+  const reviews = await db.prepare(`
+    SELECT r.*, u.first_name || ' ' || u.last_name AS reviewer_name
+    FROM reviews r
+    JOIN users u ON r.family_user_id = u.id
+    WHERE r.caregiver_id = ?
+    ORDER BY r.created_at DESC LIMIT 10
+  `).all(req.params.id);
+
+  // Get completed session count
+  const stats = await db.prepare(`
+    SELECT COUNT(*) as total_sessions,
+           AVG(duration_hours) as avg_duration
+    FROM care_sessions
+    WHERE caregiver_id = ? AND status = 'completed'
+  `).get(req.params.id);
+
+  res.json({
+    caregiver: {
+      id: cg.id,
+      name: `${cg.first_name} ${cg.last_name}`,
+      firstName: cg.first_name,
+      // v1.106.29 — the profile page is the one screen that is mostly about who she IS, and
+      // it had no way to show her face. avatar_url was selected here and never returned.
+      photoUrl: userPhotoUrl({ id: cg.user_id, avatar_url: cg.avatar_url, profile_photo: cg.profile_photo }),
+      bio: cg.bio,
+      yearsExperience: cg.years_experience,
+      hourlyRate: cg.hourly_rate,
+      rateDaytime: cg.rate_daytime || cg.hourly_rate,
+      rateNighttime: cg.rate_nighttime || cg.hourly_rate,
+      rateOvernight: cg.rate_overnight || cg.hourly_rate,
+      specialties: JSON.parse(cg.specialties || "[]"),
+      certifications: JSON.parse(cg.certifications || "[]"),
+      rating: cg.rating_avg,
+      reviewCount: cg.rating_count,
+      isAvailable: !!cg.is_available,
+      isBackgroundChecked: !!cg.is_background_checked,
+      vouchedForYou: await hasActiveVouch(db, cg.user_id, req.user.id),
+      familyBrought: !!(await db.prepare(
+        "SELECT id FROM bg_admin_vouches WHERE caregiver_user_id = ? AND family_user_id = ? AND note = ? AND revoked_at IS NULL LIMIT 1"
+      ).get(cg.user_id, req.user.id, FAMILY_BROUGHT_NOTE)),
+      city: cg.location_city,
+      state: cg.location_state,
+      // v1.105.121 — COARSENED on the way out. Distances are still computed from the
+      // exact point server-side; what leaves the building is rounded to ~1 mile. A
+      // caregiver's precise coordinates are her home address, and every family browsing
+      // the platform was being handed it to about 11 metres.
+      latitude: coarsenCoordinate(cg.latitude),
+      longitude: coarsenCoordinate(cg.longitude),
+      maxTravelMiles: cg.max_travel_miles,
+      totalSessions: stats.total_sessions,
+      avgSessionDuration: stats.avg_duration,
+    },
+    reviews,
+  });
+});
+
+
+// ─── POST /api/caregivers/profile ───
+// Create or update caregiver profile (for caregiver users)
+router.post("/profile", requireRole("caregiver"), async (req, res) => {
+  try {
+    const db = await getDb();
+    const {
+      bio, yearsExperience, hourlyRate, specialties,
+      certifications, maxTravelMiles, city, state, address,
+      // Checkr / onboarding fields
+      legalFirstName, legalMiddleName, legalLastName, dateOfBirth, ssnLast4,
+      addressLine1, addressLine2, zip, dlNumber, dlState,
+      // v1.109.5 — which photo ID she presented: drivers_license | state_id | passport |
+      // ead | permanent_resident_card. dlNumber/dlState only mean anything for the first.
+      idDocType,
+      backgroundCheckConsent,
+      // v1.5.0 — work location, stoplight, terms
+      workLocationAddress, travelRadius, careStoplight,
+      termsAcceptedAt, termsVersion,
+      // v1.13.2 — academic program tracking
+      academicProgram, academicProgramYear, needsHourReports,
+      // v1.29.1 — tiered rates from onboarding
+      rateDaytime, rateNighttime, rateOvernight,
+      // v1.34.55 — interview openness
+      openToInterview,
+    } = req.body;
+
+    // Auto-geocode if city/state/zip provided
+    let lat = null;
+    let lng = null;
+    if (city || address || zip) {
+      const addrStr = buildAddressString({ address, city, state, zip });
+      console.log(`  [caregiver-profile] Geocoding: "${addrStr}"`);
+      const geo = await geocodeAddress(addrStr);
+      if (geo) {
+        lat = geo.lat;
+        lng = geo.lng;
+        console.log(`  [caregiver-profile] Geocoded to: ${lat}, ${lng}`);
+      } else {
+        // v1.105.121 — this is the silent path that produces a caregiver nobody can book. She
+        // typed a real address, the free geocoder timed out, the profile saved anyway, and the
+        // only trace was this line in a log nobody reads. FindWork now tells her outright.
+        console.log(`  [caregiver-profile] Geocoding failed for: "${addrStr}"`);
+      }
+    }
+
+    const existing = await db.prepare(
+      "SELECT id FROM caregiver_profiles WHERE user_id = ?"
+    ).get(req.user.id);
+
+    if (existing) {
+      // Update
+      await db.prepare(`
+        UPDATE caregiver_profiles SET
+          bio = COALESCE(?, bio),
+          years_experience = COALESCE(?, years_experience),
+          hourly_rate = COALESCE(?, hourly_rate),
+          specialties = COALESCE(?, specialties),
+          certifications = COALESCE(?, certifications),
+          max_travel_miles = COALESCE(?, max_travel_miles),
+          location_city = COALESCE(?, location_city),
+          location_state = COALESCE(?, location_state),
+          latitude = COALESCE(?, latitude),
+          longitude = COALESCE(?, longitude),
+          legal_first_name = COALESCE(?, legal_first_name),
+          legal_middle_name = COALESCE(?, legal_middle_name),
+          legal_last_name = COALESCE(?, legal_last_name),
+          date_of_birth = COALESCE(?, date_of_birth),
+          ssn_last4 = COALESCE(?, ssn_last4),
+          address_line1 = COALESCE(?, address_line1),
+          address_line2 = COALESCE(?, address_line2),
+          zip = COALESCE(?, zip),
+          id_doc_type = COALESCE(?, id_doc_type),
+          dl_number = COALESCE(?, dl_number),
+          dl_state = COALESCE(?, dl_state),
+          background_check_consent = COALESCE(?, background_check_consent),
+          background_check_consent_at = CASE WHEN ? = 1 THEN NOW() ELSE background_check_consent_at END,
+          work_location_address = COALESCE(?, work_location_address),
+          care_stoplight = COALESCE(?, care_stoplight),
+          terms_accepted_at = COALESCE(?, terms_accepted_at),
+          terms_version = COALESCE(?, terms_version),
+          academic_program = COALESCE(?, academic_program),
+          academic_program_year = COALESCE(?, academic_program_year),
+          needs_hour_reports = COALESCE(?, needs_hour_reports),
+          open_to_interview = COALESCE(?, open_to_interview),
+          /* v1.104.2 — completing the onboarding wizard (the only caller that
+             sends termsVersion) flips the caregiver to available. Ordinary
+             profile edits never touch the flag. */
+          /* v1.109.5 — CAST is load-bearing. A bare "? IS NOT NULL" gives Postgres no
+             way to type the parameter, so every save that sends termsVersion as NULL
+             (i.e. every ordinary profile edit, and every wizard step after the first)
+             died with "could not determine data type of parameter". Found while testing
+             the ID-document change; older than it. */
+          is_available = CASE WHEN CAST(? AS TEXT) IS NOT NULL THEN 1 ELSE is_available END,
+          updated_at = NOW()
+        WHERE user_id = ?
+      `).run(
+        bio, yearsExperience, hourlyRate,
+        specialties ? JSON.stringify(specialties) : null,
+        certifications ? JSON.stringify(certifications) : null,
+        travelRadius || maxTravelMiles, city, state,
+        lat, lng,
+        legalFirstName || null, legalMiddleName !== undefined ? (legalMiddleName || null) : null, legalLastName || null,
+        dateOfBirth || null, ssnLast4 || null,
+        addressLine1 || null, addressLine2 || null, zip || null,
+        idDocType || null, dlNumber || null, dlState || null,
+        backgroundCheckConsent ? 1 : null, backgroundCheckConsent ? 1 : 0,
+        workLocationAddress || null,
+        careStoplight ? JSON.stringify(careStoplight) : null,
+        termsAcceptedAt || null, termsVersion || null,
+        academicProgram || null, academicProgramYear || null,
+        needsHourReports != null ? (needsHourReports ? 1 : 0) : null,
+        openToInterview === true ? 1 : openToInterview === false ? 0 : null,
+        termsVersion || null, // is_available CASE — wizard completion signal
+        req.user.id
+      );
+
+      // Backfill tiered rates from hourly_rate if they're still NULL
+      if (hourlyRate) {
+        await db.prepare(`
+          UPDATE caregiver_profiles SET
+            rate_daytime = COALESCE(rate_daytime, ?),
+            rate_nighttime = COALESCE(rate_nighttime, ?),
+            rate_overnight = COALESCE(rate_overnight, ?)
+          WHERE user_id = ? AND (rate_daytime IS NULL OR rate_nighttime IS NULL OR rate_overnight IS NULL)
+        `).run(hourlyRate, hourlyRate, hourlyRate, req.user.id);
+      }
+
+      const updated = await db.prepare("SELECT * FROM caregiver_profiles WHERE user_id = ?").get(req.user.id);
+      console.log(`  [caregiver-profile] Updated profile for user=${req.user.id} (${req.user.email})`);
+      return res.json({ profile: updated });
+    }
+
+    // Create — hourlyRate required for new profiles
+    if (!hourlyRate) {
+      return res.status(400).json({ error: "hourlyRate is required" });
+    }
+    const id = uuid();
+    await db.prepare(`
+      INSERT INTO caregiver_profiles
+      (id, user_id, bio, years_experience, hourly_rate, rate_daytime, rate_nighttime, rate_overnight,
+       specialties, certifications, max_travel_miles, location_city, location_state,
+       latitude, longitude, legal_first_name, legal_middle_name, legal_last_name,
+       date_of_birth, ssn_last4, address_line1, address_line2, zip,
+       id_doc_type, dl_number, dl_state, background_check_consent, background_check_consent_at,
+       work_location_address, care_stoplight, terms_accepted_at, terms_version,
+       academic_program, academic_program_year, needs_hour_reports, open_to_interview,
+       is_available /* v1.104.2 — wizard completion = available; column default is now 0 */)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${backgroundCheckConsent ? "NOW()" : "NULL"},
+       ?, ?, ?, ?, ?, ?, ?, ?, 1)
+    `).run(
+      id, req.user.id, bio || null, yearsExperience || 0, hourlyRate,
+      rateDaytime || hourlyRate, rateNighttime || hourlyRate, rateOvernight || hourlyRate,
+      JSON.stringify(specialties || []),
+      JSON.stringify(certifications || []),
+      maxTravelMiles || 10, city || null, state || null,
+      lat, lng,
+      legalFirstName || null, legalMiddleName || null, legalLastName || null,
+      dateOfBirth || null, ssnLast4 || null,
+      addressLine1 || null, addressLine2 || null, zip || null,
+      idDocType || null, dlNumber || null, dlState || null,
+      backgroundCheckConsent ? 1 : 0,
+      workLocationAddress || null,
+      careStoplight ? JSON.stringify(careStoplight) : null,
+      termsAcceptedAt || null, termsVersion || null,
+      academicProgram || null, academicProgramYear || null,
+      needsHourReports ? 1 : 0,
+      openToInterview === true ? 1 : openToInterview === false ? 0 : null
+    );
+
+    const profile = await db.prepare("SELECT * FROM caregiver_profiles WHERE id = ?").get(id);
+    console.log(`  [caregiver-profile] Created new profile id=${id} for user=${req.user.id} (${req.user.email})`);
+    // v1.105.186 — a family that brought this caregiver in accepted the invite before a profile
+    // existed. Now there is one, put them under that family's care recipient.
+    try {
+      const { fulfillPendingForUser } = require("../utils/knownCaregivers");
+      await fulfillPendingForUser(db, req.user.id);
+    } catch (e) {
+      console.error("  [caregiver-profile] known-caregiver fulfil (non-blocking):", e.message);
+    }
+    res.status(201).json({ profile });
+  } catch (err) {
+    console.error(`  [caregiver-profile] ❌ Error for user=${req.user?.id} (${req.user?.email}):`, err.message);
+    res.status(500).json({ error: "Failed to save caregiver profile. Please try again." });
+  }
+});
+
+// ─── PUT /api/caregivers/rates ───
+// Update tiered rates (daytime / nighttime / overnight)
+router.put("/rates", requireRole("caregiver"), async (req, res) => {
+  const { rateDaytime, rateNighttime, rateOvernight } = req.body;
+
+  // Validate
+  const rates = [rateDaytime, rateNighttime, rateOvernight];
+  for (const r of rates) {
+    if (r !== undefined && r !== null) {
+      if (typeof r !== 'number' || r <= 0 || r > 500) {
+        return res.status(400).json({ error: "Rates must be between $0.01 and $500/hr" });
+      }
+    }
+  }
+
+  if (rateDaytime == null && rateNighttime == null && rateOvernight == null) {
+    return res.status(400).json({ error: "At least one rate is required" });
+  }
+
+  const db = await getDb();
+  const profile = await db.prepare("SELECT id FROM caregiver_profiles WHERE user_id = ?").get(req.user.id);
+  if (!profile) return res.status(404).json({ error: "Caregiver profile not found" });
+
+  const safeRate = (v) => (v != null && !isNaN(parseFloat(v))) ? parseFloat(v) : null;
+  await db.prepare(`
+    UPDATE caregiver_profiles SET
+      rate_daytime = COALESCE(?, rate_daytime),
+      rate_nighttime = COALESCE(?, rate_nighttime),
+      rate_overnight = COALESCE(?, rate_overnight),
+      hourly_rate = COALESCE(?, hourly_rate),
+      updated_at = NOW()
+    WHERE user_id = ?
+  `).run(safeRate(rateDaytime), safeRate(rateNighttime), safeRate(rateOvernight), safeRate(rateDaytime), req.user.id);
+
+  const updated = await db.prepare("SELECT * FROM caregiver_profiles WHERE user_id = ?").get(req.user.id);
+  res.json({
+    rates: {
+      daytime: updated.rate_daytime,
+      nighttime: updated.rate_nighttime,
+      overnight: updated.rate_overnight,
+      base: updated.hourly_rate,
+    }
+  });
+});
+
+// ─── PUT /api/caregivers/mark-onboarding-complete ───
+// Verify all 6 onboarding steps are done, then set onboarding_complete = 1
+router.put("/mark-onboarding-complete", async (req, res) => {
+  if (req.user.role !== "caregiver") {
+    return res.status(403).json({ error: "Caregiver role required" });
+  }
+
+  // v1.105.0: this handler had no try/catch. Express 4 does not catch async
+  // route errors, so the SQL bug below rejected unhandled and the request HUNG
+  // — the caregiver sat on an infinite spinner at the last step of onboarding
+  // with nothing to click. Every async handler needs this wrapper.
+  try {
+    const db = await getDb();
+    const profile = await db.prepare(`
+      SELECT cp.*, u.avatar_url, u.profile_photo
+      FROM caregiver_profiles cp
+      JOIN users u ON cp.user_id = u.id
+      WHERE cp.user_id = ?
+    `).get(req.user.id);
+
+    if (!profile) {
+      return res.status(404).json({ error: "Caregiver profile not found" });
+    }
+
+    // Check availability rules.
+    // v1.105.0 (Sentry INPLACE-5): this queried `WHERE user_id = ?`, but the
+    // availability table has no user_id column — its FK is caregiver_id →
+    // caregiver_profiles(id) (database.js:230). Postgres threw
+    // 'column "user_id" does not exist' on EVERY caregiver's final onboarding
+    // step, so no caregiver could finish onboarding. Every other availability
+    // query in the codebase already keys on caregiver_id.
+    const availRules = await db.prepare("SELECT id FROM availability WHERE caregiver_id = ?").all(profile.id);
+
+    // Verify core criteria (always required) + conditional criteria (when configured)
+    const missing = [];
+    if (!profile.bio || !profile.hourly_rate) missing.push("Profile (bio & hourly rate)");
+    if (!availRules || availRules.length === 0) missing.push("Availability");
+    if (!profile.care_stoplight && !profile.care_preferences) missing.push("Care preferences");
+    // v1.106.8 — this read avatar_url ALONE. profile_photo is the column of record now, so
+    // a caregiver who had just uploaded a photo would have been told it was still missing.
+    if (!userHasPhoto(profile)) missing.push("Profile photo");
+
+    // Conditional gates: only required when the service is configured
+    const stripeConfigured = !!(process.env.STRIPE_SECRET_KEY || process.env.stripe_secret_key);
+    const checkrConfigured = !!process.env.CHECKR_API_KEY;
+
+    if (stripeConfigured && !profile.stripe_onboard_complete) missing.push("Stripe payments");
+    // v1.64.0: an active admin vouch satisfies this step — the caregiver can work
+    // for their vouched family without Checkr. (A real check is still required to
+    // work for anyone else; the UI says so.)
+    const cgVouches = await activeVouchesFor(db, req.user.id);
+    if (checkrConfigured && !profile.background_check_paid && !profile.is_background_checked && cgVouches.length === 0) {
+      missing.push("Background check");
+    }
+
+    // Identity verification (selfie + ID) — hard gate, requires admin approval.
+    // v1.105.64 — this used to look only for owner_type='caregiver', the shape written by the
+    // onboarding wizard. A caregiver who verified from My Account instead files under
+    // owner_type='user', gets a blue check confirming it, and was still blocked here forever
+    // with no way to find out why. See src/utils/identity.js.
+    const { caregiverIdentityDoc } = require("../utils/identity");
+    const idDoc = await caregiverIdentityDoc(db, req.user.id, profile.id);
+    if (!idDoc) {
+      missing.push("Identity verification (selfie + ID photo)");
+    } else if (idDoc.status !== 'approved') {
+      missing.push("Identity verification (pending admin review)");
+    }
+
+    if (missing.length > 0) {
+      return res.status(400).json({ error: "Incomplete onboarding", missing });
+    }
+
+    await db.prepare("UPDATE caregiver_profiles SET onboarding_complete = 1 WHERE user_id = ?").run(req.user.id);
+
+    res.json({ onboarding_complete: 1, message: "Onboarding complete! You're ready to accept care requests." });
+  } catch (err) {
+    console.error("[caregivers] mark-onboarding-complete failed:", err);
+    res.status(500).json({ error: "Could not complete onboarding. Please try again." });
+  }
+});
+
+module.exports = router;

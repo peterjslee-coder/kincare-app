@@ -1,0 +1,1966 @@
+require("dotenv").config();
+
+const { initSentry, setupSentryErrorHandler, captureException, tagRequestUser } = require("./utils/sentry");
+const { consentedSql: smsConsentedSql, samePhone: smsSamePhone } = require("./utils/smsConsent"); // v1.114.5
+initSentry();
+
+require("./utils/crashHandlers").installCrashHandlers();
+
+
+const express = require("express");
+
+// v1.105.37 — install BEFORE any route module is required. Route files register their
+// handlers at require time, so anything loaded above this line would keep unwrapped
+// handlers. Express 4 does not catch a rejected promise from an async handler: the request
+// HANGS, with no status, no log and no Sentry event. The Aug 4 audit counted 87 handlers
+// with an await outside try/catch. See src/utils/asyncRoutes.js for what is and is not
+// wrapped, and why.
+const { installAsyncRouteSafety } = require("./utils/asyncRoutes");
+installAsyncRouteSafety(express);
+
+const http = require("http");
+const cors = require("cors");
+const helmet = require("helmet");
+const path = require("path");
+const rateLimit = require("express-rate-limit");
+const { Server } = require("socket.io");
+const jwt = require("jsonwebtoken");
+const { initializeDatabase, getDb } = require("./models/database");
+const { careAccessAllowed } = require("./utils/careAccess"); // v1.112.0 — identity gate
+const { createViewRegistry } = require("./utils/presence");
+const { limitBodySize } = require("./middleware/validate");
+const { withPollerLock } = require("./models/database");
+// v1.82.0 (H5): every poller tick runs under a pg advisory lock so a second app
+// instance can never double-fire (double auto-pay, duplicate reminders).
+
+// ─── v1.106.10 — a poller failure is news, and a schema error is the biggest news of all ───
+//
+// Six pollers caught their errors and then FILTERED OUT any message containing "relation" or
+// "column" before logging — which is to say, they discarded precisely the errors that mean a
+// query names a table or column that does not exist. That is the exact failure the Aug 11
+// sweep found six live instances of: a feature that has never worked once, indistinguishable
+// from a feature nobody enabled, because the only evidence was suppressed on purpose.
+//
+// Everything now reaches Sentry. A missing relation is tagged so it sorts to the top: it is
+// not a transient failure, it is a feature that is off and nobody knows.
+function reportPollerFailure(name, err) {
+  const msg = (err && err.message) || String(err);
+  const schemaBug = /relation|column/i.test(msg);
+  console.error(`  ${name} error${schemaBug ? " (SCHEMA — this query can never have worked)" : ""}:`, msg);
+  try {
+    captureException(err instanceof Error ? err : new Error(msg), {
+      where: `poller: ${name}`,
+      schemaBug,
+    });
+  } catch { /* reporting must never be the thing that throws */ }
+}
+
+const guardedPoller = (lockKey, fn) => () =>
+  withPollerLock(lockKey, fn).catch((e) => console.error(`[poller ${lockKey}]`, e.message));
+const { getNowInZone, getTodayStringInZone, buildDateTimeInZone } = require("./utils/timezone");
+
+const app = express();
+const server = http.createServer(app);
+const PORT = process.env.PORT || 3001;
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+  console.error("FATAL: JWT_SECRET environment variable is required. Set it in .env or environment.");
+  process.exit(1);
+}
+
+// ─── Socket.io Setup ───
+// v1.105.3 — this used to read NODE_ENV, which is NOT set on Railway, so PRODUCTION
+// was running with the localhost allowlist. Used by BOTH express cors() (below) and
+// Socket.io. Nothing broke only because every caller is same-origin today; see
+// utils/env.js for the derivation and for the App Store / Capacitor caveat.
+const { allowedOrigins: ALLOWED_ORIGINS } = require("./utils/env");
+// ─── v1.105.175 — find out sooner that a client has gone away ───
+//
+// Socket.io's defaults are pingInterval 25s and pingTimeout 20s, so a phone that locks
+// mid-conversation stays registered here for up to 45 seconds. That is not a cosmetic delay:
+// for those 45 seconds the server believes the person is reading the thread, so it suppresses
+// their push — and delivers the message to a socket that is not there. The message is lost in
+// both directions at once, which is exactly what "I didn't see any of the messages until all
+// 5 were there" looks like from the outside.
+//
+// 10 and 10 cuts the window to about 20 seconds. It costs one small frame each way every ten
+// seconds per socket, which is nothing next to a message nobody receives. The view registry
+// (utils/presence.js) expires its claims independently, so this is the belt and that is the
+// braces — neither alone is a guarantee.
+const io = new Server(server, {
+  cors: { origin: ALLOWED_ORIGINS, credentials: true },
+  pingInterval: 10000,
+  pingTimeout: 10000,
+  // v1.106.5 — the default is 1 MB per message. Nothing this app sends over a socket is
+  // anywhere near that (the largest is a typing indicator), and an unbounded frame size on an
+  // authenticated socket is a cheap way to make the process allocate.
+  maxHttpBufferSize: 64 * 1024,
+});
+
+// ─── Socket abuse limits (v1.106.5) ───
+//
+// Every handler below is authenticated, and until now that was the only limit: one JWT could
+// open unlimited sockets and fire unlimited events. `typing_start` is the sharp end — it looks
+// up conversation membership, and the 15-second cache is keyed by the conversation id the
+// CLIENT supplies, so a fresh random uuid on every event misses the cache and costs one
+// database query each, forever, from a single socket.
+const MAX_SOCKETS_PER_USER = 12;   // a laptop, a phone, a tablet, and room for stale ones
+const MAX_EVENTS_PER_10S = 120;    // ~12/s sustained; typing fires far below this
+
+const _socketEvents = new Map(); // socket.id -> { count, windowStart }
+function socketEventAllowed(socketId) {
+  const now = Date.now();
+  const e = _socketEvents.get(socketId);
+  if (!e || now - e.windowStart > 10000) {
+    _socketEvents.set(socketId, { count: 1, windowStart: now });
+    return true;
+  }
+  e.count++;
+  return e.count <= MAX_EVENTS_PER_10S;
+}
+
+// JWT auth middleware for socket connections
+io.use((socket, next) => {
+  const token = socket.handshake.auth?.token;
+  if (!token) return next(new Error("Authentication required"));
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    // v1.109.1 — a socket authenticated with an impersonation token would ring someone's
+    // phone, show "she is typing" to the person she is talking to, mark her threads open and
+    // suppress her own pushes, all because an admin opened her screen. Viewing as her is
+    // read-only, and a live socket is not a read.
+    if (decoded.impersonatedBy) return next(new Error("Impersonated sessions do not connect"));
+    socket.user = decoded;
+  } catch (err) {
+    return next(new Error("Invalid token"));
+  }
+  // v1.112.0 — a live socket carries care events (messages, visit updates, activity). A person
+  // the identity gate holds (utils/careAccess.js) gets none: they reconnect once approved.
+  (async () => {
+    try {
+      const db = await getDb();
+      if (!(await careAccessAllowed(db, socket.user.id))) return next(new Error("ID_REQUIRED"));
+      next();
+    } catch (e) {
+      captureException(e, { where: "socket: care gate" });
+      next(new Error("Could not confirm access"));
+    }
+  })();
+});
+
+// Track connected users: userId -> Set of socket ids
+const connectedUsers = new Map();
+// calls-native (1.3): an answer or decline that arrives over HTTP from native code (no socket)
+// still has to reach the caller's open app. callRegistry gets this one way to do it.
+require("./utils/callRegistry").setEmitter((uid, event, payload) => {
+  const sids = connectedUsers.get(uid);
+  if (!sids) return 0;
+  for (const sid of sids) io.to(sid).emit(event, payload);
+  return sids.size;
+});
+
+// v1.105.103 — which conversation each socket currently has OPEN.
+//
+// Pete: "I am on the messaging interface messaging Julia and I get push notifications that
+// Julia has sent a message, but I don't see it in the chat" (97783012). A push that tells you
+// about a message you are reading is worse than no push: it trains the person to ignore the
+// one that matters. The server had no way to know — it fanned out to every member.
+//
+// Deliberately socket-scoped, not user-scoped: the same person on a laptop and a phone is
+// looking at one of them. A member is only skipped if the socket that has the thread open is
+// still connected, and the client closes the thread on `visibilitychange` — a hidden page is
+// not being read. Anything else (a lock, a crash, a network drop) disconnects the socket,
+// which clears the entry below. The failure direction is therefore an EXTRA push, never a
+// swallowed one.
+const viewingConversation = createViewRegistry();
+
+function isViewingConversation(userId, conversationId) {
+  return viewingConversation.isViewing(connectedUsers.get(userId), conversationId);
+}
+
+// v1.66.0 (C1): resolve conversation membership for socket fan-out, with a
+// short TTL cache so rapid typing events don't hammer the DB. Returns [] on error.
+const _convMemberCache = new Map(); // convId -> { ids:[], exp:ms }
+async function conversationMemberIds(conversationId) {
+  const now = Date.now();
+  const hit = _convMemberCache.get(conversationId);
+  if (hit && hit.exp > now) return hit.ids;
+  try {
+    const db = await getDb();
+    const rows = await db.prepare(
+      "SELECT user_id FROM conversation_members WHERE conversation_id = ?"
+    ).all(conversationId);
+    const ids = rows.map((r) => r.user_id);
+    _convMemberCache.set(conversationId, { ids, exp: now + 15000 }); // 15s TTL
+    return ids;
+  } catch (err) {
+    captureException(err);
+    return [];
+  }
+}
+
+// v1.106.4 — who may ring whom, and under what name.
+//
+// `call_invite` took `targetUserId` and `callerName` straight off the wire and rang them. Any
+// authenticated socket could therefore make any user's phone light up, all night, showing any
+// name it liked — "InPlace Support" on an 82-year-old's lock screen, as often as it wanted.
+//
+// The rule is the one people already understand from the rest of the app: you can call someone
+// you can already message. Membership of a shared conversation is exactly that, and it is what
+// every other reach-the-person path in this codebase is gated on.
+const _callRate = new Map(); // socket.id -> timestamps
+const CALL_INVITES_PER_MIN = 6;
+function callInviteThrottled(socketId) {
+  const now = Date.now();
+  const recent = (_callRate.get(socketId) || []).filter((t) => now - t < 60000);
+  recent.push(now);
+  _callRate.set(socketId, recent);
+  return recent.length > CALL_INVITES_PER_MIN;
+}
+
+async function mayCall(callerId, targetUserId) {
+  if (!callerId || !targetUserId || callerId === targetUserId) return false;
+  const db = await getDb();
+  const [me, them] = await Promise.all([
+    db.prepare("SELECT is_admin, first_name, last_name FROM users WHERE id = ?").get(callerId),
+    db.prepare("SELECT is_admin, COALESCE(is_active,1) AS is_active FROM users WHERE id = ?").get(targetUserId),
+  ]);
+  if (!them || !them.is_active) return false;
+  try {
+    const { isBlockedBetween } = require("./utils/blocks");
+    if (await isBlockedBetween(db, callerId, targetUserId)) return false;
+  } catch { /* blocks unavailable — fall through to the membership test */ }
+  if (me?.is_admin || them.is_admin) return true;
+  const shared = await db.prepare(`
+    SELECT 1 FROM conversation_members a
+    JOIN conversation_members b ON a.conversation_id = b.conversation_id
+    WHERE a.user_id = ? AND b.user_id = ? LIMIT 1
+  `).get(callerId, targetUserId);
+  return !!shared;
+}
+
+io.on("connection", (socket) => {
+  const userId = socket.user.id;
+  if (!connectedUsers.has(userId)) connectedUsers.set(userId, new Set());
+
+  // One token must not be able to hold the process open with an unbounded number of sockets.
+  const existing = connectedUsers.get(userId);
+  if (existing.size >= MAX_SOCKETS_PER_USER) {
+    console.warn(`WS refused: ${socket.user.email} already has ${existing.size} sockets`);
+    socket.emit("connect_error_reason", { reason: "too_many_connections" });
+    return socket.disconnect(true);
+  }
+  existing.add(socket.id);
+
+  // Throttle EVERY inbound event on this socket, whatever it is, before the handler runs.
+  // Done with a middleware rather than per-handler so a new socket.on() is covered by default
+  // instead of by remembering.
+  socket.use((packet, next) => {
+    if (!socketEventAllowed(socket.id)) {
+      return next(new Error("rate_limited"));
+    }
+    next();
+  });
+  socket.on("error", (err) => {
+    if (err && err.message === "rate_limited") return; // expected; do not report as a crash
+    captureException(err, { where: "socket: handler error" });
+  });
+  console.log(`WS connected: ${socket.user.email} (${connectedUsers.get(userId).size} sockets)`);
+
+  // The name shown on an incoming call comes from the database, once per connection, not from
+  // whatever the client puts in the event payload.
+  (async () => {
+    try {
+      const db = await getDb();
+      const u = await db.prepare("SELECT first_name, last_name FROM users WHERE id = ?").get(userId);
+      if (u) socket.user.displayName = `${u.first_name || ""} ${u.last_name || ""}`.trim() || null;
+    } catch (e) { captureException(e, { where: "socket: resolve display name" }); }
+  })();
+
+  // ─── Call signaling ───
+  socket.on("call_invite", (data) => {
+    // data: { targetUserId, roomName, callType, callerName }
+    //
+    // ─── v1.105.99: a call that only rings an app already on screen ───
+    //
+    // This was `if (targetSockets) { emit }` with no else. A socket exists only while the app
+    // is open and foregrounded, so an incoming call reached exactly the person who did not need
+    // telling — and if their phone was locked, backgrounded, or simply on the home screen, the
+    // invite went nowhere at all. Silently. Pete: "Phone and video calls do not ring or notify
+    // the user until I push notification after the call."
+    //
+    // Ringing someone who is not looking at their phone is the entire job of a call. So: emit
+    // to any live socket, and if there is none, push.
+    //
+    // Push only when there is NO socket, deliberately — Pete's other report (97783012) is that
+    // push while you are already in the app is noise. The socket IS the signal that they are
+    // here; its absence is the signal that they are not.
+    //
+    // ─── v1.105.141 — tell the CALLER what happened ───
+    //
+    // Pete: "Julia didn't pick up, not sure if it rang on her side or she's just not
+    // available." He could not have known: the caller's screen says "Ringing…" whether the
+    // invite reached a live app, went out as a push, or fell into a hole. Every branch below
+    // now answers back, so the person holding the phone is told which one it was.
+    const ack = (via, devices) => {
+      socket.emit("call_ring_status", { roomName: data.roomName, via, devices: devices || 0 });
+    };
+
+    // v1.106.4 — see mayCall() above. Both checks answer through the normal ack path rather
+    // than throwing, so the caller's screen stops saying "Ringing…" either way.
+    if (callInviteThrottled(socket.id)) return ack("nowhere", 0);
+    (async () => {
+      let allowed = false;
+      try { allowed = await mayCall(userId, data.targetUserId); }
+      catch (e) { captureException(e, { where: "socket: call_invite mayCall" }); }
+      if (!allowed) return ack("nowhere", 0);
+      ringTarget().catch((e) => { captureException(e, { where: "socket: call_invite ringTarget" }); ack("nowhere", 0); });
+    })();
+    return;
+
+    async function ringTarget() {
+    // ─── calls-native (1.3): ring the PHONE, not just the app ───
+    //
+    // A device running the 1.3 app has told us it can ring like a phone (utils/callDevices.js).
+    // Those devices are rung natively — CallKit full-screen on iOS, the full-screen call on
+    // Android — whether or not an app is open, because that is what works on a locked phone.
+    // The socket emit below still happens, so an app already on screen shows its banner (the
+    // 1.3 client hides it when the phone itself is ringing). The ordinary push skips exactly
+    // the devices that rang, so nobody gets a full-screen call AND a "Call from…" banner.
+    //
+    // A 1.2 device never registers, so for everyone on the store build this block does
+    // nothing and the rest of this function behaves exactly as it did.
+    let nativeRang = 0;
+    let skipEndpoints = null;
+    try {
+      const registry = require("./utils/callRegistry");
+      const call = registry.startCall({
+        roomName: data.roomName, callerId: userId, callerName: socket.user.displayName || "InPlace",
+        targetUserId: data.targetUserId, callType: data.callType,
+      });
+      if (call) {
+        const { ringCallDevices } = require("./utils/callDevices");
+        const r = await ringCallDevices(data.targetUserId, call, registry.signCallToken(call.roomName, data.targetUserId));
+        nativeRang = r.rang;
+        skipEndpoints = r.skipEndpoints;
+      }
+    } catch (e) {
+      // Native ringing failing must never cost the call the ring it would have had before.
+      captureException(e, { where: "socket: call_invite native ring" });
+    }
+
+    const targetSockets = connectedUsers.get(data.targetUserId);
+    const liveSockets = targetSockets && targetSockets.size > 0;
+    if (liveSockets) {
+      for (const sid of targetSockets) {
+        io.to(sid).emit("call_incoming", {
+          roomName: data.roomName,
+          callType: data.callType,
+          callerId: userId,
+          // v1.106.4 — resolved server-side. This was `data.callerName`, so a caller could
+          // put any words they liked on someone else's lock screen.
+          callerName: socket.user.displayName || "InPlace",
+          // calls-native: this person's phone is ALSO ringing full-screen; a 1.3 app on that
+          // phone hides its own banner. Older clients ignore the field.
+          ringingNatively: nativeRang > 0,
+        });
+      }
+      ack(nativeRang > 0 ? "phone" : "app", targetSockets.size + nativeRang);
+    } else {
+      const kind = data.callType === "video" ? "Video call" : "Call";
+      const who = socket.user.displayName || "Someone";
+      // Fire and forget, but never silently: a push that fails is the difference between a
+      // ringing phone and nothing at all, so it is logged and reported.
+      (async () => {
+        try {
+          const { sendPushToUser } = require("./routes/push");
+          // NO eventType, deliberately. sendPushToUser reads notification preferences from
+          // the eventType and silently drops anything the recipient has switched off — which
+          // is right for a digest and wrong for a ringing phone. A call is not a notification
+          // you quietly opt out of; if someone does not want calls, that is a block, not a
+          // preference toggle. The in-app record still lands with type "call_incoming",
+          // taken from data.type, so a missed call is visible in the app either way.
+          const result = await sendPushToUser(data.targetUserId, {
+            title: `${kind} from ${who}`,
+            body: "Tap to answer",
+            data: {
+              type: "call_incoming",
+              page: "messages",
+              roomName: data.roomName,
+              callType: data.callType,
+              callerId: userId,
+              callerName: who,
+            },
+          }, undefined, { skipEndpoints });
+          const sent = (result && result.sent) || 0;
+          ack(nativeRang > 0 ? "phone" : sent > 0 ? "push" : "nowhere", sent + nativeRang);
+        } catch (err) {
+          console.error("call_invite push failed:", err.message);
+          captureException(err, { where: "socket: call_invite push", targetUserId: data.targetUserId });
+          ack("nowhere", 0);
+        }
+      })();
+    }
+    } // end ringTarget
+  });
+
+  // calls-native (1.3): the server now keeps a record of each ring (utils/callRegistry.js), so a
+  // phone ringing natively can ask whether the call is still on. These three keep it current.
+  // Only the person who was rung may answer or decline it, and only the two people on the call
+  // may end it; a ring the registry does not know about (an older client) behaves as before.
+  const settleRing = (roomName, state) => {
+    try {
+      const registry = require("./utils/callRegistry");
+      const call = registry.getCall(roomName);
+      if (!call) return;
+      if (state === "ended" ? (call.callerId !== userId && call.targetUserId !== userId) : call.targetUserId !== userId) return;
+      const r = registry.finishCall(roomName, state, userId);
+      // Answered on this device: every OTHER app of theirs stops ringing.
+      if (r && r.changed && state === "answered") {
+        for (const sid of connectedUsers.get(userId) || []) {
+          if (sid !== socket.id) io.to(sid).emit("call_answered_elsewhere", { roomName });
+        }
+      }
+    } catch (e) { captureException(e, { where: "socket: settleRing" }); }
+  };
+
+  socket.on("call_accept", (data) => {
+    // data: { callerId, roomName }
+    settleRing(data && data.roomName, "answered");
+    const callerSockets = connectedUsers.get(data.callerId);
+    if (callerSockets) {
+      for (const sid of callerSockets) {
+        io.to(sid).emit("call_accepted", { roomName: data.roomName });
+      }
+    }
+  });
+
+  socket.on("call_decline", (data) => {
+    // data: { callerId, roomName }
+    settleRing(data && data.roomName, "declined");
+    const callerSockets = connectedUsers.get(data.callerId);
+    if (callerSockets) {
+      for (const sid of callerSockets) {
+        io.to(sid).emit("call_declined", { roomName: data.roomName });
+      }
+    }
+  });
+
+  socket.on("call_hangup", (data) => {
+    // data: { targetUserId, roomName }
+    settleRing(data && data.roomName, "ended");
+    const targetSockets = connectedUsers.get(data.targetUserId);
+    if (targetSockets) {
+      for (const sid of targetSockets) {
+        io.to(sid).emit("call_ended", { roomName: data.roomName });
+      }
+    }
+  });
+
+  // ─── Typing indicators ───
+  // v1.66.0 (C1 fix): emit ONLY to the other members of this conversation.
+  // Previously this broadcast to every connected user (and leaked the sender's
+  // email) then let the client filter — a privacy leak and O(users) per keystroke.
+  socket.on("typing_start", async (data) => {
+    try {
+      const convId = data?.conversationId;
+      if (!convId) return;
+      const memberIds = await conversationMemberIds(convId);
+      if (!memberIds.includes(userId)) return; // sender must be a member
+      for (const memberId of memberIds) {
+        if (memberId === userId) continue;
+        const sockets = connectedUsers.get(memberId);
+        if (!sockets) continue;
+        for (const sid of sockets) {
+          io.to(sid).emit("typing_indicator", { conversationId: convId, userId });
+        }
+      }
+    } catch (err) { captureException(err); }
+  });
+
+  // ─── Read receipts ───
+  socket.on("messages_read", async (data) => {
+    try {
+      const convId = data?.conversationId;
+      if (!convId) return;
+      const memberIds = await conversationMemberIds(convId);
+      if (!memberIds.includes(userId)) return;
+      const readAt = new Date().toISOString();
+      for (const memberId of memberIds) {
+        if (memberId === userId) continue;
+        const sockets = connectedUsers.get(memberId);
+        if (!sockets) continue;
+        for (const sid of sockets) {
+          io.to(sid).emit("messages_read", { conversationId: convId, userId, readAt });
+        }
+      }
+    } catch (err) { captureException(err); }
+  });
+
+  // ─── Which thread is on screen (v1.105.103) ───
+  // Membership is checked here rather than trusted: without it, claiming to be "viewing" any
+  // conversation id would suppress that person's pushes for it.
+  socket.on("conversation_open", async (data) => {
+    try {
+      const convId = data?.conversationId;
+      if (!convId) return;
+      const memberIds = await conversationMemberIds(convId);
+      if (!memberIds.includes(userId)) return;
+      viewingConversation.open(socket.id, convId);
+    } catch (err) { captureException(err); }
+  });
+
+  socket.on("conversation_close", () => {
+    viewingConversation.close(socket.id);
+  });
+
+  // ─── v1.105.175 — "are you actually there?", asked by the client ───
+  //
+  // A socket that has been frozen and thawed can report itself connected while the connection
+  // underneath it is long gone; the client cannot tell by asking itself. This answers, and the
+  // silence when it does not answer is what the client acts on. See connectSocket() in
+  // public/js/utils.js.
+  //
+  // It doubles as the heartbeat for the view registry: a page that is awake enough to ask is
+  // awake enough to still be reading, so a live answer refreshes the claim rather than needing
+  // a second round trip to do it.
+  socket.on("ping_check", (payload, ack) => {
+    const cb = typeof payload === "function" ? payload : ack;
+    const convId = typeof payload === "object" && payload ? payload.conversationId : null;
+    if (convId) viewingConversation.open(socket.id, convId);
+    if (typeof cb === "function") cb({ ok: true });
+  });
+
+  socket.on("disconnect", () => {
+    _socketEvents.delete(socket.id);
+    _callRate.delete(socket.id);
+    viewingConversation.close(socket.id);
+    const sockets = connectedUsers.get(userId);
+    if (sockets) {
+      sockets.delete(socket.id);
+      if (sockets.size === 0) connectedUsers.delete(userId);
+    }
+  });
+});
+
+// Helper: emit to a specific user (all their connected sockets)
+function emitToUser(userId, event, data) {
+  const sockets = connectedUsers.get(userId);
+  if (sockets) {
+    for (const socketId of sockets) {
+      io.to(socketId).emit(event, data);
+    }
+  }
+}
+
+// Make io and emitToUser available to routes
+app.set("io", io);
+app.set("emitToUser", emitToUser);
+app.set("isViewingConversation", isViewingConversation);
+
+// ─── Middleware ───
+app.set("trust proxy", 1); // Trust first proxy (Cloudflare/Railway) for X-Forwarded-For
+
+// v1.105.55 — a malformed percent-escape in the path (INPLACE-6: GET /%c0, an overlong
+// UTF-8 sequence from a path-traversal scanner) makes Express's own router throw URIError
+// out of decodeURIComponent, which lands in the error handler and Sentry as an application
+// error. It isn't one: it is a garbage URL and the answer is 400. Catching it here keeps a
+// scanner from writing noise into the same place real failures are reported — which is the
+// only reason anyone would look there.
+app.use((req, res, next) => {
+  try {
+    decodeURIComponent(req.path);
+    return next();
+  } catch {
+    return res.status(400).json({ error: "Malformed URL" });
+  }
+});
+
+// Security headers via Helmet
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: [
+        "'self'", "'unsafe-eval'", "'unsafe-inline'",  // Required for Babel client-side compilation
+        "https://cdnjs.cloudflare.com", "https://unpkg.com", "https://cdn.socket.io",
+        "https://js.stripe.com", "https://connect-js.stripe.com",
+        "https://sdk.twilio.com",
+        // v1.117.0 — plausible.io and static.cloudflareinsights.com removed: no third-party
+        // analytics (Pete, 10/14). tests/journeyTracking.test.js keeps them out.
+      ],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://unpkg.com", "https://fonts.googleapis.com"],
+      imgSrc: ["'self'", "data:", "blob:", "https:"],
+      connectSrc: ["'self'", "https://*.twilio.com", "https://api.stripe.com", "https://js.stripe.com", "https://connect-js.stripe.com", "https://*.tile.openstreetmap.org", "wss:", "ws:"],
+      // v1.110.4 — blob: so an in-app PDF preview can render. Every PDF preview in the app
+      // (Documents Center, receipts, care documents, admin review) is a same-origin blob URL
+      // in an iframe on non-WebKit browsers, and Chrome blocked all of them: "This content is
+      // blocked." A blob: URL can only be minted by our own page, so this opens nothing to
+      // other origins.
+      frameSrc: ["'self'", "blob:", "https://js.stripe.com", "https://connect-js.stripe.com"],
+      fontSrc: ["'self'", "https://fonts.gstatic.com", "data:"],
+      mediaSrc: ["'self'", "blob:"],
+      workerSrc: ["'self'", "blob:"],
+    },
+  },
+  crossOriginEmbedderPolicy: false,   // Loads CDN scripts (React, Leaflet, etc.)
+  hsts: { maxAge: 31536000, includeSubDomains: true, preload: true },
+}));
+
+// CORS — restrict to known origins
+app.use(cors({
+  origin: ALLOWED_ORIGINS,
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization", "X-Active-Role", "x-admin-api-key", "x-csrf-token"],
+}));
+app.use(require("cookie-parser")());
+// v1.104.1 — Sentry attribution: decode the JWT (cookie or Bearer) BEFORE the
+// body parsers so even 413s thrown inside body-parser carry the user's UUID
+// tag. Sentry answers "whose account failed?" with a UUID; names/emails/PHI
+// still never leave the server (see utils/sentry.js beforeSend).
+app.use((req, res, next) => {
+  try {
+    // v1.105.2 — token precedence MUST match middleware/auth.js:57, which reads the
+    // Bearer header first and falls back to the cookie. This block had them the other
+    // way round, so during admin "Test Mode" the request ran as the impersonated user
+    // (Bearer) while Sentry tagged the admin (cookie). Every impersonated error was
+    // filed against Pete: INPLACE-5 was tagged user_role=family on a caregiver-only
+    // endpoint, which is impossible and is what gave the mismatch away.
+    const header = req.headers.authorization || "";
+    const raw = (header.startsWith("Bearer ") ? header.slice(7) : null)
+      || req.cookies?.auth_token;
+    if (raw) {
+      const payload = require("jsonwebtoken").verify(raw, process.env.JWT_SECRET);
+      tagRequestUser(payload.id, payload.role, payload.impersonatedBy);
+    }
+  } catch (_) { /* invalid/expired token — event just goes untagged */ }
+  next();
+});
+app.use("/api/auth/me/photo", express.json({ limit: "5mb" }));
+app.use("/api/care-recipients", express.json({ limit: "5mb" }));
+app.use("/api/self-onboarding", express.json({ limit: "10mb" }));
+app.use("/api/reimbursements", express.json({ limit: "10mb" })); // receipt photos/PDFs (base64)
+// v1.103.2 — observation notes accept a photo (client resizes to ≤1600px, route
+// enforces 5MB): the global 100kb JSON cap silently broke every photo note.
+app.use("/api/notes", express.json({ limit: "8mb" }));
+// v1.105.0 (Sentry INPLACE-1) — feedback accepts a base64 screenshot (v1.104.8
+// added the client picker; the route enforces its own 2MB cap). It shipped
+// without a route-scoped limit, so the global 100kb cap 413'd every screenshot.
+// Same rule as notes above: BOTH this and a limitBodySize exemption are needed.
+app.use("/api/feedback", express.json({ limit: "4mb" }));
+// v1.105.35 — caregiver ID verification posts TWO base64 data URIs (government ID +
+// selfie) in one body and had NEITHER half of the rule, so every submission 413'd against
+// the global 100kb cap. Same failure as photo notes (v1.103.2) and feedback screenshots
+// (v1.105.0), on the one flow a caregiver cannot skip and a store reviewer walks.
+app.use("/api/caregiver-onboarding", express.json({ limit: "10mb" }));
+// v1.105.74 — a family visit can carry one photo (client downscales to ≤1600px, the route
+// enforces 5MB + magic bytes). Same rule as notes, feedback and caregiver-onboarding above:
+// BOTH a route-scoped express.json limit AND a limitBodySize exemption, or the global 100kb
+// cap 413s every photo. That has now been the same bug four times.
+app.use("/api/family-visits", express.json({ limit: "8mb" }));
+// Skip JSON parsing for webhooks that need raw body for signature verification
+app.use((req, res, next) => {
+  if (req.originalUrl === '/api/payments/webhook' || req.originalUrl === '/api/checkr/webhook') return next();
+  express.json({ limit: "100kb" })(req, res, next);
+});
+app.use(limitBodySize(100000));
+
+// ─── Rate Limiting ───
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 20,                   // 20 attempts per window
+  message: { error: "Too many attempts — please try again in 15 minutes" },
+  standardHeaders: true,
+  legacyHeaders: false,
+  validate: { trustProxy: false, xForwardedForHeader: false },
+});
+app.use("/api/auth/login", authLimiter);
+// v1.106.4 — demo-login mints a real 7-day JWT with no credentials; it was the one auth
+// route not rate-limited, so it was a free, unmetered token dispenser.
+app.use("/api/auth/demo-login", authLimiter);
+app.use("/api/auth/register", authLimiter);
+app.use("/api/password-reset", authLimiter);
+app.use("/api/auth/verify", authLimiter);
+app.use("/api/auth/resend-verification", authLimiter);
+app.use("/api/waitlist", authLimiter);
+// v1.106.5 — every unauthenticated route below causes us to send a real email to an address
+// the caller chose. They were the amplification surface: no login required, and our sending
+// reputation is what gets spent. (utils/email.js adds the per-ADDRESS ceiling, which is the
+// half that survives an attacker rotating IPs; this is the per-IP half.)
+app.use("/api/auth/signup-intent", authLimiter);
+app.use("/api/consent/respond", authLimiter);
+
+const apiLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000,  // 1 minute
+  max: 120,                  // 120 requests per minute
+  message: { error: "Too many requests — please slow down" },
+  standardHeaders: true,
+  legacyHeaders: false,
+  validate: { trustProxy: false, xForwardedForHeader: false },
+});
+app.use("/api/", apiLimiter);
+
+// ─── v1.106.7 — tell an incompatible client so, instead of letting it fail strangely ───
+//
+// Every request already carries X-App-Version, and until now the server only WROTE IT DOWN.
+// Pete, Sep 9: a deploy landed while the app was closed; the next open ran the old bundle
+// against the new server and "every screen switch spun for a minute". Nothing told the client
+// it was the problem — it just got shapes it did not understand, one endpoint at a time.
+//
+// This is the smallest honest answer: 426 Upgrade Required, plus the minimum, so apiFetch can
+// reload at a safe moment instead of guessing.
+//
+// Deliberately conservative, because the failure mode of getting this wrong is locking every
+// user out of a working app:
+//   · MIN_APP_VERSION moves only when a release genuinely breaks old clients. It is NOT
+//     APP_VERSION. Bumping it on every deploy would force-reload everyone every time.
+//   · A missing or unparseable header PASSES. Native shells, curl, webhooks and Stripe do not
+//     send it and must never be turned away.
+//   · The recovery paths are exempt. A client that cannot call /api/version, /api/health or
+//     /api/auth/* cannot reload itself out of the hole this is meant to get it out of.
+const MIN_APP_VERSION = "1.106.0";
+
+function parseVersion(v) {
+  const m = /^(\d+)\.(\d+)\.(\d+)/.exec(String(v || "").trim());
+  return m ? [Number(m[1]), Number(m[2]), Number(m[3])] : null;
+}
+
+function isOlder(a, b) {
+  for (let i = 0; i < 3; i++) {
+    if (a[i] < b[i]) return true;
+    if (a[i] > b[i]) return false;
+  }
+  return false;
+}
+
+const VERSION_GATE_EXEMPT = ["/api/version", "/api/pricing", "/api/health", "/api/auth/", "/api/payments/webhook", "/api/checkr/webhook", "/api/sms/"];
+
+app.use("/api/", (req, res, next) => {
+  const full = req.originalUrl || req.path;
+  if (VERSION_GATE_EXEMPT.some((p) => full.startsWith(p))) return next();
+  const client = parseVersion(req.headers["x-app-version"]);
+  if (!client) return next();                      // not a browser client of ours — not our business
+  const min = parseVersion(MIN_APP_VERSION);
+  if (!min || !isOlder(client, min)) return next();
+  res.set("X-Min-App-Version", MIN_APP_VERSION);
+  return res.status(426).json({
+    error: "This version of the app is out of date. Reloading to get the current one.",
+    minAppVersion: MIN_APP_VERSION,
+    upgradeRequired: true,
+  });
+});
+
+
+// ─── Serve Frontend ───
+//
+// v1.106.6 — this used to send `no-store` on EVERY .js and .css, which defeated the browser
+// cache, Cloudflare's edge and the service worker in one line. Every visit, every navigation,
+// every deploy re-downloaded the whole client: ~700 KB compressed, on a caregiver's phone, on
+// cellular, before anything appeared.
+//
+// The `?v=build-<hash>` scheme already guarantees freshness — the URL changes when the bytes
+// change — so the hashed assets can be cached forever. What must NEVER be cached is the small
+// set of files that POINT at them: index.html and the service worker. Those stay `no-store`,
+// because a stale index.html is how a user gets pinned to a build that no longer exists.
+const IMMUTABLE_PREFIXES = ["/js-compiled/", "/vendor/", "/css/", "/icons/", "/fonts/"];
+const NEVER_CACHE_PATHS = new Set(["/", "/index.html", "/sw.js", "/manifest.json", "/business.html"]);
+
+app.use((req, res, next) => {
+  if (NEVER_CACHE_PATHS.has(req.path)) {
+    res.set("Cache-Control", "no-cache, no-store, must-revalidate");
+    res.set("Pragma", "no-cache");
+    res.set("Expires", "0");
+    return next();
+  }
+  // Only fingerprinted requests get the immutable treatment. A hashed asset fetched WITHOUT
+  // ?v= (a hand-typed URL, an old service worker, a native shell that lost its query string)
+  // gets a short revalidating cache instead — long enough to help, short enough to recover.
+  if (IMMUTABLE_PREFIXES.some((prefix) => req.path.startsWith(prefix))) {
+    res.set("Cache-Control", req.query.v
+      ? "public, max-age=31536000, immutable"
+      : "public, max-age=300, must-revalidate");
+    return next();
+  }
+  // Anything else that looks like client code — including the raw /js/** sources, which are
+  // no longer referenced by index.html but are still on disk — revalidates every time.
+  if (req.path.endsWith(".js") || req.path.endsWith(".css")) {
+    res.set("Cache-Control", "no-cache, must-revalidate");
+  }
+  next();
+});
+
+// v1.106.6 — source maps are built, but they are NOT the public's business. bundle.js.map is
+// 4.2 MB of `sourcesContent`: the entire client source, comments and all, including the ones
+// that name real users by name while explaining a bug they hit. The build now writes maps
+// outside public/, so this is a belt to that braces — a stray .map in public/ from an older
+// build, or from someone's local run, still does not get served.
+app.use((req, res, next) => {
+  if (req.path.endsWith(".map")) return res.status(404).end();
+  next();
+});
+// Apple App Site Association — must serve as application/json (no file extension)
+app.get("/.well-known/apple-app-site-association", (req, res) => {
+  res.set("Content-Type", "application/json");
+  res.sendFile(path.join(__dirname, "../public/.well-known/apple-app-site-association"));
+});
+
+app.use(express.static(path.join(__dirname, "../public")));
+
+// Request logging
+app.use((req, res, next) => {
+  const start = Date.now();
+  res.on("finish", () => {
+    const ms = Date.now() - start;
+    console.log(`${req.method} ${req.path} → ${res.statusCode} (${ms}ms)`);
+  });
+  next();
+});
+
+// ─── CSRF Protection ───
+const { verifyCsrf } = require("./middleware/auth");
+app.use("/api", verifyCsrf);
+
+// ─── Audit Logging ───
+const { auditLogMiddleware } = require("./middleware/auditLog");
+app.use("/api", auditLogMiddleware);
+
+// ─── Routes ───
+app.use("/api/auth", require("./routes/auth"));
+app.use("/api/care-recipients", require("./routes/careRecipients"));
+app.use("/api/sessions", require("./routes/sessions"));
+app.use("/api/sessions", require("./routes/offers"));
+app.use("/api/caregivers", require("./routes/caregivers"));
+app.use("/api/activity", require("./routes/activity"));
+// v1.104.4 — client-side crash beacon. The ErrorBoundary POSTs render/lifecycle
+// throws here so a white-screen becomes a real Sentry event (the user_id tag is
+// already attached upstream by the JWT-decode middleware). No auth required —
+// a crash can happen before/around auth — but the payload is tiny and the
+// global 100kb body cap + rate limiter bound abuse.
+app.post("/api/client-error", (req, res) => {
+  try {
+    const b = req.body || {};
+    const err = new Error(`[client] ${String(b.message || "unknown").slice(0, 300)}`);
+    err.stack = String(b.stack || "").slice(0, 4000) || err.stack;
+    captureException(err, {
+      source: "client",
+      page: b.page, url: b.url, version: b.version,
+      standalone: b.standalone, userAgent: b.userAgent,
+      componentStack: String(b.componentStack || "").slice(0, 4000),
+    });
+    console.error(`  [client-error] v${b.version} page=${b.page} standalone=${b.standalone}: ${String(b.message).slice(0, 200)}`);
+  } catch (_) { /* never throw from the error sink */ }
+  res.status(204).end();
+});
+
+app.use("/api/dashboard", require("./routes/dashboard"));
+app.use("/api/messages", require("./routes/messages"));
+app.use("/api/notes", require("./routes/notes"));
+app.use("/api/assignments", require("./routes/assignments"));
+app.use("/api/analytics", require("./routes/analytics"));
+app.use("/api/push", require("./routes/push"));
+app.use("/api/calls", require("./routes/calls")); // calls-native (1.3): native ringing; inert for 1.2
+app.use("/api/photos", require("./routes/photos"));
+app.use("/api/auth/2fa", require("./routes/twoFactor"));
+app.use("/api/passkeys", require("./routes/passkeys"));
+app.use("/api/oauth", require("./routes/oauth"));
+app.use("/api/care-teams", require("./routes/careTeams"));
+const reimbursementsRouter = require("./routes/reimbursements");
+const careTasksRouter = require("./routes/careTasks");
+const careEventsRouter = require("./routes/careEvents");
+app.use("/api/reimbursements", reimbursementsRouter);
+app.use("/api/geocode", require("./routes/geocode"));
+app.use("/api/mileage", require("./routes/mileage")); // v1.126.1 — visit mileage
+app.use("/api/waitlist", require("./routes/waitlist"));
+app.use("/api/password-reset", require("./routes/passwordReset"));
+app.use("/api/availability", require("./routes/availability"));
+app.use("/api/admin", require("./routes/admin"));
+app.use("/api/pricing", require("./routes/pricing"));
+app.use("/api/admin/financials", require("./routes/financials"));
+app.use("/api/admin/treasury", require("./routes/treasury"));
+app.use("/api/admin/tickets", require("./routes/tickets"));
+app.use("/api/admin/legal-readiness", require("./routes/legalReadiness").adminRouter); // v1.110 — after /api/admin, so its network gate runs first
+app.use("/api/admin/outreach", require("./routes/outreach")); // v1.113.0 — caregiver outreach; after /api/admin for the same reason
+app.use("/api/admin/links", require("./routes/track").adminRouter); // v1.117.0 — campaign links; after /api/admin for the same reason
+app.use("/api/t", require("./routes/track").beaconRouter); // v1.117.0 — journey beacon (utils/tracking.js)
+app.use("/api/sms", require("./routes/smsWebhooks")); // v1.113.0 — Twilio webhooks (signature-checked in the router)
+app.use("/api/costs", require("./routes/costs"));
+app.use("/api/platform-invites", require("./routes/platformInvites"));
+app.use("/api/known-caregivers", require("./routes/knownCaregivers")); // v1.105.186 — a family adds a caregiver it already knows
+app.use("/api/caregiver-onboarding", require("./routes/caregiveronboarding"));
+app.use("/api/family-visits", require("./routes/familyVisits")); // v1.105.38
+app.use("/api/reactions", require("./routes/reactions")); // v1.105.170 — notes, visits, and whatever is next
+app.use("/api/onboarding-events", require("./routes/onboardingEvents"));
+app.use("/api/feedback", require("./routes/feedback"));
+app.use("/api/payments", require("./routes/payments"));
+app.use("/api/self-onboarding", require("./routes/selfOnboarding"));
+app.use("/api/connections", require("./routes/connections"));
+app.use("/api/help", require("./routes/help"));
+app.use("/api/reports", require("./routes/reports"));
+app.use("/api/video", require("./routes/videoCall"));
+app.use("/api/consent", require("./routes/consent"));
+app.use("/api/documents", require("./routes/documents"));
+app.use("/api/medical-records", require("./routes/medicalRecords")); // Documents Center — medical records (migration 050)
+app.use("/api/checkr", require("./routes/checkr"));
+app.use("/api/accountability", require("./routes/accountability"));
+app.use("/api/interviews", require("./routes/interviews"));
+app.use("/api/matching", require("./routes/matching"));
+app.use("/api/care-intelligence", require("./routes/careIntelligence"));
+app.use("/api/scheduling", require("./routes/nlScheduling"));
+app.use("/api/ipai", require("./routes/ipaiChat"));
+app.use("/api/referrals", require("./routes/referrals"));
+app.use("/api/kindred", require("./routes/kindred"));
+app.use("/api/care-tasks", careTasksRouter);
+app.use("/api/care-events", careEventsRouter);
+app.use("/api/care-todos", require("./routes/careTodos")); // v1.109.9 — one-time to-dos for the next visit
+app.use("/api/whats-new", require("./routes/whatsNew")); // v1.112.4 — the What's New splash
+app.use("/api/care-tools", require("./routes/careTools")); // v1.114.0 — care tools come with care booked through InPlace
+app.use("/api/legal", require("./routes/legal"));
+app.use("/api/legal-readiness", require("./routes/legalReadiness")); // v1.110 — family readiness checklist, local help, money-safety concerns
+app.use("/api/media", require("./routes/media"));
+app.use("/api/safety", require("./routes/safety"));
+
+// ─── App version check (lightweight, no auth) ───
+const { cancelPassedPrivateOffers, releaseExpiredExclusiveOffers } = require("./utils/exclusiveOffers");
+const APP_VERSION = "1.126.7";
+app.get("/api/version", (req, res) => {
+  res.set("Cache-Control", "no-cache, no-store, must-revalidate");
+  res.json({ version: APP_VERSION, minAppVersion: MIN_APP_VERSION });
+});
+
+// ─── Health check ───
+app.get("/api/health", (req, res) => {
+  const { environment, cookiesSecure } = require("./utils/env");
+  res.json({
+    status: "ok",
+    service: "InPlace API",
+    version: APP_VERSION,
+    // v1.105.3 — surfaced deliberately. The NODE_ENV bug went unnoticed for months
+    // because the deployment's own idea of "am I production?" was invisible from
+    // outside. These two booleans make it checkable in one request, forever.
+    // Neither is a secret: `environment` is a label, `secureCookies` says whether
+    // the Secure flag is being set — anyone can already observe that in DevTools.
+    environment,
+    secureCookies: cookiesSecure,
+    // v1.106.43 — the same argument as the two above. Whether uploads go to R2 or stay in the
+    // database decides which code path serves every photo, and it was invisible from outside:
+    // chasing "the picture shows a black box" meant guessing at which of two systems was in
+    // play. A label, never a value — no account id, no bucket name, no key.
+    blobStorage: require("./utils/storage").storageMode(),
+    timestamp: new Date().toISOString(),
+  });
+});
+
+// ─── API docs overview ───
+app.get("/api", (req, res) => {
+  res.json({
+    name: "InPlace API",
+    version: "0.2.0",
+    endpoints: {
+      auth: {
+        "POST /api/auth/register": "Create a new account",
+        "POST /api/auth/login": "Sign in and get JWT token",
+        "GET /api/auth/me": "Get current user profile",
+      },
+      careRecipients: {
+        "GET /api/care-recipients": "List your care recipients",
+        "POST /api/care-recipients": "Add a care recipient (parent)",
+        "GET /api/care-recipients/:id": "Get care recipient details",
+        "PUT /api/care-recipients/:id": "Update care recipient",
+      },
+      sessions: {
+        "GET /api/sessions": "List care sessions (filter by status, date)",
+        "POST /api/sessions": "Create a new care request",
+        "GET /api/sessions/:id": "Get session details + visit log",
+        "POST /api/sessions/:id/match": "Match a caregiver to session",
+        "PUT /api/sessions/:id/status": "Update session status",
+      },
+      caregivers: {
+        "GET /api/caregivers": "Search available caregivers",
+        "GET /api/caregivers/:id": "Get caregiver profile + reviews",
+        "POST /api/caregivers/profile": "Create/update caregiver profile",
+      },
+      activity: {
+        "GET /api/activity": "Activity feed (notifications)",
+        "PUT /api/activity/:id/read": "Mark notification as read",
+        "PUT /api/activity/read-all": "Mark all as read",
+        "POST /api/activity/visit-log": "Submit visit log (caregiver)",
+      },
+      dashboard: {
+        "GET /api/dashboard": "Aggregated dashboard data",
+      },
+    },
+  });
+});
+
+// ─── Kindred PWA (separate app for care recipients) ───
+// Auth-gated: requires valid JWT + companion_access flag (admins always pass)
+app.get("/kindred", async (req, res) => {
+  const token = req.cookies?.auth_token || req.query.token;
+  if (!token) {
+    return res.redirect("/?redirect=kindred");
+  }
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const db = await getDb();
+    const user = await db.prepare("SELECT companion_access, is_admin FROM users WHERE id = ?").get(decoded.id);
+    if (!user || (!user.companion_access && !user.is_admin)) {
+      return res.status(403).send("Access denied. Kindred access has not been enabled for your account.");
+    }
+    res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
+    res.sendFile(path.join(__dirname, "../kindred/index.html"));
+  } catch {
+    return res.redirect("/?redirect=kindred");
+  }
+});
+
+// ─── Public legal pages (v1.105.4) ───
+// /terms, /privacy, /caregiver-agreement, /client-services, /legal — rendered from
+// the lawyer-reviewed `legal_documents` rows users already accept in-app. Both app
+// stores need a policy URL a reviewer can open with no session.
+//
+// This REPLACES a static public/privacy.html last updated April 2 2026, which
+// described the Kindred voice companion (killed in the July 7 review), named
+// ElevenLabs, and omitted nearly every processor the platform actually uses. That
+// stale page was the URL registered with Google Play. Mounted before the SPA
+// catch-all; any type with no active document falls through to the app.
+app.use(require("./routes/publicLegal"));
+
+// ─── /business — a page a crawler can actually read (v1.105.56) ───
+//
+// Pete: "when someone signs up for the website and it says it can't reach the domain,
+// something appears wrong." He's right, and the trust cost lands at the exact moment we're
+// asking a caregiver for their bank details.
+//
+// Two separate faults produced that screen. The first was ours and is fixed in
+// routes/payments.js — we handed Stripe a domain that has never resolved. The second is
+// this: index.html is `<div id="root"></div>` and everything else is drawn by JavaScript.
+// Stripe's verification fetches the URL and reads HTML. It sees an empty shell and a
+// one-line meta description — indistinguishable from the "placeholder or under-construction
+// site" its own task text says it will not accept. Pointing it at yourinplace.com alone
+// would very likely have failed review a second time, and I'd have called it fixed.
+//
+// So: one server-rendered page, no JavaScript required, describing what the business is,
+// what it sells, what it charges and how caregivers are paid. Every word is Pete's own
+// copy from the splash page — a business-information page is the wrong place to invent
+// claims about a business.
+app.get("/business", (req, res) => {
+  res.set("Cache-Control", "public, max-age=300");
+  res.sendFile(path.join(__dirname, "../public/business.html"));
+});
+
+// ─── /i/:code — personal and campaign short links (v1.117.0, routes/track.js) ───
+app.use(require("./routes/track").publicRouter);
+
+// ─── Catch-all: serve frontend for any non-API route ───
+app.get("*", (req, res) => {
+  res.sendFile(path.join(__dirname, "../public/index.html"));
+});
+
+// ─── Error handling ───
+setupSentryErrorHandler(app);
+app.use((err, req, res, next) => {
+  console.error("Unhandled error:", err);
+  captureException(err);
+  res.status(500).json({ error: "Internal server error" });
+});
+
+// ─── Start ───
+async function start() {
+  // Retry DB connection up to 5 times (Railway internal DNS can be slow on cold start)
+  for (let attempt = 1; attempt <= 5; attempt++) {
+    try {
+      await initializeDatabase();
+      break; // success
+    } catch (err) {
+      console.error(`  DB init attempt ${attempt}/5 failed:`, err.message);
+      if (attempt === 5) throw err;
+      const delay = attempt * 2000; // 2s, 4s, 6s, 8s
+      console.log(`  Retrying in ${delay / 1000}s...`);
+      await new Promise(r => setTimeout(r, delay));
+    }
+  }
+
+  // Initialize VAPID keys for push notifications (env → DB → auto-generate)
+  const { initializeVapidKeys } = require("./routes/push");
+  await initializeVapidKeys();
+
+  // Auto-seed if database is empty OR demo data is stale
+  const db = await getDb();
+  const userCount = await db.prepare("SELECT COUNT(*) as count FROM users").get();
+  const { seed, DEMO_SEED_VERSION } = require("./seed");
+
+  try {
+    if (parseInt(userCount.count) === 0) {
+      console.log("  Empty database detected — running seed...");
+      await seed({ force: true }); // Empty DB — safe to force
+      console.log("  Seed complete");
+    } else {
+      // Check if demo data version is current — re-seed if stale
+      const versionRow = await db.prepare(
+        "SELECT name FROM waitlist WHERE email = '_seed_version@inplace.internal' LIMIT 1"
+      ).get();
+      const currentVersion = versionRow ? versionRow.name : null;
+
+      // Refresh the demo when the code version changed OR when there are no
+      // upcoming demo sessions (dates drifted into the past, or the demo was
+      // emptied). The 24h timer alone isn't enough — it resets on every Railway
+      // restart, so a frequently-restarting process could otherwise show a demo
+      // full of past dates. This makes the demo self-heal on boot.
+      let demoStale = false;
+      try {
+        const fresh = await db.prepare(`
+          SELECT COUNT(*) AS count FROM care_sessions
+          WHERE scheduled_date::date >= CURRENT_DATE
+            AND (caregiver_id IN (SELECT id FROM users WHERE is_demo = 1)
+                 OR family_user_id IN (SELECT id FROM users WHERE is_demo = 1))
+        `).get();
+        demoStale = parseInt(fresh && fresh.count || 0) === 0;
+      } catch (e) {
+        // Older schema without care_sessions/scheduled_date — fall back to version check only
+      }
+
+      if (currentVersion !== DEMO_SEED_VERSION || demoStale) {
+        const reason = currentVersion !== DEMO_SEED_VERSION
+          ? `version ${currentVersion || 'none'} → ${DEMO_SEED_VERSION}`
+          : 'no upcoming demo sessions (stale dates or emptied)';
+        // Always use demoOnly mode for auto-reseed — never risk real user data
+        console.log(`  Demo data needs refresh (${reason}) — refreshing demo data only...`);
+        await seed({ demoOnly: true });
+        console.log("  Demo-only re-seed complete (real user data preserved)");
+      }
+    }
+  } catch (seedErr) {
+    console.error("  ⚠️  Seed failed — starting server anyway:", seedErr.message);
+  }
+
+  // ─── Daily demo data refresh ───
+  // Re-seed demo data every 24 hours so relative dates stay fresh
+  setInterval(guardedPoller(101, async () => {
+    try {
+      console.log("🔄 Daily demo data refresh starting...");
+      const { seed: dailySeed } = require("./seed");
+      await dailySeed({ demoOnly: true });
+      console.log("✅ Daily demo data refresh complete");
+    } catch (err) {
+      console.error("⚠️  Daily demo refresh failed:", err.message);
+    }
+  }), 24 * 60 * 60 * 1000); // 24 hours
+
+  // ─── Demo data patch ───
+  // Ensures key demo profile fields are correct even when full reseed is skipped
+  try {
+    const mariaUser = await db.prepare(
+      "SELECT id FROM users WHERE email = 'maria@inplace.care' AND is_demo = 1"
+    ).get();
+    if (mariaUser) {
+      // Ensure Maria has dual role (caregiver + family) for role-switching demo
+      await db.prepare(`
+        UPDATE users SET roles = '["caregiver","family"]' WHERE id = ? AND (roles IS NULL OR roles = '["caregiver"]')
+      `).run(mariaUser.id);
+      await db.prepare(`
+        UPDATE caregiver_profiles SET
+          onboarding_complete = 1,
+          checkr_status = 'clear',
+          legal_first_name = COALESCE(NULLIF(legal_first_name, ''), 'Maria'),
+          legal_last_name = COALESCE(NULLIF(legal_last_name, ''), 'Santos'),
+          date_of_birth = COALESCE(date_of_birth, '1992-03-15'),
+          ssn_last4 = COALESCE(NULLIF(ssn_last4, ''), '4567'),
+          dl_number = COALESCE(NULLIF(dl_number, ''), 'V12-34-5678'),
+          dl_state = COALESCE(NULLIF(dl_state, ''), 'VA')
+        WHERE user_id = ?
+      `).run(mariaUser.id);
+      // Ensure avatar is set
+      await db.prepare(`
+        UPDATE users SET avatar_url = COALESCE(avatar_url,
+          'data:image/svg+xml,%3Csvg xmlns=''http://www.w3.org/2000/svg'' width=''120'' height=''120''%3E%3Crect width=''120'' height=''120'' fill=''%231b6b5a''/%3E%3Ctext x=''50%25'' y=''52%25'' font-family=''system-ui'' font-size=''48'' font-weight=''700'' fill=''white'' text-anchor=''middle'' dominant-baseline=''central''%3EMS%3C/text%3E%3C/svg%3E')
+        WHERE id = ?
+      `).run(mariaUser.id);
+      // Ensure Carlos (Maria's brother) care recipient exists for family view
+      const carlosExists = await db.prepare(
+        "SELECT id FROM care_recipients WHERE family_user_id = ? AND first_name = 'Carlos'"
+      ).get(mariaUser.id);
+      if (!carlosExists) {
+        const { v4: uuid } = require("uuid");
+        const carlosId = uuid();
+        await db.prepare(`
+          INSERT INTO care_recipients
+          (id, family_user_id, first_name, last_name, age,
+           location_address, location_city, location_state, location_zip,
+           latitude, longitude,
+           health_conditions, medications, preferences,
+           emergency_contact_name, emergency_contact_phone,
+           pets, pet_allergies, food_allergies, medical_conditions)
+          VALUES (?, ?, 'Carlos', 'Santos', 34,
+                  '215 College Avenue', 'Blacksburg', 'VA', '24060',
+                  37.2285, -80.4155,
+                  ?, ?, ?,
+                  'Maria Santos', '(540) 555-0201',
+                  '1 dog — Luna (golden retriever, therapy dog, very gentle, 3 yrs)',
+                  'None known', ?, ?)
+        `).run(
+          carlosId, mariaUser.id,
+          JSON.stringify(["Traumatic brain injury — recovery phase", "Short-term memory difficulties", "Mild left-side weakness", "Anxiety in crowded environments"]),
+          JSON.stringify(["Sertraline 50mg daily", "Gabapentin 300mg twice daily", "Melatonin 5mg at bedtime"]),
+          "Needs patient, calm communication. Prefers structured routines. Loves soccer. Music helps him focus.",
+          JSON.stringify(["Dairy (moderate — causes stomach cramps)"]),
+          "Traumatic brain injury (recovery), short-term memory issues, mild left-side weakness, anxiety"
+        );
+        // Create Carlos's care team
+        const teamId = uuid();
+        await db.prepare(
+          "INSERT INTO care_teams (id, name, care_recipient_id, created_by) VALUES (?, ?, ?, ?)"
+        ).run(teamId, "Carlos Santos's Care Team", carlosId, mariaUser.id);
+        await db.prepare(
+          "INSERT INTO care_team_members (id, care_team_id, user_id, role, invited_by) VALUES (?, ?, ?, 'leader', ?)"
+        ).run(uuid(), teamId, mariaUser.id, mariaUser.id);
+        console.log("  Demo data patch: created Carlos care recipient + care team for Maria");
+      }
+      console.log("  Demo data patch applied (Maria dual-role + profile)");
+    }
+  } catch (patchErr) {
+    console.error("  Demo patch failed:", patchErr.message);
+  }
+
+  // ─── Session notification poller (every 60s) ───
+  // Checks for upcoming sessions that need pre-check-in or pre-check-out reminders
+  const { sendSessionReminders } = require("./routes/push");
+  const NOTIFICATION_POLL_INTERVAL = 60 * 1000; // 1 minute
+  const REMINDER_WINDOW_MINUTES = 15;
+  const OVERDUE_GRACE_MINUTES = 5; // how long after session start before "you're late" fires
+  const MAX_OVERDUE_WINDOW = 60;   // stop sending overdue alerts after 60 min
+
+  setInterval(guardedPoller(102, async () => {
+    try {
+      const pollDb = await getDb();
+
+      // ─── v1.106.10 — offer expiry belongs here, not on the dashboard GET ───
+      //
+      // These two UPDATEs used to run fire-and-forget on EVERY family dashboard load, seq
+      // scanning an unindexed column each time, to do housekeeping that has nothing to do
+      // with the request. A read endpoint that writes is a read endpoint that can be made
+      // to write by anyone who refreshes, and the work is the same whether one family loads
+      // the dashboard or fifty do. It is a poller's job, and poller 102 already runs every
+      // minute and already owns session state transitions.
+      // v1.106.25 — the two statements moved to utils/exclusiveOffers so they can be tested
+      // against a real database. A recurring series must expire as a unit; see the note there.
+      try {
+        await cancelPassedPrivateOffers(pollDb);
+        await releaseExpiredExclusiveOffers(pollDb);
+      } catch (e) {
+        // Reported, not swallowed: this is the code that stops a private request sitting
+        // open forever, and it failing silently is how it would stop mattering.
+        captureException(e, { where: "poller 102: offer expiry" });
+      }
+
+      // ─── Per-session timezone-aware notification logic ───
+      // Each session uses its care recipient's timezone for all timing decisions.
+      // We query sessions whose scheduled_date is "today" in ANY US timezone
+      // (widened to yesterday..tomorrow to catch cross-timezone edge cases),
+      // then compare using each session's specific care-location timezone.
+      const eastNow = getTodayStringInZone('America/New_York');
+      const westNow = getTodayStringInZone('Pacific/Honolulu');
+      // Build a date range that covers "today" across all US timezones
+      const dateRangeStart = eastNow < westNow ? eastNow : westNow;
+      const dateRangeEnd = eastNow > westNow ? eastNow : westNow;
+
+      // ─── Pre-check-in reminders ───
+      // Find confirmed sessions that haven't had pre_check_in notification
+      // Exclude demo sessions — demo data must never trigger real notifications
+      const checkInCandidates = await pollDb.prepare(`
+        SELECT cs.id, cs.scheduled_date, cs.scheduled_time, cs.notifications_sent,
+          cr.timezone AS care_timezone
+        FROM care_sessions cs
+        LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
+        LEFT JOIN users u ON cs.family_user_id = u.id
+        LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+        LEFT JOIN users cu ON cp.user_id = cu.id
+        WHERE cs.status = 'confirmed'
+          AND cs.scheduled_date BETWEEN ? AND ?
+          AND (cs.notifications_sent IS NULL OR cs.notifications_sent NOT LIKE '%pre_check_in%')
+          AND (u.is_demo IS NULL OR u.is_demo = 0)
+          AND (cu.is_demo IS NULL OR cu.is_demo = 0)
+      `).all(dateRangeStart, dateRangeEnd);
+
+      for (const s of checkInCandidates) {
+        if (!s.scheduled_time) continue;
+        const tz = s.care_timezone || 'America/New_York';
+        const careNow = getNowInZone(tz);
+        const sessionStart = buildDateTimeInZone(s.scheduled_date, s.scheduled_time, tz);
+        const reminderTime = new Date(sessionStart.getTime() - REMINDER_WINDOW_MINUTES * 60000);
+        // Send if we're within the notification window (up to session start)
+        if (careNow >= reminderTime && careNow <= sessionStart) {
+          await sendSessionReminders(s.id, "pre_check_in");
+        }
+      }
+
+      // ─── Arrival SMS reminders for care recipients (2hr, 1hr, 30min) ───
+      // Sends friendly countdown texts to the care recipient's phone before each visit
+      const { sendArrivalSms } = require("./routes/push");
+      const arrivalCandidates = await pollDb.prepare(`
+        SELECT cs.id, cs.scheduled_date, cs.scheduled_time, cs.notifications_sent,
+          cr.timezone AS care_timezone, cr.notification_channel, cr.sms_phone,
+          ${smsConsentedSql("cr")} AS sms_consented,
+          cr.sms_reminder_intervals, cr.first_name AS recipient_first_name,
+          cp.user_id AS caregiver_user_id
+        FROM care_sessions cs
+        LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
+        LEFT JOIN users u ON cs.family_user_id = u.id
+        LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+        LEFT JOIN users cu ON cp.user_id = cu.id
+        WHERE cs.status = 'confirmed'
+          AND cs.scheduled_date BETWEEN ? AND ?
+          AND (u.is_demo IS NULL OR u.is_demo = 0)
+          AND (cu.is_demo IS NULL OR cu.is_demo = 0)
+      `).all(dateRangeStart, dateRangeEnd);
+
+      for (const s of arrivalCandidates) {
+        if (!s.scheduled_time || !s.sms_phone || !s.sms_consented) continue; // v1.114.5 — no texts without recorded consent
+        // Only send if channel includes SMS
+        const channel = s.notification_channel || "push";
+        if (!["sms", "both"].includes(channel)) continue;
+
+        const tz = s.care_timezone || 'America/New_York';
+        const careNow = getNowInZone(tz);
+        const sessionStart = buildDateTimeInZone(s.scheduled_date, s.scheduled_time, tz);
+        const minutesUntil = (sessionStart - careNow) / 60000;
+
+        // Parse enabled intervals (default: all three)
+        let intervals;
+        try { intervals = JSON.parse(s.sms_reminder_intervals || '[120, 60, 30]'); } catch { intervals = [120, 60, 30]; }
+        if (!Array.isArray(intervals) || intervals.length === 0) continue;
+
+        const sent = s.notifications_sent || '';
+        for (const mins of intervals) {
+          const tag = `arrival_sms_${mins}`;
+          if (sent.includes(tag)) continue; // already sent this tier
+          // Send when we're within the window: (mins) to (mins - 2) minutes before
+          // The 2-min buffer accounts for the 60s poll interval
+          if (minutesUntil <= mins && minutesUntil > (mins - 2)) {
+            await sendArrivalSms(s, mins);
+          }
+        }
+      }
+
+      // ─── Pre-check-out reminders ───
+      // Find in_progress sessions that haven't had pre_check_out notification
+      const checkOutCandidates = await pollDb.prepare(`
+        SELECT cs.id, cs.scheduled_date, cs.scheduled_time, cs.duration_hours, cs.notifications_sent,
+          cr.timezone AS care_timezone
+        FROM care_sessions cs
+        LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
+        LEFT JOIN users u ON cs.family_user_id = u.id
+        LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+        LEFT JOIN users cu ON cp.user_id = cu.id
+        WHERE cs.status = 'in_progress'
+          AND cs.scheduled_date BETWEEN ? AND ?
+          AND (cs.notifications_sent IS NULL OR cs.notifications_sent NOT LIKE '%pre_check_out%')
+          AND (u.is_demo IS NULL OR u.is_demo = 0)
+          AND (cu.is_demo IS NULL OR cu.is_demo = 0)
+      `).all(dateRangeStart, dateRangeEnd);
+
+      for (const s of checkOutCandidates) {
+        if (!s.scheduled_time || !s.duration_hours) continue;
+        const tz = s.care_timezone || 'America/New_York';
+        const careNow = getNowInZone(tz);
+        const sessionStart = buildDateTimeInZone(s.scheduled_date, s.scheduled_time, tz);
+        const sessionEnd = new Date(sessionStart.getTime() + s.duration_hours * 60 * 60000);
+        const reminderTime = new Date(sessionEnd.getTime() - REMINDER_WINDOW_MINUTES * 60000);
+        // Send if we're within the check-out notification window
+        if (careNow >= reminderTime && careNow <= sessionEnd) {
+          await sendSessionReminders(s.id, "pre_check_out");
+        }
+      }
+
+      // ─── Overdue check-in alerts ───
+      // Confirmed sessions where start time + grace period has passed but caregiver hasn't checked in
+      const overdueCandidates = await pollDb.prepare(`
+        SELECT cs.id, cs.scheduled_date, cs.scheduled_time, cs.notifications_sent,
+          cr.timezone AS care_timezone
+        FROM care_sessions cs
+        LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
+        LEFT JOIN users u ON cs.family_user_id = u.id
+        LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+        LEFT JOIN users cu ON cp.user_id = cu.id
+        WHERE cs.status = 'confirmed'
+          AND cs.scheduled_date BETWEEN ? AND ?
+          AND (cs.notifications_sent IS NULL OR cs.notifications_sent NOT LIKE '%overdue_check_in%')
+          AND (u.is_demo IS NULL OR u.is_demo = 0)
+          AND (cu.is_demo IS NULL OR cu.is_demo = 0)
+      `).all(dateRangeStart, dateRangeEnd);
+
+      for (const s of overdueCandidates) {
+        if (!s.scheduled_time) continue;
+        const tz = s.care_timezone || 'America/New_York';
+        const careNow = getNowInZone(tz);
+        const sessionStart = buildDateTimeInZone(s.scheduled_date, s.scheduled_time, tz);
+        const overdueTime = new Date(sessionStart.getTime() + OVERDUE_GRACE_MINUTES * 60000);
+        const maxWindow = new Date(sessionStart.getTime() + MAX_OVERDUE_WINDOW * 60000);
+        // Send if we're past grace period but within the overdue window
+        if (careNow >= overdueTime && careNow <= maxWindow) {
+          await sendSessionReminders(s.id, "overdue_check_in");
+        }
+      }
+      // ─── Overdue check-out alerts ───
+      // In-progress sessions past their scheduled end time where caregiver hasn't checked out
+      const checkOutOverdueCandidates = await pollDb.prepare(`
+        SELECT cs.id, cs.scheduled_date, cs.scheduled_time, cs.duration_hours, cs.notifications_sent,
+          cr.timezone AS care_timezone
+        FROM care_sessions cs
+        LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
+        LEFT JOIN users u ON cs.family_user_id = u.id
+        LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+        LEFT JOIN users cu ON cp.user_id = cu.id
+        WHERE cs.status = 'in_progress'
+          AND cs.scheduled_date BETWEEN ? AND ?
+          AND (cs.notifications_sent IS NULL OR cs.notifications_sent NOT LIKE '%overdue_check_out%')
+          AND (u.is_demo IS NULL OR u.is_demo = 0)
+          AND (cu.is_demo IS NULL OR cu.is_demo = 0)
+      `).all(dateRangeStart, dateRangeEnd);
+
+      for (const s of checkOutOverdueCandidates) {
+        if (!s.scheduled_time || !s.duration_hours) continue;
+        const tz = s.care_timezone || 'America/New_York';
+        const careNow = getNowInZone(tz);
+        const sessionStart = buildDateTimeInZone(s.scheduled_date, s.scheduled_time, tz);
+        const sessionEnd = new Date(sessionStart.getTime() + s.duration_hours * 60 * 60000);
+        const overdueTime = new Date(sessionEnd.getTime() + REMINDER_WINDOW_MINUTES * 60000);
+        const maxOverdueWindow = new Date(sessionEnd.getTime() + MAX_OVERDUE_WINDOW * 60000);
+        // Send if 15 min past scheduled end but within 2h overdue window
+        if (careNow >= overdueTime && careNow <= maxOverdueWindow) {
+          await sendSessionReminders(s.id, "overdue_check_out");
+        }
+      }
+
+      // ─── Interview reminders (48h, 24h, 2h before session) ───
+      try {
+        const pendingInterviews = await pollDb.prepare(`
+          SELECT i.id, i.session_id, i.requested_by, i.requested_of,
+            i.reminder_48h_sent, i.reminder_24h_sent, i.reminder_2h_sent,
+            cs.scheduled_date, cs.scheduled_time, cs.care_recipient_id,
+            cr.timezone AS care_timezone
+          FROM interviews i
+          JOIN care_sessions cs ON i.session_id = cs.id
+          LEFT JOIN care_recipients cr ON cs.care_recipient_id = cr.id
+          LEFT JOIN users u ON cs.family_user_id = u.id
+          LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+          LEFT JOIN users cu ON cp.user_id = cu.id
+          WHERE i.status IN ('pending', 'accepted')
+            AND cs.status = 'confirmed'
+            AND (u.is_demo IS NULL OR u.is_demo = 0)
+            AND (cu.is_demo IS NULL OR cu.is_demo = 0)
+        `).all();
+
+        for (const iv of pendingInterviews) {
+          if (!iv.scheduled_date || !iv.scheduled_time) continue;
+          const ivTz = iv.care_timezone || 'America/New_York';
+          const ivNow = getNowInZone(ivTz);
+          const sessionStart = buildDateTimeInZone(iv.scheduled_date, iv.scheduled_time, ivTz);
+          const hoursUntil = (sessionStart - ivNow) / (60 * 60000);
+
+          // 48-hour reminder
+          if (hoursUntil <= 48 && hoursUntil > 24 && !iv.reminder_48h_sent) {
+            const { sendPushToUser: pushFn } = require("./routes/push");
+            for (const uid of [iv.requested_by, iv.requested_of]) {
+              pushFn(uid, { title: 'Interview reminder', body: `Your interview for the appointment on ${iv.scheduled_date} is coming up. Coordinate a time in chat.`, data: { type: 'interview_reminder', interviewId: iv.id, page: 'messages' } }, 'interview_reminder').catch(() => {});
+            }
+            await pollDb.prepare("UPDATE interviews SET reminder_48h_sent = 1 WHERE id = ?").run(iv.id);
+          }
+          // 24-hour reminder (also cancellation deadline)
+          if (hoursUntil <= 24 && hoursUntil > 2 && !iv.reminder_24h_sent) {
+            const { sendPushToUser: pushFn } = require("./routes/push");
+            for (const uid of [iv.requested_by, iv.requested_of]) {
+              pushFn(uid, { title: 'Interview — 24h deadline', body: `Last chance to cancel the interview without penalty. Appointment is on ${iv.scheduled_date}.`, data: { type: 'interview_reminder_24h', interviewId: iv.id, page: 'messages' } }, 'interview_reminder').catch(() => {});
+            }
+            await pollDb.prepare("UPDATE interviews SET reminder_24h_sent = 1 WHERE id = ?").run(iv.id);
+          }
+          // 2-hour final reminder
+          if (hoursUntil <= 2 && hoursUntil > 0 && !iv.reminder_2h_sent) {
+            const { sendPushToUser: pushFn } = require("./routes/push");
+            for (const uid of [iv.requested_by, iv.requested_of]) {
+              pushFn(uid, { title: 'Interview starting soon!', body: `The appointment is in 2 hours. If you haven't done the interview yet, connect now in chat.`, data: { type: 'interview_reminder_2h', interviewId: iv.id, page: 'messages' } }, 'interview_reminder').catch(() => {});
+            }
+            await pollDb.prepare("UPDATE interviews SET reminder_2h_sent = 1 WHERE id = ?").run(iv.id);
+          }
+        }
+      } catch (ivErr) {
+        // Don't crash — interview reminders are non-critical
+        reportPollerFailure("interview reminders", ivErr);
+      }
+    } catch (err) {
+      // Silent — don't crash server for notification polling failures
+      reportPollerFailure("notification poller", err);
+    }
+  }), NOTIFICATION_POLL_INTERVAL);
+  console.log(`  Session notification poller started (every ${NOTIFICATION_POLL_INTERVAL / 1000}s)`);
+
+  // ─── Session Accountability Poller ───
+  // Runs every 60s: payment authorizations (24hrs before), late check-ins, no-shows
+  const {
+    pollPaymentAuthorizations,
+    pollLateCheckIns,
+    pollCaregiverNoShows,
+    pollLateResolutionDefaults,
+    pollCancellationFees,
+    setEmitToUser: setAccountabilityEmit,
+  } = require("./routes/accountability");
+  setAccountabilityEmit(emitToUser);
+
+  setInterval(guardedPoller(103, async () => {
+    try {
+      await pollPaymentAuthorizations();
+      await pollLateCheckIns();
+      await pollCaregiverNoShows();
+      await pollLateResolutionDefaults();
+      await pollCancellationFees();
+    } catch (err) {
+      reportPollerFailure("accountability poller", err);
+    }
+  }), NOTIFICATION_POLL_INTERVAL);
+  console.log("  Accountability poller started (payment auth, late check-ins, no-shows)");
+
+  // ─── Reimbursement push digest sweeper (v1.98.15) ───
+  // Sends coalesced reimbursement pushes once their ~2-minute debounce window
+  // elapses, so approve + pay + confirm in one sitting become a single push.
+  const { sweepReimbursementDigests } = require("./services/reimbursementDigest");
+  setInterval(guardedPoller(104, async () => {
+    try {
+      await sweepReimbursementDigests();
+    } catch (err) {
+      reportPollerFailure("reimbursement digest sweeper", err);
+    }
+  }), 30 * 1000); // every 30s (window is 2 min)
+  console.log("  Reimbursement digest sweeper started (coalesces approve/pay/confirm pushes)");
+
+  // ─── Kindred Reminder Delivery Poller ───
+  // v1.105.50 — was ALSO lock key 104, the same key as the reimbursement digest sweeper
+  // directly above. Two unrelated pollers competing for one lock: whichever ticked first
+  // blocked the other, so Kindred reminders and reimbursement pushes were each silently
+  // skipping turns, and a hang in either killed both. Its own key now.
+  setInterval(guardedPoller(109, async () => {
+    try {
+      const now = new Date();
+      const fiveMinAgo = new Date(now.getTime() - 5 * 60000).toISOString();
+      const nowISO = now.toISOString();
+
+      // Find pending reminders whose scheduled_for is in the past (within 5 min window)
+      const dueReminders = await db.prepare(`
+        SELECT vr.*, cr.first_name AS recipient_name, cr.id AS recipient_id
+        FROM voice_reminders vr
+        LEFT JOIN care_recipients cr ON vr.care_recipient_id::text = cr.id
+        WHERE vr.status = 'pending'
+          AND vr.scheduled_for <= ?
+          AND vr.scheduled_for >= ?
+      `).all(nowISO, fiveMinAgo);
+
+      for (const reminder of dueReminders) {
+        // Mark as delivered
+        await db.prepare("UPDATE voice_reminders SET status = 'delivered', delivered_at = ? WHERE id = ?")
+          .run(nowISO, reminder.id);
+
+        // If recurring, schedule the next occurrence
+        if (reminder.recurrence && reminder.recurrence !== 'none') {
+          const recTime = reminder.recurrence_time || '09:00';
+          const recDays = (reminder.recurrence_days || 'mon,tue,wed,thu,fri,sat,sun').split(',');
+          const dayMap = { sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6 };
+          const reverseDayMap = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+
+          // Find next valid day
+          let nextDate = new Date(now);
+          nextDate.setDate(nextDate.getDate() + 1); // start from tomorrow
+          for (let attempt = 0; attempt < 8; attempt++) {
+            const dayName = reverseDayMap[nextDate.getDay()];
+            let validDay = false;
+            if (reminder.recurrence === 'daily') validDay = true;
+            else if (reminder.recurrence === 'weekdays') validDay = nextDate.getDay() >= 1 && nextDate.getDay() <= 5;
+            else if (reminder.recurrence === 'weekends') validDay = nextDate.getDay() === 0 || nextDate.getDay() === 6;
+            else if (reminder.recurrence === 'custom') validDay = recDays.includes(dayName);
+
+            if (validDay) break;
+            nextDate.setDate(nextDate.getDate() + 1);
+          }
+
+          const nextDateStr = nextDate.toISOString().split('T')[0];
+          const nextScheduledFor = `${nextDateStr}T${recTime}:00`;
+          const { v4: uuid } = require("uuid");
+          await db.prepare(`
+            INSERT INTO voice_reminders (id, care_recipient_id, message_text, scheduled_for, status, recurrence, recurrence_time, recurrence_days, label, source)
+            VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?)
+          `).run(uuid(), reminder.care_recipient_id, reminder.message_text, nextScheduledFor, reminder.recurrence, reminder.recurrence_time, reminder.recurrence_days, reminder.label, reminder.source || 'manual');
+        }
+
+        // Emit real-time event (family dashboard will show delivery status)
+        if (emitToUser) {
+          // Find the family user associated with this care recipient
+          try {
+            const family = await db.prepare("SELECT family_user_id FROM care_recipients WHERE id = ?::text").get(reminder.care_recipient_id);
+            if (family?.family_user_id) {
+              emitToUser(family.family_user_id, "reminder_delivered", {
+                reminderId: reminder.id,
+                recipientName: reminder.recipient_name,
+                message: reminder.message_text,
+              });
+            }
+          } catch (e) { captureException(e, { where: "reminders: emit reminder_delivered" }); }
+        }
+      }
+    } catch (err) {
+      if (err.message && !err.message.includes("no such table") && !err.message.includes("no such column")) {
+        console.error("  Kindred reminder poller error:", err.message);
+      }
+    }
+  }), 60000); // Check every minute
+  console.log("  Kindred reminder delivery poller started");
+
+  // ─── Auto-pay cron: charge overdue sessions ───
+  // Runs every 5 minutes. If a completed session's payment_due_at has passed and no payment
+  // exists, auto-charges the family's saved card. No tip (they missed the review window).
+  setInterval(guardedPoller(105, async () => {
+    try {
+      const paymentRouter = require("./routes/payments");
+      const { sendPushToUser } = require("./routes/push");
+      // 1) Auto-charge overdue sessions
+      if (paymentRouter.processOverduePayments) {
+        await paymentRouter.processOverduePayments(sendPushToUser);
+      }
+      // 2) Hold future sessions for families with unpaid balance (after auto-pay fails)
+      if (paymentRouter.holdSessionsForUnpaidFamilies) {
+        await paymentRouter.holdSessionsForUnpaidFamilies(sendPushToUser);
+      }
+    } catch (err) {
+      if (err.message && !err.message.includes("not configured")) {
+        console.error("  Auto-pay cron error:", err.message);
+      }
+    }
+  }), 5 * 60000); // Every 5 minutes
+  console.log("  Auto-pay cron started (checks every 5 min for overdue payments + session holds)");
+
+  // ─── Geocode backfill (v1.106.10, poller 111) ───
+  //
+  // Two blocks used to run on EVERY boot, unlocked, walking every row with NULL coordinates at
+  // one request per second to a free public API. On a deploy-heavy day that is the same rows
+  // geocoded again and again, and with two instances it is both of them doing it at once.
+  // Since v1.106.5 those lookups also hit the geocode cache, so the repeat work is now mostly
+  // free — but "mostly free work nobody asked for, on every restart" is still the shape.
+  //
+  // A poller instead: advisory-locked (one instance only), 5 minutes after boot so it is out
+  // of the way of the first requests, then hourly. It is self-terminating in the way that
+  // matters — once every row has coordinates it finds nothing and costs one indexed query.
+  //
+  // Capped per run so a large backlog is spread over hours rather than held in one tick, and
+  // the whole thing skips instantly when there is nothing to do.
+  {
+    const GEOCODE_BATCH = 25;
+    const runGeocodeBackfill = guardedPoller(111, async () => {
+      const { geocodeAddress, buildAddressString } = require("./utils/geocode");
+      const gdb = await getDb();
+      let done = 0;
+
+      const caregivers = await gdb.prepare(`
+        SELECT cp.user_id, cp.address_line1, cp.location_city, cp.location_state, cp.zip
+        FROM caregiver_profiles cp
+        WHERE cp.latitude IS NULL AND cp.longitude IS NULL
+          AND (cp.zip IS NOT NULL OR cp.location_city IS NOT NULL)
+        LIMIT ${GEOCODE_BATCH}
+      `).all();
+      for (const cg of caregivers) {
+        const addrStr = buildAddressString({ address: cg.address_line1, city: cg.location_city, state: cg.location_state, zip: cg.zip });
+        if (!addrStr) continue;
+        const geo = await geocodeAddress(addrStr);
+        if (geo) {
+          await gdb.prepare("UPDATE caregiver_profiles SET latitude = ?, longitude = ? WHERE user_id = ?").run(geo.lat, geo.lng, cg.user_id);
+          done++;
+        }
+      }
+
+      // v1.105.122 — the recipient half. Until then self-onboarding never geocoded at all, so
+      // EVERY care recipient who signed themselves up has NULL coordinates. A recipient with
+      // no point is missing from /caregivers/nearby, centres no map, and shows every caregiver
+      // a blank distance on the job.
+      const recipients = await gdb.prepare(`
+        SELECT id, location_address, location_city, location_state, location_zip
+        FROM care_recipients
+        WHERE latitude IS NULL AND longitude IS NULL
+          AND (location_zip IS NOT NULL OR location_city IS NOT NULL)
+        LIMIT ${GEOCODE_BATCH}
+      `).all();
+      for (const cr of recipients) {
+        const addrStr = buildAddressString({ address: cr.location_address, city: cr.location_city, state: cr.location_state, zip: cr.location_zip });
+        if (!addrStr) continue;
+        const geo = await geocodeAddress(addrStr);
+        if (geo) {
+          await gdb.prepare("UPDATE care_recipients SET latitude = ?, longitude = ? WHERE id = ?").run(geo.lat, geo.lng, cr.id);
+          done++;
+        }
+      }
+
+      if (done > 0) console.log(`  [geocode backfill] filled ${done} coordinate(s)`);
+    });
+    setTimeout(runGeocodeBackfill, 5 * 60 * 1000);
+    setInterval(runGeocodeBackfill, 60 * 60 * 1000);
+    console.log("  Geocode backfill poller started (hourly, cached, advisory-locked)");
+  }
+
+  // ─── One-time migration: merge Daniel Lee's duplicate Apple-relay account ───
+  // Apple "Hide My Email" created v7vx2xsc8z@privaterelay.appleid.com instead of linking to danbecklee@me.com
+  (async () => {
+    try {
+      const original = await db.prepare("SELECT id FROM users WHERE LOWER(email) = 'danbecklee@me.com' AND is_active = 1").get();
+      const duplicate = await db.prepare("SELECT id FROM users WHERE LOWER(email) = 'v7vx2xsc8z@privaterelay.appleid.com'").get();
+      if (original && duplicate && original.id !== duplicate.id) {
+        // Move Apple OAuth link from duplicate → original
+        await db.prepare("UPDATE oauth_accounts SET user_id = ? WHERE user_id = ? AND provider = 'apple'").run(original.id, duplicate.id);
+        // Soft-delete the duplicate
+        await db.prepare("UPDATE users SET is_active = 0 WHERE id = ?").run(duplicate.id);
+        console.log(`  [Migration] Merged Apple OAuth from duplicate ${duplicate.id} → original ${original.id} (danbecklee@me.com). Duplicate soft-deleted.`);
+      }
+    } catch (e) { console.log("  [Migration] Daniel merge skipped:", e.message); }
+  })();
+
+  // ─── Recurring reimbursements: generate due occurrences (v1.74.0) ───
+  // Hourly + once shortly after boot. Generation is transactional with an
+  // optimistic lock on next_run_date, so restarts/overlaps can't double-generate.
+  setTimeout(guardedPoller(106, () => reimbursementsRouter.generateRecurringReimbursements()), 90 * 1000);
+  setInterval(guardedPoller(106, () => reimbursementsRouter.generateRecurringReimbursements()), 60 * 60 * 1000);
+  // v1.120.1 — poller 115: remind the payer until an approved reimbursement is paid. Hourly; the
+  // cadence and the 9 AM–7 PM window live in utils/reimbursementReminders.js. Offset from 106 so
+  // the two never ask the pool for connections in the same second.
+  {
+    const runPayReminders = guardedPoller(115, async () => {
+      const { sendUnpaidReimbursementReminders } = require("./utils/reimbursementReminders");
+      const { sendPushToUser: pushFn } = require("./routes/push");
+      const n = await sendUnpaidReimbursementReminders(await getDb(), pushFn);
+      if (n > 0) console.log(`  [reimbursement reminders] sent ${n}`);
+    });
+    // Starts 7 minutes after boot and stays 7 minutes off the hour-from-boot ticks the other
+    // hourly pollers share (Sentry INPLACE-13/14/15: they queue for the pool in one second).
+    setTimeout(() => { runPayReminders(); setInterval(runPayReminders, 60 * 60 * 1000); }, 7 * 60 * 1000);
+    console.log("  Unpaid reimbursement reminder poller started (hourly)");
+  }
+
+  // ─── Care Tasks poller (v1.99.0) ───
+  // Every 60s: materialize today's occurrences, push the assignee at due
+  // time, escalate to the whole care team after the task's grace window,
+  // and roll yesterday's still-pending occurrences to 'missed'. A missed
+  // dose must never fail silently. Timezone-aware per recipient, same
+  // pattern as the session reminder poller above.
+  {
+    const { sendPushToUser: careTaskPush } = require("./routes/push");
+    setInterval(guardedPoller(107, async () => {
+      try {
+        await careTasksRouter.pollCareTasks(careTaskPush);
+      } catch (err) {
+        reportPollerFailure("care tasks poller", err);
+      }
+    }), 60 * 1000);
+    console.log("  Care tasks poller started (materialize, remind, escalate, missed)");
+  }
+
+  // ─── Care Events poller (v1.100.0) ───
+  // Every 60s: family-only day-before + same-day reminder pushes for
+  // upcoming events (appointments, visits, outings). Events are awareness,
+  // not obligations — no escalation, nothing goes "missed".
+  {
+    const { sendPushToUser: careEventPush } = require("./routes/push");
+    setInterval(guardedPoller(108, async () => {
+      try {
+        await careEventsRouter.pollCareEvents(careEventPush);
+      } catch (err) {
+        reportPollerFailure("care events poller", err);
+      }
+    }), 60 * 1000);
+    console.log("  Care events poller started (day-before + same-day notices, family-only)");
+  }
+
+  // ─── Retention (v1.106.9, poller 110) ───
+  //
+  // Five tables that nothing ever deleted from. Windows are Pete's decision and live in
+  // src/utils/retention.js beside the reasoning; the care record is deliberately not among
+  // them. Daily rather than monthly: a daily run deletes a day's worth and is invisible,
+  // whereas a monthly one deletes a month's worth in one go and is a lock nobody expected.
+  //
+  // 30 seconds after boot, then every 24 hours. The delay keeps it out of the way of the
+  // first requests after a deploy, which is when the app is slowest anyway.
+  {
+    const { applyRetention } = require("./utils/retention");
+    const runRetention = guardedPoller(110, async () => {
+      const db = await getDb();
+      const results = await applyRetention(db);
+      const moved = results.filter((r) => r.deleted > 0 || r.error);
+      if (moved.length) {
+        for (const r of moved) {
+          if (r.error) {
+            console.error(`  [retention] ${r.table}: ${r.error}`);
+            captureException(new Error(`retention ${r.table}: ${r.error}`), { where: "poller: retention" });
+          } else {
+            console.log(`  [retention] ${r.table}: deleted ${r.deleted} row(s) older than ${r.days}d${r.hitCeiling ? " (hit the per-run ceiling — will continue tomorrow)" : ""}`);
+          }
+        }
+      }
+    });
+    setTimeout(runRetention, 30 * 1000);
+    setInterval(runRetention, 24 * 60 * 60 * 1000);
+    console.log("  Retention poller started (audit 180d, admin audit 365d, notifications 60d, activity 60d, onboarding events 30d)");
+  }
+
+  // ─── v1.106.13 — poller 112: proposals that nobody answered ───
+  //
+  // expireStaleProposals was only ever called from two places in dashboard.js, both passing
+  // (db, null, null). So it ran only when a family happened to load their dashboard, and its
+  // notification arguments were dead on both paths — an expiring proposal could never tell
+  // the person who made it.
+  //
+  // That was tolerable when the only thing it swept was time_proposals, where an expiry means
+  // "the job is back in the open pool" and the caregiver finds out by looking. It is not
+  // tolerable for time_change_proposals: the person waiting is waiting on a visit that is
+  // still on the calendar, and the pointer that unblocks the session is cleared here.
+  //
+  // Every ten minutes, with the real emit and push functions, so the sweep does not depend on
+  // whose browser happens to be open. The dashboard calls stay as an opportunistic sweep.
+  {
+    const runProposalSweep = guardedPoller(112, async () => {
+      const { expireStaleProposals } = require("./utils/proposals");
+      // sendPushToUser is not a module-level binding in this file — every other poller
+      // requires it locally, and so does this one.
+      const { sendPushToUser: pushFn } = require("./routes/push");
+      const db = await getDb();
+      const n = await expireStaleProposals(db, emitToUser, pushFn);
+      if (n > 0) console.log(`  [proposals] expired ${n} unanswered proposal(s)`);
+    });
+    setTimeout(runProposalSweep, 90 * 1000);
+    setInterval(runProposalSweep, 10 * 60 * 1000);
+    console.log("  Proposal expiry poller started (time offers + time changes, every 10m)");
+  }
+
+  // ─── The settled-in question (v1.106.48) ───
+  //
+  // Pete: "There needs to be a mechanism to have the caregiver leave feedback on found
+  // condition 15 minutes after start... A trigger 15 minutes later to ask them to return to
+  // check-in would be ideal."
+  //
+  // Every minute, because the window it is looking for opens on a per-visit clock and a
+  // fifteen-minute question asked at twenty-two is a worse question. Its own lock key, 113:
+  // v1.105.50 had two unrelated pollers on key 104, each silently skipping turns whenever the
+  // other ticked first.
+  //
+  // The prompt is marked sent whether or not the push lands. A caregiver whose phone is off
+  // must not be asked sixty times when she turns it on, and her own screen keeps offering the
+  // question regardless — see conditionReadDue, which is a different question on purpose.
+  {
+    const runConditionPrompts = guardedPoller(113, async () => {
+      const { visitsDueConditionRead, SETTLED_MINUTES } = require("./utils/settledCheck");
+      const { sendPushToUser: pushFn } = require("./routes/push");
+      const db = await getDb();
+      const due = await visitsDueConditionRead(db);
+      for (const v of due) {
+        await db.prepare(
+          "UPDATE visit_logs SET condition_prompt_sent_at = NOW() WHERE id = ? AND condition_prompt_sent_at IS NULL"
+        ).run(v.visit_log_id);
+        if (!v.caregiver_user_id) continue;
+        try {
+          await pushFn(v.caregiver_user_id, {
+            title: v.recipient_first_name ? `How is ${v.recipient_first_name} today?` : "How are they today?",
+            // No condition in the body — it is a question, and the answer is the PHI.
+            body: `You've been there ${SETTLED_MINUTES} minutes. Tap to record how you found ${v.recipient_first_name || "them"}.`,
+            data: { type: "condition_read", sessionId: v.session_id, page: "dashboard" },
+          }, "condition_read");
+        } catch (e) {
+          reportPollerFailure("settled-in condition prompt", e);
+        }
+      }
+      if (due.length > 0) console.log(`  [condition] asked ${due.length} caregiver(s) how they found things`);
+    });
+    setTimeout(runConditionPrompts, 45 * 1000);
+    setInterval(runConditionPrompts, 60 * 1000);
+    console.log("  Settled-in condition poller started (asks 15m after check-in, every 60s)");
+  }
+
+  // ─── Quiet hours summary (v1.107.3, poller 114) ───
+  //
+  // Pushes held during someone's quiet hours are counted in quiet_hours_held. Once their
+  // window ends, one "While you were away" push goes out and the count is cleared. Every five
+  // minutes: a summary a few minutes after 7:00 is fine; a second one is not, which is what the
+  // count-matched delete in utils/quietHours prevents.
+  {
+    const runQuietSummaries = guardedPoller(114, async () => {
+      const { sendQuietHourSummaries } = require("./utils/quietHours");
+      const { sendPushToUser: pushFn } = require("./routes/push");
+      const db = await getDb();
+      const n = await sendQuietHourSummaries(db, pushFn);
+      if (n > 0) console.log(`  [quiet-hours] sent ${n} summary push(es)`);
+    });
+    setTimeout(runQuietSummaries, 60 * 1000);
+    setInterval(runQuietSummaries, 5 * 60 * 1000);
+    console.log("  Quiet hours summary poller started (every 5m)");
+  }
+
+  // ─── Visit mileage: charge what is owed once the visit itself is paid (v1.126.1, poller 116) ───
+  //
+  // Check-out charges mileage right after the visit's capture. This catches the rest: a visit
+  // whose capture failed and was paid later by the auto-pay sweep, an approved extra whose
+  // charge failed, a Stripe hiccup. utils/mileage.js stops after five attempts and reports.
+  {
+    const runMileageSweep = guardedPoller(116, async () => {
+      const { sweepOwed } = require("./utils/mileage");
+      const db = await getDb();
+      const n = await sweepOwed(db);
+      if (n > 0) console.log(`  [mileage] charged mileage on ${n} visit(s)`);
+    });
+    setTimeout(runMileageSweep, 90 * 1000);
+    setInterval(runMileageSweep, 5 * 60 * 1000);
+    console.log("  Mileage settlement poller started (every 5m)");
+  }
+
+  // v1.105.50 — bound the inbound side too. Node's defaults leave `server.timeout` at 0,
+  // so a handler that never responds holds its socket, its worker slot and any pool client
+  // it took, indefinitely, logging nothing. That is the same shape as the client-side hang
+  // Pete hit, seen from the other end.
+  server.headersTimeout = 20000;   // headers only — nothing legitimate is slow here
+  // Generous on purpose: this bounds RECEIVING the whole request, and a caregiver
+  // uploading an ID photo or a receipt over weak cellular legitimately needs minutes.
+  // Cutting that to something tidy would trade one silent failure for another.
+  server.requestTimeout = 180000;
+  server.keepAliveTimeout = 65000;
+
+  server.listen(PORT, "0.0.0.0", () => {
+    console.log(`\n  InPlace v${APP_VERSION} running on port ${PORT}\n`);
+    // v1.124.9 — the runtime version goes in the deploy log, not /api/health: knowing whether a
+    // server is unpatched is exactly what an attacker wants, and Railway's logs are enough for us.
+    console.log(`  Node ${process.version}`);
+    console.log(`  WebSocket server ready`);
+    const { isSmsConfigured } = require("./utils/sms");
+    console.log(`  SMS notifications: ${isSmsConfigured() ? "Twilio configured ✓" : "Twilio not configured (SMS reminders will be skipped)"}`);
+    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET || process.env.stripe_webhook_secret || "";
+    const baseUrl = process.env.BASE_URL || process.env.base_url || "https://yourinplace.com";
+    console.log(`  Stripe webhook: ${baseUrl}/api/payments/webhook ${webhookSecret ? "(secret configured ✓)" : "⚠️  NO WEBHOOK SECRET — configure STRIPE_WEBHOOK_SECRET in Railway"}`);
+
+    // ─── Startup diagnostic: list ALL Stripe webhook endpoints ───
+    (async () => {
+      try {
+        const stripeKey = process.env.STRIPE_SECRET_KEY || process.env.stripe_secret_key;
+        if (stripeKey) {
+          const stripe = require("stripe")(stripeKey);
+          const endpoints = await stripe.webhookEndpoints.list({ limit: 20 });
+          console.log(`\n  🔍 Stripe webhook endpoints found: ${endpoints.data.length}`);
+          for (const ep of endpoints.data) {
+            console.log(`    → ${ep.id} | ${ep.url} | status: ${ep.status} | events: ${(ep.enabled_events || []).length}`);
+          }
+          if (endpoints.data.length > 1) {
+            console.warn(`  ⚠️  MULTIPLE webhook endpoints detected — this causes duplicate events and signature mismatches!`);
+          }
+        }
+      } catch (diagErr) {
+        console.log(`  (webhook endpoint check skipped: ${diagErr.message})`);
+      }
+    })();
+  });
+}
+
+// Only auto-start when run directly (not when imported by tests)
+if (require.main === module) {
+  start().catch(console.error);
+}
+
+module.exports = app;

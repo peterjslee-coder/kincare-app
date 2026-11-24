@@ -1,0 +1,103 @@
+// ─── Trusted Admin IP Management ───
+// Tracks which IPs are verified as belonging to admin users.
+// IPs get added on successful login/passkey auth for admin accounts.
+// Unknown IPs trigger a passkey re-verification challenge.
+
+const { getDb } = require("../models/database");
+const { ipTrustKey } = require("./ipTrustKey");
+
+/**
+ * Register an IP as trusted for an admin user.
+ * Uses UPSERT so repeated logins just update last_seen_at.
+ */
+async function registerTrustedIp(userId, ipAddress, { userAgent, verifiedVia = "login", label } = {}) {
+  try {
+    const db = await getDb();
+    // Check if user is admin
+    // v1.106.4 — this checked `role === "admin"`. Admin-ness lives in users.is_admin and the
+    // two are independent: Pete is role "family" AND is_admin. So this returned false for every
+    // real admin, trusted_admin_ips stayed permanently empty, and the "empty table means first
+    // boot" bootstrap in routes/admin/index.js auto-trusted every request forever. The IP gate
+    // has never once run.
+    const user = await db.prepare("SELECT is_admin FROM users WHERE id = ?").get(userId);
+    if (!user || !user.is_admin) return false;
+
+    // v1.106.21 — ip_address stays as the exact address that registered the trust, because it
+    // is what the admin panel shows and what an audit needs. trust_key is what is MATCHED, and
+    // for IPv6 that is the /64: see utils/ipTrustKey for why an exact match locks admins out on
+    // a schedule.
+    await db.prepare(`
+      INSERT INTO trusted_admin_ips (user_id, ip_address, trust_key, user_agent, label, verified_via, last_seen_at, expires_at)
+      VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW() + INTERVAL '90 days')
+      ON CONFLICT (user_id, ip_address)
+      DO UPDATE SET last_seen_at = NOW(), expires_at = NOW() + INTERVAL '90 days',
+        trust_key = EXCLUDED.trust_key,
+        user_agent = COALESCE(EXCLUDED.user_agent, trusted_admin_ips.user_agent),
+        verified_via = EXCLUDED.verified_via
+    `).run(userId, ipAddress, ipTrustKey(ipAddress), userAgent || null, label || null, verifiedVia);
+
+    return true;
+  } catch (err) {
+    console.error("registerTrustedIp error:", err.message);
+    return false;
+  }
+}
+
+/**
+ * Check if an IP is trusted for a given admin user.
+ * Returns the trust record if found and not expired, null otherwise.
+ */
+async function isTrustedIp(userId, ipAddress) {
+  try {
+    const db = await getDb();
+    // Match the network, not the rotating host part. The ip_address fallback keeps rows that
+    // predate the column working until the migration backfills them.
+    const key = ipTrustKey(ipAddress);
+    const row = await db.prepare(`
+      SELECT * FROM trusted_admin_ips
+      WHERE user_id = ?
+        AND (trust_key = ? OR (trust_key IS NULL AND ip_address = ?))
+        AND expires_at > NOW()
+    `).get(userId, key, ipAddress);
+    return row || null;
+  } catch (err) {
+    console.error("isTrustedIp error:", err.message);
+    return null;
+  }
+}
+
+/**
+ * Get all trusted IPs for a user (for admin panel display).
+ */
+async function getTrustedIps(userId) {
+  try {
+    const db = await getDb();
+    return await db.prepare(`
+      SELECT id, ip_address, user_agent, label, verified_via, created_at, last_seen_at, expires_at
+      FROM trusted_admin_ips
+      WHERE user_id = ? AND expires_at > NOW()
+      ORDER BY last_seen_at DESC
+    `).all(userId);
+  } catch (err) {
+    console.error("getTrustedIps error:", err.message);
+    return [];
+  }
+}
+
+/**
+ * Remove a trusted IP (manual revocation).
+ */
+async function removeTrustedIp(userId, ipId) {
+  try {
+    const db = await getDb();
+    const result = await db.prepare(
+      "DELETE FROM trusted_admin_ips WHERE id = ? AND user_id = ?"
+    ).run(ipId, userId);
+    return result.changes > 0;
+  } catch (err) {
+    console.error("removeTrustedIp error:", err.message);
+    return false;
+  }
+}
+
+module.exports = { registerTrustedIp, isTrustedIp, getTrustedIps, removeTrustedIp };

@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "330946357249",
+    "project_id": "inplace-care",
+    "storage_bucket": "inplace-care.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:330946357249:android:e09ec41ef78f3a9979b800",
+        "android_client_info": {
+          "package_name": "com.yourinplace.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAFLQOe1-YL-fhNZPvECGDQ2qsNcjxS9ME"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

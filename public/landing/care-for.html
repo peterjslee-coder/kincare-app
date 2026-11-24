@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<title>InPlace — help at home</title>
+<meta name="description" content="Get the help you need to stay at home — a friendly local helper you choose yourself.">
+<link rel="icon" href="/icons/icon-192.png">
+<!-- v1.119.0 — link landing page (Pete, 10/14: "not intended to be up front for the main page...
+     hidden"). Reached only from a personal or campaign link (/i/:code, routes/track.js). Not linked
+     from the site; noindex. One file per audience; copy approved on the "InPlace Link Landing Pages"
+     canvas. No third-party fonts or scripts: system fonts, and /js/journey.js for first-party visit
+     tracking (screen name "land-care-for"). -->
+<style>
+  :root { --ink:#24302c; --muted:#56635e; --teal:#1b6b5a; --teal-dark:#0f4238; --teal-tint:#e0f2e9;
+          --clay:#b8502b; --ground:#f8f6f1; --card:#ffffff; --line:#d9e3df; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--ground); color:var(--ink);
+         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+  main { max-width: 480px; margin: 0 auto; min-height: 100vh; display:flex; flex-direction:column;
+         padding-bottom: env(safe-area-inset-bottom); }
+  .brand { padding: 20px 24px; display:flex; align-items:center; gap:8px; font-weight:700; font-size:20px; color:var(--teal); text-decoration:none; }
+  .hero { padding: 24px 24px 32px; display:flex; flex-direction:column; gap:16px; }
+  .eyebrow { font-size:13px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--clay); }
+  h1 { margin:0; font-family: Georgia, "Times New Roman", serif; font-weight:600; font-size:34px; line-height:1.14; color:var(--teal-dark); }
+  .lede { margin:0; font-size:20px; line-height:1.55; color:#3d4a46; }
+  .points { margin:0 24px; padding:24px; background:var(--card); border-radius:16px; display:flex; flex-direction:column; gap:22px; list-style:none; }
+  .points li { display:flex; gap:14px; align-items:flex-start; }
+  .dot { flex:0 0 40px; height:40px; border-radius:20px; background:var(--teal-tint); display:flex; align-items:center; justify-content:center; }
+  .points strong { display:block; font-size:19px; margin-bottom:4px; }
+  .points span { font-size:17px; line-height:1.5; color:var(--muted); }
+  .cta { padding: 28px 24px 8px; display:flex; flex-direction:column; gap:12px; }
+  .btn { display:block; text-align:center; padding:17px 20px; border-radius:12px; font-weight:700; font-size:20px; text-decoration:none; min-height:48px; }
+  .btn.primary { background:var(--clay); color:#fff; }
+  .btn.primary:hover { background:#9c4123; }
+  .btn.secondary { border:2px solid var(--teal); color:var(--teal); background:transparent; }
+  .note { margin:0; text-align:center; font-size:17px; color:var(--muted); line-height:1.5; }
+  .note a { color:var(--teal); font-weight:700; }
+  .box { margin:24px 24px 0; padding:20px; border:1px solid var(--line); border-radius:14px; font-size:17px; line-height:1.55; color:#3d4a46; }
+  footer { margin-top:auto; padding:32px 24px 24px; font-size:13px; color:#6b7672; display:flex; gap:16px; flex-wrap:wrap; }
+  footer a { color:var(--muted); }
+  @media (prefers-color-scheme: dark) {
+    :root { --ink:#eef2f0; --muted:#b4c0bb; --teal:#7cc7b2; --teal-dark:#a8e0cf; --teal-tint:#1e3a32;
+            --clay:#e8724a; --ground:#121614; --card:#1b2220; --line:#2c3633; }
+    .lede, .box { color:#cdd6d2; }
+    .btn.primary { color:#1a0f0a; }
+    .btn.primary:hover { background:#f08a64; }
+  }
+</style>
+</head>
+<body>
+<main>
+<a class="brand" href="/" aria-label="InPlace home">
+<svg aria-hidden="true" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/><path d="M10 20v-5h4v5"/></svg>
+InPlace</a>
+<section class="hero">
+<div class="eyebrow">For older adults in the New River Valley</div>
+<h1>Do you want to learn how you can get the help you need to stay at home?</h1>
+<p class="lede">Not a nursing home. Not a nurse. Just a hand when you want one, from a friendly local helper you choose yourself.</p>
+</section>
+<ul class="points">
+<li><span class="dot" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--teal)"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/></svg></span><div><strong>Help that comes to you</strong><span>A ride to the doctor. Help with the garden or the heavy lifting. Someone to share a coffee with.</span></div></li>
+<li><span class="dot" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--teal)"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-8 8-8s8 3.6 8 8"/></svg></span><div><strong>You choose who comes, and when</strong><span>One flat price per visit, no meter running, no contracts. Every helper passes a background check first.</span></div></li>
+<li><span class="dot" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--teal)"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/></svg></span><div><strong>Your family worries less</strong><span>If you like, they can see when a helper arrives and how the visit went.</span></div></li>
+</ul>
+<div class="cta">
+<a class="btn primary" href="tel:+15408355987">Call us: (540) 835-5987</a>
+<a class="btn secondary" href="/register?role=care_for">Or sign up here</a>
+<p class="note">If no one picks up, leave a message and we'll call you back. A family member can set it up for you, too.</p>
+</div>
+<p class="box">You stay in your own home, on your own terms. We just help you find the people to make that easier.</p>
+<footer><a href="/privacy">Privacy</a><a href="/terms">Terms</a><span>Limited early access</span></footer>
+</main>
+<script src="/js/journey.js"></script>
+<script>try { window.InPlaceJourney && window.InPlaceJourney.page('land-care-for'); } catch (e) {}</script>
+</body>
+</html>

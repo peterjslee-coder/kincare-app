@@ -1,0 +1,732 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>InPlace — Check-In UX Improvement Mockup</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #111; color: #fff; }
+
+/* Mockup container — mobile viewport */
+.phone { width: 390px; height: 844px; margin: 20px auto; border-radius: 40px; overflow: hidden; position: relative; background: #0f1923; border: 3px solid #333; }
+.screen { width: 100%; height: 100%; overflow-y: auto; position: relative; }
+
+/* Annotation bar */
+.mockup-bar { position: fixed; top: 0; left: 0; right: 0; background: #1b6b5a; color: #fff; padding: 10px 16px; font-size: 13px; font-weight: 600; z-index: 9999; display: flex; align-items: center; justify-content: space-between; }
+.mockup-bar .label { opacity: 0.8; font-size: 11px; }
+.scenario-tabs { display: flex; gap: 6px; margin: 12px auto; max-width: 600px; padding: 0 16px; flex-wrap: wrap; justify-content: center; }
+.scenario-tab { padding: 8px 14px; border-radius: 20px; border: 2px solid #1b6b5a; background: transparent; color: #1b6b5a; font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.15s; }
+.scenario-tab.active { background: #1b6b5a; color: #fff; }
+.scenario-tab:hover { background: #e8f5e9; }
+.scenario-tab.active:hover { background: #24897a; }
+
+/* Annotation callouts */
+.callout { background: #eff6ff; border: 2px solid #3b82f6; border-radius: 10px; padding: 10px 14px; margin: 10px 16px; font-size: 12px; line-height: 1.5; color: #1e40af; }
+.callout strong { font-weight: 700; }
+.callout.new { background: #f0fdf4; border-color: #22c55e; color: #166534; }
+.callout.warn { background: #fef3c7; border-color: #f59e0b; color: #92400e; }
+.callout.problem { background: #fef2f2; border-color: #ef4444; color: #991b1b; }
+
+/* Layout */
+.header-bar { padding: 12px 16px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid rgba(255,255,255,0.08); }
+.header-bar .back { font-size: 22px; cursor: pointer; opacity: 0.7; }
+.header-bar h1 { font-size: 17px; font-weight: 600; }
+
+/* Session card on caregiver hub */
+.session-card { margin: 12px 16px; background: linear-gradient(135deg, #1a3a4a 0%, #1b4332 100%); border-radius: 16px; padding: 18px; border: 1px solid rgba(255,255,255,0.1); }
+.session-card .recipient { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+.session-card .avatar { width: 48px; height: 48px; border-radius: 50%; background: #2d6a4f; display: flex; align-items: center; justify-content: center; font-size: 22px; }
+.session-card .name { font-size: 17px; font-weight: 600; }
+.session-card .detail { font-size: 13px; color: rgba(255,255,255,0.6); margin-top: 2px; }
+.session-card .time-row { display: flex; align-items: center; gap: 8px; font-size: 14px; color: rgba(255,255,255,0.7); margin-bottom: 12px; }
+.session-card .time-row strong { color: #fff; }
+
+/* Status badge */
+.status-badge { display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; }
+.status-badge.confirmed { background: rgba(59, 130, 246, 0.2); color: #93c5fd; }
+.status-badge.in-progress { background: rgba(34, 197, 94, 0.2); color: #86efac; }
+
+/* ===== CHECK-IN BUTTON — THE KEY CHANGE ===== */
+.checkin-btn {
+  width: 100%;
+  padding: 18px;
+  border: none;
+  border-radius: 14px;
+  font-size: 17px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+  position: relative;
+  overflow: hidden;
+}
+.checkin-btn.ready {
+  background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+  color: #fff;
+  box-shadow: 0 4px 20px rgba(34, 197, 94, 0.4);
+  animation: pulse-glow 2s infinite;
+}
+.checkin-btn.ready:active { transform: scale(0.97); }
+
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 4px 20px rgba(34, 197, 94, 0.4); }
+  50% { box-shadow: 0 4px 30px rgba(34, 197, 94, 0.7); }
+}
+
+/* ===== FULL-SCREEN CHECK-IN FLOW (NEW) ===== */
+.checkin-flow {
+  position: absolute;
+  inset: 0;
+  background: #0f1923;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+}
+.checkin-flow.hidden { display: none; }
+
+/* Progress stepper — always visible at top */
+.stepper {
+  display: flex;
+  align-items: center;
+  padding: 16px 20px;
+  gap: 0;
+  background: rgba(0,0,0,0.3);
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+.step-dot {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 700;
+  flex-shrink: 0;
+  transition: all 0.3s;
+}
+.step-dot.pending { background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.3); }
+.step-dot.active { background: #1b6b5a; color: #fff; box-shadow: 0 0 12px rgba(27,107,90,0.5); }
+.step-dot.done { background: #22c55e; color: #fff; }
+.step-line { flex: 1; height: 2px; background: rgba(255,255,255,0.08); margin: 0 6px; }
+.step-line.done { background: #22c55e; }
+.step-label { font-size: 9px; color: rgba(255,255,255,0.4); text-align: center; margin-top: 4px; }
+.step-col { display: flex; flex-direction: column; align-items: center; }
+.step-col.active .step-label { color: #5eead4; font-weight: 600; }
+.step-col.done .step-label { color: #86efac; }
+
+/* Close button */
+.close-btn {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.08);
+  border: none;
+  color: rgba(255,255,255,0.5);
+  font-size: 18px;
+  cursor: pointer;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Step content area */
+.step-content { flex: 1; overflow-y: auto; padding: 20px 16px; }
+
+/* Briefing card */
+.briefing-section { margin-bottom: 16px; }
+.briefing-card { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 14px 16px; margin-bottom: 8px; }
+.briefing-card h3 { font-size: 14px; font-weight: 600; margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
+.briefing-card p { font-size: 13px; color: rgba(255,255,255,0.65); line-height: 1.5; }
+.briefing-card .tag { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 6px; font-size: 11px; font-weight: 600; margin-right: 6px; margin-bottom: 4px; }
+.tag.red { background: rgba(239,68,68,0.15); color: #fca5a5; }
+.tag.yellow { background: rgba(234,179,8,0.15); color: #fde047; }
+.tag.blue { background: rgba(59,130,246,0.15); color: #93c5fd; }
+
+/* ===== ACKNOWLEDGMENT — THE KEY IMPROVEMENT ===== */
+.ack-strip {
+  background: linear-gradient(135deg, rgba(27,107,90,0.15) 0%, rgba(34,197,94,0.1) 100%);
+  border: 2px solid rgba(27,107,90,0.3);
+  border-radius: 14px;
+  padding: 16px;
+  margin-top: 12px;
+  transition: all 0.3s;
+}
+.ack-strip.checked {
+  border-color: #22c55e;
+  background: linear-gradient(135deg, rgba(34,197,94,0.15) 0%, rgba(34,197,94,0.08) 100%);
+}
+.ack-label {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  font-size: 15px;
+  font-weight: 600;
+  color: #fff;
+}
+.ack-check {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  border: 2px solid rgba(255,255,255,0.25);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  flex-shrink: 0;
+  transition: all 0.2s;
+}
+.ack-strip.checked .ack-check {
+  background: #22c55e;
+  border-color: #22c55e;
+}
+
+/* Continue / final button */
+.flow-btn {
+  padding: 18px;
+  border: none;
+  border-radius: 14px;
+  font-size: 16px;
+  font-weight: 700;
+  width: 100%;
+  cursor: pointer;
+  transition: all 0.2s;
+  margin-top: 16px;
+}
+.flow-btn.primary {
+  background: linear-gradient(135deg, #1b6b5a 0%, #22c55e 100%);
+  color: #fff;
+}
+.flow-btn.disabled {
+  background: rgba(255,255,255,0.06);
+  color: rgba(255,255,255,0.2);
+  cursor: not-allowed;
+}
+/* NEW: shake + tooltip when tapping disabled button */
+.flow-btn.disabled.shake {
+  animation: shake 0.4s ease-in-out;
+}
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-6px); }
+  75% { transform: translateX(6px); }
+}
+.btn-hint {
+  text-align: center;
+  font-size: 12px;
+  color: #f59e0b;
+  margin-top: 8px;
+  opacity: 0;
+  transition: opacity 0.3s;
+  font-weight: 500;
+}
+.btn-hint.visible { opacity: 1; }
+
+/* Mood picker */
+.mood-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 16px 0; }
+.mood-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 14px 8px;
+  border-radius: 12px;
+  border: 2px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.03);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.mood-btn:hover { border-color: rgba(255,255,255,0.2); }
+.mood-btn.selected { border-color: #22c55e; background: rgba(34,197,94,0.1); }
+.mood-btn .emoji { font-size: 28px; }
+.mood-btn .mood-label { font-size: 10px; color: rgba(255,255,255,0.5); font-weight: 500; }
+.mood-btn.selected .mood-label { color: #86efac; }
+
+/* Location check */
+.location-row { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 10px; background: rgba(34,197,94,0.08); border: 1px solid rgba(34,197,94,0.2); margin-bottom: 16px; font-size: 13px; color: #86efac; }
+.location-row .icon { font-size: 18px; }
+
+/* Final check-in button */
+.final-checkin {
+  width: 100%;
+  padding: 22px;
+  border: none;
+  border-radius: 16px;
+  font-size: 20px;
+  font-weight: 800;
+  cursor: pointer;
+  background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+  color: #fff;
+  box-shadow: 0 6px 30px rgba(34, 197, 94, 0.5);
+  transition: all 0.15s;
+  letter-spacing: 0.5px;
+}
+.final-checkin:active { transform: scale(0.97); }
+
+/* ===== EXIT WARNING MODAL ===== */
+.exit-warn {
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0.7);
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+.exit-warn.hidden { display: none; }
+.exit-warn-card {
+  background: #1a2634;
+  border-radius: 20px;
+  padding: 28px 24px;
+  text-align: center;
+  border: 1px solid rgba(255,255,255,0.1);
+  max-width: 340px;
+}
+.exit-warn-card .icon { font-size: 48px; margin-bottom: 12px; }
+.exit-warn-card h3 { font-size: 18px; font-weight: 700; margin-bottom: 8px; }
+.exit-warn-card p { font-size: 14px; color: rgba(255,255,255,0.6); line-height: 1.5; margin-bottom: 20px; }
+.exit-warn-card .btn-row { display: flex; gap: 10px; }
+.exit-warn-card .btn-row button { flex: 1; padding: 14px; border-radius: 12px; font-size: 14px; font-weight: 700; cursor: pointer; border: none; }
+.exit-warn-card .btn-stay { background: #22c55e; color: #fff; }
+.exit-warn-card .btn-leave { background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.6); }
+
+/* ===== NOT-CHECKED-IN BANNER (if they do leave) ===== */
+.warning-banner {
+  margin: 12px 16px 0;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(239,68,68,0.15) 0%, rgba(234,179,8,0.1) 100%);
+  border: 1px solid rgba(239,68,68,0.3);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+}
+.warning-banner .icon { font-size: 24px; }
+.warning-banner .text { flex: 1; }
+.warning-banner .text strong { font-size: 14px; display: block; color: #fca5a5; }
+.warning-banner .text span { font-size: 12px; color: rgba(255,255,255,0.5); }
+.warning-banner .action { font-size: 13px; font-weight: 700; color: #22c55e; white-space: nowrap; }
+
+/* Timer badge */
+.timer-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  background: rgba(239,68,68,0.15);
+  color: #fca5a5;
+  animation: blink 2s infinite;
+}
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+/* Scenarios wrapper */
+.scenario { display: none; }
+.scenario.active { display: block; }
+
+/* Compare layout */
+.compare { display: flex; gap: 20px; max-width: 900px; margin: 0 auto; padding: 20px; }
+.compare .phone { margin: 0; flex-shrink: 0; }
+.compare-label { text-align: center; font-size: 13px; font-weight: 700; color: #1b6b5a; margin-bottom: 8px; padding: 6px 12px; background: rgba(27,107,90,0.1); border-radius: 8px; }
+
+/* Responsive */
+@media (max-width: 500px) {
+  .phone { width: 100%; height: auto; min-height: 100vh; border-radius: 0; border: none; margin: 0; }
+  .compare { flex-direction: column; }
+}
+</style>
+</head>
+<body style="background: #f5f5f5; color: #333;">
+
+<div class="mockup-bar">
+  <span>Check-In UX Improvement</span>
+  <span class="label">InPlace Mockup</span>
+</div>
+
+<div style="height: 42px;"></div>
+
+<div class="scenario-tabs" id="scenarioTabs">
+  <button class="scenario-tab active" data-s="current">Current (Problem)</button>
+  <button class="scenario-tab" data-s="improved-step1">New: Step 1 — Briefing</button>
+  <button class="scenario-tab" data-s="improved-step2">New: Step 2 — Check In</button>
+  <button class="scenario-tab" data-s="exit-warning">New: Exit Warning</button>
+  <button class="scenario-tab" data-s="incomplete-banner">New: Incomplete Banner</button>
+</div>
+
+<!-- ============================= -->
+<!-- SCENARIO: CURRENT (PROBLEM)   -->
+<!-- ============================= -->
+<div class="scenario active" id="s-current">
+  <div class="callout problem" style="max-width: 420px; margin: 12px auto;">
+    <strong>The Problem:</strong> Edwina tapped "I'm Here" and a modal appeared with a care briefing + checkbox. She didn't realize the checkbox was required — the "Continue" button was just greyed out with no explanation. She closed the modal thinking she'd checked in. The system still showed her as "confirmed" → the no-show poller flagged her 30 min later.
+  </div>
+  <div class="phone" style="height: 700px;">
+    <div class="screen" style="padding-top: 20px;">
+      <div class="header-bar">
+        <span class="back">‹</span>
+        <h1>Your Sessions</h1>
+      </div>
+
+      <div class="session-card">
+        <div class="recipient">
+          <div class="avatar">👵</div>
+          <div>
+            <div class="name">Betty Lee</div>
+            <div class="detail">Companionship · Fairlawn, VA</div>
+          </div>
+        </div>
+        <div class="time-row">🕐 <strong>2:00 PM – 5:00 PM</strong> · Today</div>
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px;">
+          <span class="status-badge confirmed">● Confirmed</span>
+        </div>
+
+        <div class="callout problem" style="margin: 0 0 14px 0; font-size: 11px;">
+          <strong>❌ Problem:</strong> This button opens a modal, but the caregiver expects it to check them in immediately.
+        </div>
+
+        <!-- This is what it looks like now -->
+        <button class="checkin-btn ready" style="font-size: 15px; padding: 14px;">
+          🏠 I'm Here — Check In
+        </button>
+      </div>
+
+      <!-- The modal that opens (simplified) -->
+      <div style="margin: 16px; padding: 20px; background: rgba(255,255,255,0.04); border-radius: 16px; border: 1px solid rgba(255,255,255,0.1);">
+        <h3 style="font-size: 15px; margin-bottom: 12px;">📋 Care Briefing</h3>
+        <p style="font-size: 13px; color: rgba(255,255,255,0.5); margin-bottom: 16px;">Health conditions, medications, allergies…</p>
+
+        <div class="callout problem" style="margin: 0 0 12px 0; font-size: 11px;">
+          <strong>❌ Problem:</strong> The checkbox is easy to miss and the disabled button gives ZERO feedback about why it won't work.
+        </div>
+
+        <div style="display: flex; align-items: center; gap: 10px; padding: 10px; border-radius: 8px; background: rgba(255,255,255,0.03); margin-bottom: 16px;">
+          <div style="width: 22px; height: 22px; border: 2px solid rgba(255,255,255,0.15); border-radius: 4px;"></div>
+          <span style="font-size: 13px; color: rgba(255,255,255,0.4);">I've reviewed this care briefing</span>
+        </div>
+
+        <button class="flow-btn disabled" style="font-size: 14px; padding: 14px;">
+          Continue to Check In →
+        </button>
+        <div style="text-align: center; font-size: 11px; color: rgba(255,255,255,0.2); margin-top: 6px;">
+          (No hint about WHY this is disabled)
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================= -->
+<!-- SCENARIO: IMPROVED STEP 1     -->
+<!-- ============================= -->
+<div class="scenario" id="s-improved-step1">
+  <div class="callout new" style="max-width: 420px; margin: 12px auto;">
+    <strong>Fix #1: Full-Screen Flow with Progress Stepper.</strong> Instead of a dismissable modal, checking in launches a full-screen flow with clear step indicators. The caregiver can see exactly where they are and what's left. The acknowledgment is bigger, more prominent, and the disabled button explains itself.
+  </div>
+  <div class="phone" style="height: 780px;">
+    <div class="screen">
+      <!-- Full-screen check-in flow -->
+      <div class="checkin-flow">
+        <!-- Stepper -->
+        <div class="stepper">
+          <div class="step-col active">
+            <div class="step-dot active">1</div>
+            <div class="step-label">Briefing</div>
+          </div>
+          <div class="step-line"></div>
+          <div class="step-col">
+            <div class="step-dot pending">2</div>
+            <div class="step-label">Check In</div>
+          </div>
+          <button class="close-btn" title="Close">✕</button>
+        </div>
+
+        <!-- Step 1: Briefing -->
+        <div class="step-content">
+          <h2 style="font-size: 20px; margin-bottom: 4px;">📋 Care Briefing</h2>
+          <p style="font-size: 13px; color: rgba(255,255,255,0.5); margin-bottom: 16px;">Review Betty's care info before checking in</p>
+
+          <div class="briefing-card">
+            <h3>🏥 Health Conditions</h3>
+            <p>
+              <span class="tag yellow">⚠️ Early stage dementia</span>
+            </p>
+            <p style="margin-top: 8px;">Betty may repeat questions or forget recent conversations. Be patient and redirect gently.</p>
+          </div>
+
+          <div class="briefing-card">
+            <h3>💊 Medications</h3>
+            <p>
+              <span class="tag blue">Donepezil 10mg</span>
+              <span class="tag blue">Vitamin D</span>
+            </p>
+            <p style="margin-top: 8px;">Evening medications — check pill organizer on kitchen counter.</p>
+          </div>
+
+          <div class="briefing-card">
+            <h3>🍽️ Food Allergies</h3>
+            <p>
+              <span class="tag red">🚫 Shellfish</span>
+              <span class="tag yellow">⚠️ Lactose sensitive</span>
+            </p>
+          </div>
+
+          <div class="briefing-card">
+            <h3>📝 Recent Care Notes</h3>
+            <p>Mar 28 — "Betty was in good spirits. Walked outside for 15 min. Ate well at lunch."</p>
+          </div>
+
+          <!-- THE KEY IMPROVEMENT: Bigger, clearer acknowledgment -->
+          <div class="callout new" style="font-size: 11px; margin: 12px 0 0 0;">
+            <strong>✅ Fix:</strong> Acknowledgment is now a prominent, full-width strip that's impossible to miss. If you tap "Continue" without checking it, the button shakes and shows a yellow hint explaining why.
+          </div>
+
+          <div class="ack-strip" id="ackStrip" onclick="toggleAck()">
+            <label class="ack-label">
+              <div class="ack-check" id="ackCheck"></div>
+              <span>I've reviewed Betty's care briefing</span>
+            </label>
+          </div>
+
+          <button class="flow-btn disabled" id="continueBtn" onclick="tapContinue()">
+            Continue to Check In →
+          </button>
+          <div class="btn-hint" id="btnHint">
+            ☝️ Please acknowledge the care briefing first
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================= -->
+<!-- SCENARIO: IMPROVED STEP 2     -->
+<!-- ============================= -->
+<div class="scenario" id="s-improved-step2">
+  <div class="callout new" style="max-width: 420px; margin: 12px auto;">
+    <strong>Fix #2: Step 2 is unmistakable.</strong> After completing the briefing, the stepper updates and the caregiver sees a big, satisfying "I'm Here ✓" button. No ambiguity — this is the moment that actually checks them in.
+  </div>
+  <div class="phone" style="height: 720px;">
+    <div class="screen">
+      <div class="checkin-flow">
+        <!-- Stepper — step 2 active -->
+        <div class="stepper">
+          <div class="step-col done">
+            <div class="step-dot done">✓</div>
+            <div class="step-label">Briefing</div>
+          </div>
+          <div class="step-line done"></div>
+          <div class="step-col active">
+            <div class="step-dot active">2</div>
+            <div class="step-label">Check In</div>
+          </div>
+        </div>
+
+        <div class="step-content">
+          <h2 style="font-size: 20px; margin-bottom: 4px;">Almost there!</h2>
+          <p style="font-size: 13px; color: rgba(255,255,255,0.5); margin-bottom: 20px;">How is Betty right now?</p>
+
+          <div class="mood-grid">
+            <div class="mood-btn selected">
+              <span class="emoji">😊</span>
+              <span class="mood-label">Happy</span>
+            </div>
+            <div class="mood-btn">
+              <span class="emoji">😮</span>
+              <span class="mood-label">Surprised</span>
+            </div>
+            <div class="mood-btn">
+              <span class="emoji">😴</span>
+              <span class="mood-label">Sleepy</span>
+            </div>
+            <div class="mood-btn">
+              <span class="emoji">😐</span>
+              <span class="mood-label">Neutral</span>
+            </div>
+            <div class="mood-btn">
+              <span class="emoji">🤗</span>
+              <span class="mood-label">Warm</span>
+            </div>
+            <div class="mood-btn">
+              <span class="emoji">😟</span>
+              <span class="mood-label">Worried</span>
+            </div>
+            <div class="mood-btn">
+              <span class="emoji">😢</span>
+              <span class="mood-label">Sad</span>
+            </div>
+            <div class="mood-btn">
+              <span class="emoji">😠</span>
+              <span class="mood-label">Upset</span>
+            </div>
+          </div>
+
+          <div class="location-row">
+            <span class="icon">📍</span>
+            <span>Location captured · Accuracy: 12m</span>
+          </div>
+
+          <div class="callout new" style="font-size: 11px; margin: 0 0 16px 0;">
+            <strong>✅ Fix:</strong> This is the only button that actually completes check-in. It's BIG, green, and unmissable. The session doesn't move to "in_progress" until THIS is tapped.
+          </div>
+
+          <button class="final-checkin">
+            I'm Here ✓
+          </button>
+          <p style="text-align: center; font-size: 11px; color: rgba(255,255,255,0.3); margin-top: 8px;">
+            This will start your session timer
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================= -->
+<!-- SCENARIO: EXIT WARNING        -->
+<!-- ============================= -->
+<div class="scenario" id="s-exit-warning">
+  <div class="callout warn" style="max-width: 420px; margin: 12px auto;">
+    <strong>Fix #3: Exit Warning.</strong> If the caregiver tries to close the check-in flow before completing it (taps ✕ or swipes back), they get a clear warning that they haven't actually checked in yet. This is what would have saved Edwina.
+  </div>
+  <div class="phone" style="height: 600px;">
+    <div class="screen">
+      <div class="checkin-flow" style="filter: blur(2px); opacity: 0.4;">
+        <div class="stepper">
+          <div class="step-col active">
+            <div class="step-dot active">1</div>
+            <div class="step-label">Briefing</div>
+          </div>
+          <div class="step-line"></div>
+          <div class="step-col">
+            <div class="step-dot pending">2</div>
+            <div class="step-label">Check In</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Warning overlay -->
+      <div class="exit-warn">
+        <div class="exit-warn-card">
+          <div class="icon">⚠️</div>
+          <h3>You Haven't Checked In Yet</h3>
+          <p>If you leave now, you won't be checked in and may be flagged as a no-show after 30 minutes.</p>
+          <div class="btn-row">
+            <button class="btn-leave">Leave Anyway</button>
+            <button class="btn-stay">Finish Check-In</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================= -->
+<!-- SCENARIO: INCOMPLETE BANNER   -->
+<!-- ============================= -->
+<div class="scenario" id="s-incomplete-banner">
+  <div class="callout warn" style="max-width: 420px; margin: 12px auto;">
+    <strong>Fix #4: Persistent Banner.</strong> If the caregiver DOES leave without completing check-in, they see a persistent red/orange banner on their dashboard reminding them to finish. Tapping it reopens the check-in flow right where they left off. The timer shows urgency (no-show in X minutes).
+  </div>
+  <div class="phone" style="height: 700px;">
+    <div class="screen" style="padding-top: 20px;">
+      <div class="header-bar">
+        <span class="back">‹</span>
+        <h1>Your Sessions</h1>
+      </div>
+
+      <!-- Persistent incomplete check-in banner -->
+      <div class="warning-banner">
+        <div class="icon">🚨</div>
+        <div class="text">
+          <strong>Check-in incomplete for Betty Lee</strong>
+          <span>You haven't finished checking in · <span class="timer-badge">⏱ No-show in 22 min</span></span>
+        </div>
+        <div class="action">Finish →</div>
+      </div>
+
+      <div class="session-card" style="opacity: 0.7;">
+        <div class="recipient">
+          <div class="avatar">👵</div>
+          <div>
+            <div class="name">Betty Lee</div>
+            <div class="detail">Companionship · Fairlawn, VA</div>
+          </div>
+        </div>
+        <div class="time-row">🕐 <strong>2:00 PM – 5:00 PM</strong> · Today</div>
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px;">
+          <span class="status-badge confirmed">● Confirmed</span>
+          <span style="font-size: 11px; color: #fca5a5; font-weight: 600;">Check-in started but not completed</span>
+        </div>
+
+        <button class="checkin-btn ready" style="font-size: 15px; padding: 14px;">
+          🏠 Resume Check-In
+        </button>
+      </div>
+
+      <div class="callout new" style="margin: 16px; font-size: 11px;">
+        <strong>✅ Bonus:</strong> If the caregiver still doesn't complete check-in within 20 minutes, we send a <strong>push notification</strong>: "You started checking in for Betty Lee but didn't finish. Tap to complete — you'll be marked as a no-show in 10 minutes."
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// Scenario switching
+document.querySelectorAll('.scenario-tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.scenario-tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.scenario').forEach(s => s.classList.remove('active'));
+    tab.classList.add('active');
+    document.getElementById('s-' + tab.dataset.s).classList.add('active');
+  });
+});
+
+// Interactive acknowledgment demo
+let acked = false;
+function toggleAck() {
+  acked = !acked;
+  const strip = document.getElementById('ackStrip');
+  const check = document.getElementById('ackCheck');
+  const btn = document.getElementById('continueBtn');
+  const hint = document.getElementById('btnHint');
+
+  if (acked) {
+    strip.classList.add('checked');
+    check.textContent = '✓';
+    btn.className = 'flow-btn primary';
+    btn.textContent = 'Continue to Check In →';
+    hint.classList.remove('visible');
+  } else {
+    strip.classList.remove('checked');
+    check.textContent = '';
+    btn.className = 'flow-btn disabled';
+    hint.classList.remove('visible');
+  }
+}
+
+function tapContinue() {
+  if (!acked) {
+    const btn = document.getElementById('continueBtn');
+    const hint = document.getElementById('btnHint');
+    btn.classList.add('shake');
+    hint.classList.add('visible');
+    setTimeout(() => btn.classList.remove('shake'), 400);
+  }
+}
+</script>
+
+</body>
+</html>

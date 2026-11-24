@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <script>
+    // Safe-area polyfill: WKWebView with contentInsetAdjustmentBehavior=never
+    // can return 0 for env(safe-area-inset-*). Detect and inject real values.
+    // v1.105.166 — this only guesses inside the Capacitor iOS WebView. In a browser or a
+    // home-screen PWA, env() reporting 0 means the page does not extend under the status
+    // bar, and inventing an inset draws an empty band at the top of every screen. app.js
+    // runs the same check again and always has the last word.
+    (function(){try{
+      var d=document.createElement('div');
+      d.style.cssText='position:absolute;visibility:hidden;padding-top:env(safe-area-inset-top,0px)';
+      document.documentElement.appendChild(d);
+      var v=parseFloat(getComputedStyle(d).paddingTop)||0;
+      document.documentElement.removeChild(d);
+      var capIOS=!!(window.Capacitor
+        && (typeof window.Capacitor.isNativePlatform!=='function' || window.Capacitor.isNativePlatform())
+        && typeof window.Capacitor.getPlatform==='function'
+        && window.Capacitor.getPlatform()==='ios');
+      if(v<1 && capIOS){
+        var h=Math.max(screen.height,screen.width),w=Math.min(screen.height,screen.width);
+        if(h/w>2.0){
+          document.documentElement.style.setProperty('--sat',(h>=852?59:47)+'px');
+          document.documentElement.style.setProperty('--sab','34px');
+        }else if(h/w>1.7){
+          document.documentElement.style.setProperty('--sat','20px');
+          document.documentElement.style.setProperty('--sab','0px');
+        }
+      }
+    }catch(e){}})();
+  </script>
+  <title>InPlace - On-Demand Care for Your Loved Ones</title>
+
+  <!-- PWA Meta Tags -->
+  <meta name="theme-color" content="#ffffff">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="InPlace">
+  <meta name="description" content="On-demand care coordination for your loved ones">
+
+  <!-- Icons -->
+  <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png">
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+
+  <!-- PWA Manifest -->
+  <link rel="manifest" href="/manifest.json">
+
+  <link rel="stylesheet" href="/css/styles.css?v=build-613cc13f">
+
+  <!-- Leaflet CSS for maps (self-hosted — no CDN dependency) -->
+  <link rel="stylesheet" href="/vendor/leaflet.css">
+
+  <!-- v1.117.0 — no third-party analytics. Plausible was here with no account behind it (it
+       recorded nothing); journey tracking is first-party now: InPlaceJourney in js/utils.js. -->
+</head>
+<body>
+  <!-- v1.124.5 — a plain-HTML home page INSIDE #root, for anything that does not run JavaScript.
+       Carriers rejected the outreach text campaign on 10/21: "rejected because of unverifiable
+       website" — to a non-JS fetch, yourinplace.com was a title and an empty div. ReactDOM.render
+       replaces #root's children on start, so real visitors still get the app; the <script> just
+       below hides this block from them until then, so there is no flash. Keep it short and true. -->
+  <script>document.documentElement.className += ' js';</script>
+  <style>.js #static-home{display:none}#static-home{max-width:760px;margin:0 auto;padding:32px 20px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#24242c;line-height:1.6}#static-home a{color:#1b6b5a}</style>
+  <div id="root">
+    <main id="static-home">
+      <h1>InPlace Care</h1>
+      <p><strong>Vetted local caregivers for older adults, by the visit.</strong> InPlace Care is an app that connects families in Virginia's New River Valley with independent, non-medical caregivers for companionship, errands, rides and help around the house. Families book and pay through the app and see each visit in real time; caregivers set their own rate and keep all of it.</p>
+      <h2>For families</h2>
+      <p>Find a caregiver, book a visit, and keep the whole family up to date on care, notes and appointments. <a href="/register?role=family">Sign up</a></p>
+      <h2>For caregivers</h2>
+      <p>Set your own rate, choose your visits, and get paid through the app after each one. <a href="/register?role=caregiver">Sign up as a caregiver</a></p>
+      <p><strong>Looking for caregiving work? Text JOIN to (540) 835-5987.</strong><br>
+      <small>By texting JOIN you agree to receive texts from InPlace Care about caregiving work. Msg &amp; data rates may apply. Msg frequency varies. Reply STOP to opt out, HELP for help. <a href="/sms">Text messaging terms</a> &middot; <a href="/sms/opt-in">How opt-in works</a></small></p>
+      <h2>Contact</h2>
+      <p>InPlace Care is operated by Cedar Rock Holdings, LLC, Fairlawn, Virginia.<br>
+      Email <!--email_off--><a href="mailto:peter@yourinplace.com">peter@yourinplace.com</a><!--/email_off--> &middot; Phone <a href="tel:+15408355987">(540) 835-5987</a></p>
+      <p><a href="/privacy">Privacy Policy</a> &middot; <a href="/terms">Terms of Use</a> &middot; <a href="/sms">Text Messaging Terms</a></p>
+    </main>
+  </div>
+
+  <!-- React (self-hosted — no CDN dependency) -->
+  <script src="/vendor/react.production.min.js"></script>
+  <script src="/vendor/react-dom.production.min.js"></script>
+
+  <!-- SimpleWebAuthn Browser — passkey/biometric login (self-hosted, was unpkg CDN) -->
+  <script src="/vendor/simplewebauthn-browser.min.js"></script>
+  <!-- Socket.io client (self-hosted — no CDN dependency) -->
+  <script src="/vendor/socket.io.min.js"></script>
+  <!-- Leaflet JS for maps (self-hosted — no CDN dependency) -->
+  <script src="/vendor/leaflet.js"></script>
+  <!--
+    v1.106.6 — three script tags were removed from here, and none of them were being used by
+    the page that paid for them:
+
+      js.stripe.com/v3          synchronous and external. It blocked everything below it on a
+                                third-party host, on every single page load, for one component
+                                (StripePaymentForm) that most people never open. It now loads
+                                itself, on demand, via window.__loadStripeJs() below.
+      connect-js.stripe.com     dead. The embedded Connect flow was replaced by the redirect
+                                flow (CareRecipients.handleStripeConnect) and nothing has
+                                called loadConnectAndInitialize since. One fewer third-party
+                                origin that can white-screen the app.
+      /vendor/twilio-video      624 KB, shipped to every visitor including the ones who will
+                                never place a call. VideoCallOverlay has had its own loader
+                                with CDN fallbacks since v1.105.140 — this tag only meant the
+                                loader never had anything to do. utils.js now warms it when a
+                                call actually starts ringing, so answering is no slower.
+  -->
+  <script>
+    // On-demand Stripe.js. Returns the same promise to concurrent callers, so mounting two
+    // payment forms loads one script. Rejects rather than hanging if Stripe is unreachable —
+    // the caller already shows "Payment system is not configured yet".
+    window.__loadStripeJs = (function () {
+      var p = null;
+      return function () {
+        if (window.Stripe) return Promise.resolve(window.Stripe);
+        if (p) return p;
+        p = new Promise(function (resolve, reject) {
+          var s = document.createElement('script');
+          s.src = 'https://js.stripe.com/v3/';
+          s.async = true;
+          s.onload = function () { window.Stripe ? resolve(window.Stripe) : reject(new Error('Stripe.js loaded but window.Stripe is missing')); };
+          s.onerror = function () { p = null; reject(new Error('Stripe.js could not be loaded')); };
+          document.head.appendChild(s);
+        });
+        return p;
+      };
+    })();
+  </script>
+
+  <!-- Pre-compiled app bundle (built by scripts/build-client.js) -->
+  <script>
+    window.APP_VERSION = "1.126.7";
+    // v1.85: admin components live in a separate lazy bundle (infra #5)
+    window.__ADMIN_BUNDLE_URL = '/js-compiled/bundle-admin.js?v=build-613cc13f';
+  </script>
+  <script>
+    // ─── Theme initialization ───
+    // Always start light (brand green). Unauthenticated visitors should never
+    // see dark mode — they haven't set a preference. The React app applies the
+    // user's saved theme after auth/me confirms a session (see app.js).
+    (function() {
+      document.documentElement.setAttribute('data-theme', 'light');
+      // Helper the React app calls once the user is authenticated:
+      window.__applyUserTheme = function() {
+        try {
+          var saved = localStorage.getItem('inplace-theme') || 'light';
+          if (saved === 'system') {
+            var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+            document.documentElement.setAttribute('data-theme', prefersDark ? 'dark' : 'light');
+            // Listen for OS theme changes while session is active
+            window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function(e) {
+              if (localStorage.getItem('inplace-theme') === 'system') {
+                document.documentElement.setAttribute('data-theme', e.matches ? 'dark' : 'light');
+              }
+            });
+          } else {
+            document.documentElement.setAttribute('data-theme', saved);
+          }
+        } catch(e) {}
+      };
+
+      // ─── Native status bar sync ───
+      // When running inside Capacitor (iOS/Android), keep the status bar
+      // text color in sync with the current theme so it stays readable.
+      // Light theme → dark text; dark theme → light text.
+      function syncNativeStatusBar() {
+        if (!window.Capacitor?.isNativePlatform?.()) return;
+        var isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+        var StatusBar = window.Capacitor?.Plugins?.StatusBar;
+        if (StatusBar) {
+          StatusBar.setStyle({ style: isDark ? 'DARK' : 'LIGHT' });
+          // Update theme-color meta tag to match the background
+          var meta = document.querySelector('meta[name="theme-color"]');
+          if (meta) meta.setAttribute('content', isDark ? '#121218' : '#ffffff');
+        }
+      }
+      // Watch for data-theme attribute changes
+      new MutationObserver(function() { syncNativeStatusBar(); })
+        .observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+      // Initial sync after Capacitor plugins load
+      document.addEventListener('DOMContentLoaded', function() {
+        setTimeout(syncNativeStatusBar, 500);
+      });
+    })();
+  </script>
+  <script src="/js-compiled/bundle.js?v=build-613cc13f"></script>
+
+  <script>
+    // Service worker: register/update and auto-reload on new version
+    if ('serviceWorker' in navigator) {
+      // Listen for SW_UPDATED messages — show update available, don't auto-reload
+      // (auto-reload was causing the app to "crash" mid-use when a new deploy landed)
+      navigator.serviceWorker.addEventListener('message', function(event) {
+        if (event.data?.type === 'SW_UPDATED') {
+          console.log('SW updated to', event.data.version, '— update available (manual reload)');
+          // Don't auto-reload — let the in-app "Update Available" button handle it
+          // This prevents jarring reloads while the user is actively navigating
+        }
+      });
+
+      // v1.78.0 — surface waiting updates instead of letting users run stale
+      // bundles forever (the PWA/native app can stay open for weeks). Deliberately
+      // injected here, NOT in the React bundle: the whole point is that the
+      // running bundle may be old.
+      var swHadController = !!navigator.serviceWorker.controller;
+      var swReloaded = false;
+      navigator.serviceWorker.addEventListener('controllerchange', function() {
+        // Only reload when a controller is REPLACED (update applied). First-install
+        // claim also fires this event — reloading then would loop new visitors.
+        if (!swHadController) { swHadController = true; return; }
+        if (swReloaded) return;
+        swReloaded = true;
+        window.location.reload();
+      });
+
+      // ─── v1.105.187 — apply updates at a safe moment, and say so ───
+      //
+      // Pete, Sep 9: a deploy landed while the app was closed; the next open ran the OLD bundle
+      // against the NEW server and every screen switch spun for a minute. The pill below was on
+      // screen the whole time. "Is there a way to force the app to restart when there's an
+      // update... or a screen that says 'App updated, reloading your data... back in a sec!'"
+      //
+      // Both, with one rule: NEVER mid-work. Auto-reload on arrival is what broke dashboards
+      // pre-v1.57.14, so:
+      //   1. Update already waiting when the app OPENS (deploy happened while closed): nothing is
+      //      in flight yet — apply now, behind a full-screen "App updated" card.
+      //   2. Update lands while the app is OPEN: show the pill, and ALSO apply at the next screen
+      //      change — if no form has text in it and no modal is open (`swIsSafeMoment`).
+      //   3. Typing or booking: wait. The pill stays; the next screen change tries again.
+      // Lives here, not in the React bundle, because the bundle is the thing that is stale.
+      var swApplying = false;
+      var swPendingReg = null;
+
+      function swIsSafeMoment() {
+        try {
+          if (document.querySelector('.modal-overlay, .modal-backdrop, [role="dialog"]')) return false;
+          var fields = document.querySelectorAll('input, textarea, [contenteditable="true"]');
+          for (var i = 0; i < fields.length; i++) {
+            var f = fields[i];
+            if (f.disabled || f.readOnly) continue;
+            var t = (f.getAttribute('type') || 'text').toLowerCase();
+            if (t === 'hidden' || t === 'checkbox' || t === 'radio' || t === 'submit' || t === 'button' || t === 'range') continue;
+            var v = f.isContentEditable ? (f.textContent || '') : (f.value || '');
+            if (v.trim()) return false;
+          }
+          return true;
+        } catch (e) { return false; }
+      }
+
+      function swShowUpdateScreen() {
+        if (document.getElementById('sw-update-screen')) return;
+        var pill = document.getElementById('sw-update-pill');
+        if (pill) pill.remove();
+        var el = document.createElement('div');
+        el.id = 'sw-update-screen';
+        el.setAttribute('role', 'status');
+        el.setAttribute('aria-live', 'polite');
+        el.style.cssText = 'position:fixed;inset:0;z-index:9999;display:flex;flex-direction:column;' +
+          'align-items:center;justify-content:center;gap:14px;background:#1b6b5a;color:#fff;' +
+          'font:400 15px -apple-system,BlinkMacSystemFont,"DM Sans",sans-serif;text-align:center;padding:32px;';
+        el.innerHTML =
+          '<div style="width:56px;height:56px;border-radius:14px;background:rgba(255,255,255,.14);' +
+          'display:flex;align-items:center;justify-content:center;font-weight:800;font-size:22px;">iP</div>' +
+          '<div style="font-size:20px;font-weight:700;">App updated</div>' +
+          '<div style="opacity:.85;max-width:26ch;line-height:1.45;">Reloading your data… back in a sec.</div>' +
+          '<div style="margin-top:8px;width:28px;height:28px;border:3px solid rgba(255,255,255,.35);' +
+          'border-top-color:#fff;border-radius:50%;animation:swspin .8s linear infinite;"></div>' +
+          '<style>@keyframes swspin{to{transform:rotate(360deg)}}@media (prefers-reduced-motion:reduce){#sw-update-screen div[style*="swspin"]{animation:none}}</style>';
+        document.body.appendChild(el);
+      }
+
+      // v1.110.2 — a waiting worker that never activates must not trap the app. Seen on
+      // staging 10/12: reg.waiting stuck at "installed", answering no messages, while the
+      // ACTIVE worker was already the new build. Every open showed "App updated", waited 8s,
+      // reloaded — and found the same zombie, forever. Remember the last attempt; if it was
+      // under two minutes ago, don't take the screen again — leave the pill.
+      var SW_ATTEMPT_KEY = 'inplace_sw_apply_attempt';
+      function swRecentlyTried() {
+        try { var t = Number(sessionStorage.getItem(SW_ATTEMPT_KEY) || 0); return t && (Date.now() - t) < 120000; }
+        catch (e) { return false; }
+      }
+
+      function swApplyUpdate(reg) {
+        if (swApplying || !reg || !reg.waiting) return false;
+        if (swRecentlyTried()) { swPendingReg = null; return false; }
+        try { sessionStorage.setItem(SW_ATTEMPT_KEY, String(Date.now())); } catch (e) { /* private mode */ }
+        swApplying = true;
+        swShowUpdateScreen();
+        reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+        // controllerchange normally reloads within a second. If it never fires (a browser
+        // that will not swap controllers, or a worker that errors), reload anyway rather
+        // than leaving a "back in a sec" card up forever.
+        setTimeout(function() { if (!swReloaded) { swReloaded = true; window.location.reload(); } }, 8000);
+        return true;
+      }
+
+      // The bundle calls this on every screen change (window.__swApplyPendingUpdate).
+      window.__swApplyPendingUpdate = function() {
+        if (!swPendingReg || !swPendingReg.waiting) return false;
+        if (!swIsSafeMoment()) return false;
+        return swApplyUpdate(swPendingReg);
+      };
+
+      function swShowUpdatePill(reg) {
+        if (!reg.waiting) return;
+        swPendingReg = reg;
+        if (document.getElementById('sw-update-pill') || document.getElementById('sw-update-screen')) return;
+        var pill = document.createElement('button');
+        pill.id = 'sw-update-pill';
+        pill.textContent = 'Update ready — tap to refresh';
+        pill.setAttribute('aria-label', 'A new version of InPlace is ready. Tap to refresh.');
+        pill.style.cssText = 'position:fixed;left:50%;transform:translateX(-50%);' +
+          'bottom:calc(env(safe-area-inset-bottom, 0px) + 78px);z-index:9998;' +
+          'background:#1b6b5a;color:#fff;border:none;border-radius:22px;' +
+          'padding:12px 20px;font:600 14px -apple-system,BlinkMacSystemFont,sans-serif;' +
+          'box-shadow:0 4px 14px rgba(0,0,0,0.25);cursor:pointer;';
+        pill.onclick = function() { swApplyUpdate(reg); };
+        document.body.appendChild(pill);
+      }
+
+      window.addEventListener('load', async function() {
+        try {
+          var reg = await navigator.serviceWorker.register('/sw.js');
+          // Force check for updates on every page load
+          reg.update().catch(function() {});
+          console.log('SW registered:', reg.scope);
+
+          // Already-waiting worker (deploy happened while app was closed). The app has JUST
+          // opened, so nothing is in flight: apply it now, behind the "App updated" card.
+          if (reg.waiting && !swRecentlyTried()) { swApplyUpdate(reg); } else if (!reg.waiting) { swShowUpdatePill(reg); }
+          // Worker that finishes installing while the app is open
+          reg.addEventListener('updatefound', function() {
+            var nw = reg.installing;
+            if (!nw) return;
+            nw.addEventListener('statechange', function() {
+              if (nw.state === 'installed' && navigator.serviceWorker.controller) {
+                swShowUpdatePill(reg);
+              }
+            });
+          });
+          // Long-lived PWA/native sessions: re-check when the app comes back to
+          // the foreground, and every 30 minutes while open
+          document.addEventListener('visibilitychange', function() {
+            if (document.visibilityState !== 'visible') return;
+            // Coming back to the foreground is a natural pause: apply a waiting update if
+            // nothing is half-typed, otherwise just check and leave the pill.
+            if (reg.waiting && swIsSafeMoment()) { swApplyUpdate(reg); return; }
+            reg.update().catch(function() {});
+          });
+          setInterval(function() { reg.update().catch(function() {}); }, 30 * 60 * 1000);
+        } catch (err) {
+          console.log('SW setup failed:', err);
+        }
+      });
+    }
+  </script>
+</body>
+</html>

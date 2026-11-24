@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Up Next Card — Before / After</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; padding: 24px; }
+  h1 { text-align: center; font-size: 18px; color: #333; margin-bottom: 24px; }
+  .compare { display: flex; gap: 24px; max-width: 900px; margin: 0 auto; flex-wrap: wrap; justify-content: center; }
+  .panel { flex: 1; min-width: 340px; max-width: 420px; background: #fff; border-radius: 16px; padding: 20px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); }
+  .panel-label { text-align: center; font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 16px; padding: 6px 0; border-radius: 8px; }
+  .panel-label.before { background: #f0f0f0; color: #888; }
+  .panel-label.after { background: #fff3e0; color: #e8724a; }
+
+  /* Shared card base */
+  .section-label { font-size: 12px; font-weight: 700; color: '#555'; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; color: #555; }
+  .card { padding: 14px 16px; border-radius: 12px; margin-bottom: 10px; }
+
+  /* BEFORE: current style */
+  .card.before-style {
+    border: 2px solid #1b6b5a;
+    background: #fff;
+  }
+  .card.before-style .countdown {
+    font-size: 12px; font-weight: 600; color: #1b6b5a; margin-bottom: 4px;
+  }
+
+  /* AFTER: proposed style */
+  .card.after-style {
+    border: 3px solid #e8724a;
+    background: linear-gradient(135deg, #fff8f0 0%, #fff 100%);
+    box-shadow: 0 2px 12px rgba(232, 114, 74, 0.15);
+  }
+  .card.after-style .countdown {
+    font-size: 14px; font-weight: 800; color: #e8724a; margin-bottom: 4px;
+    letter-spacing: 0.3px;
+  }
+
+  /* Shared inner layout */
+  .card-inner { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+  .card-left { flex: 1; }
+  .card-right { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+  .name { font-size: 15px; font-weight: 600; color: #333; }
+  .detail { font-size: 13px; color: #666; margin-top: 2px; }
+  .location { font-size: 12px; color: #888; margin-top: 3px; }
+  .payout { font-size: 22px; font-weight: 800; color: #1b6b5a; }
+  .status-badge { padding: 4px 10px; border-radius: 10px; font-size: 11px; font-weight: 600; background: #e8f5e9; color: #2e7d32; }
+
+  /* Find Work tile for context */
+  .find-work {
+    background: linear-gradient(135deg, #1b6b5a 0%, #24897a 100%);
+    color: #fff; padding: 16px 20px; border-radius: 12px; margin-top: 6px;
+  }
+  .find-work .fw-title { font-size: 16px; font-weight: 800; }
+  .find-work .fw-sub { font-size: 12px; opacity: 0.8; margin-top: 2px; }
+
+  .note { text-align: center; font-size: 12px; color: #999; margin-top: 16px; font-style: italic; }
+</style>
+</head>
+<body>
+  <h1>Up Next Card — Current vs. Proposed</h1>
+  <div class="compare">
+
+    <!-- BEFORE -->
+    <div class="panel">
+      <div class="panel-label before">Current (v1.34.19)</div>
+      <div class="section-label">UP NEXT</div>
+      <div class="card before-style">
+        <div class="card-inner">
+          <div class="card-left">
+            <div class="countdown">14h 39m until check-in</div>
+            <div class="name">Betty Lee</div>
+            <div class="detail">Today at 3:00 PM · 2hr · Housekeeping</div>
+            <div class="location">📍 7420 Gate 10 Road, Fairlawn</div>
+          </div>
+          <div class="card-right">
+            <div class="payout">$61</div>
+            <span class="status-badge">Confirmed</span>
+          </div>
+        </div>
+      </div>
+      <div class="find-work">
+        <div class="fw-title">🔍 Find Work</div>
+        <div class="fw-sub">2 open jobs near you</div>
+      </div>
+      <div class="note">Green border blends in — eye goes to Find Work</div>
+    </div>
+
+    <!-- AFTER -->
+    <div class="panel">
+      <div class="panel-label after">Proposed</div>
+      <div class="section-label">UP NEXT</div>
+      <div class="card after-style">
+        <div class="card-inner">
+          <div class="card-left">
+            <div class="countdown">14h 39m until check-in</div>
+            <div class="name">Betty Lee</div>
+            <div class="detail">Today at 3:00 PM · 2hr · Housekeeping</div>
+            <div class="location">📍 7420 Gate 10 Road, Fairlawn</div>
+          </div>
+          <div class="card-right">
+            <div class="payout">$61</div>
+            <span class="status-badge">Confirmed</span>
+          </div>
+        </div>
+      </div>
+      <div class="find-work">
+        <div class="fw-title">🔍 Find Work</div>
+        <div class="fw-sub">2 open jobs near you</div>
+      </div>
+      <div class="note">Orange border + bold countdown draws the eye first</div>
+    </div>
+
+  </div>
+</body>
+</html>

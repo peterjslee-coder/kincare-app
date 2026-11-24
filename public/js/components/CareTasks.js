@@ -1,0 +1,1077 @@
+// ─── Care Tasks (v1.99.0) ───────────────────────────────────────────────
+// Flexible recurring care-task engine — medication tracking first, but the
+// engine is task-agnostic (bathroom visits, baths, meals, check-ins...).
+//
+// Pete's placement rule: NO DIGGING to complete tasks. Today's tasks render
+// inline in the dashboard's Next Up feed, chronological with sessions
+// (CareTaskNextUpRow + CareTaskCheckSheet, consumed by Dashboard.js).
+// Managing definitions lives on the recipient profile (CareTasksSection).
+//
+// Legal line (do not cross in copy): we record that care happened; we never
+// give dosage advice, interaction warnings, or medical guidance.
+
+const CARE_TASK_TYPES = [
+  { id: 'medication', label: 'Medication', icon: '💊' },
+  { id: 'hygiene',    label: 'Hygiene',    icon: '🛁' },
+  { id: 'meal',       label: 'Meal',       icon: '🍽️' },
+  { id: 'checkin',    label: 'Check-in',   icon: '👋' },
+  { id: 'custom',     label: 'Other',      icon: '📌' },
+];
+const careTaskIcon = (type) => (CARE_TASK_TYPES.find(t => t.id === type) || CARE_TASK_TYPES[4]).icon;
+
+const careTaskDetail = (occ) => {
+  try {
+    const d = JSON.parse(occ.details || 'null');
+    if (d?.med_name) return `${d.med_name}${d.dose ? ` · ${d.dose}` : ''}`;
+  } catch {}
+  return null;
+};
+
+const careTaskDoneBy = (occ, short) => {
+  if (occ.completed_by_name) return occ.completed_by_name;
+  if (occ.completed_by_first_name) return short ? occ.completed_by_first_name : `${occ.completed_by_first_name} ${occ.completed_by_last_name || ''}`.trim();
+  return 'care team';
+};
+
+// ─── Next Up row (rendered inside Dashboard's Next Up list) ───
+// v1.101.0: swipe left (or mouse-drag) reveals ✓ Done / Dismiss. Dismiss maps
+// to the existing 'skipped' status — on the record, attributed, undoable.
+// v1.105.147 — the client half of utils/careTaskSchedule.taskTimes. Same rule, same fallback:
+// the list if there is one, otherwise the single due_time every older task has.
+const careTaskTimesOf = (t) => {
+  let raw = t && t.due_times;
+  if (typeof raw === 'string') { try { raw = JSON.parse(raw); } catch { raw = null; } }
+  const list = Array.isArray(raw) ? raw.filter((x) => /^([01]\d|2[0-3]):[0-5]\d$/.test(String(x))) : [];
+  if (list.length) return [...new Set(list)].sort();
+  return t?.due_time ? [t.due_time] : [];
+};
+
+const CareTaskNextUpRow = window.CareTaskNextUpRow = ({ occ, group, onQuickCheck, onOpenSheet, onUndo, onDismiss, onClear }) => {
+  const done = occ.status === 'done';
+  const skipped = occ.status === 'skipped';
+  const nowMs = Date.now();
+  const dueMs = new Date(occ.due_at).getTime();
+  const graceMs = (occ.grace_minutes ?? 45) * 60000;
+  const isDue = !done && !skipped && nowMs >= dueMs;
+  const isLate = !done && !skipped && nowMs >= dueMs + graceMs;
+  // v1.105.147 — the time of THIS dose, not the task's first one. `occ_time` comes from the
+  // server, which knows which slot this row is; falling back to due_time keeps every task
+  // written before multi-time existed rendering exactly as it did.
+  const timeLabel = TimezoneHelper.formatTime(occ.occ_time || occ.due_time);
+  const detail = careTaskDetail(occ);
+
+  const borderColor = isLate ? 'var(--color-error)' : isDue ? 'var(--color-warning)' : done ? 'var(--color-success)' : 'var(--border-color)';
+  const bg = isLate ? 'linear-gradient(135deg, var(--color-error-bg) 0%, var(--bg-card) 100%)'
+    : isDue ? 'linear-gradient(135deg, var(--color-warning-bg) 0%, var(--bg-card) 100%)' : 'var(--bg-card)';
+
+  // Pending rows: ✓ Done / Dismiss. Done or skipped rows: Clear — Pete's
+  // "meds were done hours ago" swipe folds the row into the Done-earlier
+  // strip immediately instead of waiting out the 30-min linger (v1.103.0).
+  const swipeActions = (!done && !skipped) ? [
+    { label: occ.task_type === 'medication' ? '✓ Taken' : '✓ Done', background: 'var(--color-success)', onTap: onQuickCheck },
+    ...(onDismiss ? [{ label: 'Dismiss', background: 'var(--text-muted)', onTap: onDismiss }] : []),
+  ] : (onClear ? [
+    { label: 'Clear', background: 'var(--text-muted)', onTap: onClear },
+  ] : null);
+
+  return (
+    <SwipeableRow actions={swipeActions} marginBottom={8}>
+    <div onClick={() => { if (!done && !skipped) onOpenSheet(); }} style={{
+      padding: '12px 14px', borderRadius: 12, cursor: done || skipped ? 'default' : 'pointer',
+      border: `2px solid ${borderColor}`, background: bg, opacity: skipped ? 0.7 : 1,
+      boxShadow: isDue && !done ? '0 2px 12px rgba(245, 127, 23, 0.12)' : '0 1px 4px rgba(0,0,0,0.06)',
+      boxSizing: 'border-box',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        {/* One-tap check circle: tap = done, recorded as you. Row tap opens the who/note sheet. */}
+        <button
+          aria-label={done ? 'Completed — undo' : `Mark ${occ.title} done`}
+          onClick={(e) => { e.stopPropagation(); done || skipped ? onUndo() : onQuickCheck(); }}
+          style={{
+            width: 34, height: 34, minWidth: 34, borderRadius: '50%', cursor: 'pointer',
+            border: done ? 'none' : `2px solid ${isDue ? 'var(--color-warning)' : 'var(--border-color)'}`,
+            background: done ? 'var(--color-success)' : skipped ? 'var(--border-light)' : 'var(--bg-card)',
+            color: 'var(--text-on-primary)', fontSize: 16, fontWeight: 800,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+          {done ? '✓' : skipped ? '—' : ''}
+        </button>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          {isLate && <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-error)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 2 }}>Overdue — team notified</div>}
+          {isDue && !isLate && <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-warning)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 2 }}>Due now</div>}
+          <div style={{ fontWeight: 600, fontSize: 15, color: 'var(--text-primary)', textDecoration: skipped ? 'line-through' : 'none' }}>
+            {careTaskIcon(occ.task_type)} {occ.title}
+          </div>
+          <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 2 }}>
+            {occ.__saving ? 'Saving\u2026'
+              : done ? `${occ.task_type === 'medication' ? 'Taken' : 'Done'} · ${careTaskDoneBy(occ, true)}${occ.note ? ' · 📝' : ''}`
+              : skipped ? `Skipped · ${careTaskDoneBy(occ, true)}`
+              : <>Today at {timeLabel} · for {group.recipientFirstName}{detail ? ` · ${detail}` : ''}</>}
+          </div>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+          <span style={{
+            padding: '4px 10px', borderRadius: 10, fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap',
+            background: done ? 'var(--color-success-bg)' : isLate ? 'var(--color-error-bg)' : isDue ? 'var(--color-warning-bg)' : 'var(--border-light)',
+            color: done ? 'var(--color-success)' : isLate ? 'var(--color-error)' : isDue ? 'var(--color-warning)' : 'var(--text-tertiary)',
+          }}>{done ? 'Done' : skipped ? 'Skipped' : 'Task'}</span>
+          {!done && !skipped && occ.assignee_first_name && (
+            <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{occ.assignee_first_name}'s turn</span>
+          )}
+          {(done || skipped) && (
+            <button onClick={(e) => { e.stopPropagation(); onUndo(); }}
+              style={{ padding: '2px 8px', borderRadius: 6, border: '1px solid var(--border-color)', background: 'var(--bg-surface)', color: 'var(--text-tertiary)', fontSize: 10, fontWeight: 600, cursor: 'pointer' }}>
+              Undo
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+    </SwipeableRow>
+  );
+};
+
+// ─── Check-off sheet: who did it + optional note ───
+const CareTaskCheckSheet = window.CareTaskCheckSheet = ({ occ, group, onClose, onDone }) => {
+  const { showToast } = useToast();
+  const [who, setWho] = useState({ kind: 'me' }); // {kind:'me'|'user'|'helper'|'other', id?, name?}
+  const [otherName, setOtherName] = useState('');
+  const [note, setNote] = useState('');
+  const [saving, setSaving] = useState(false);
+  const detail = careTaskDetail(occ);
+  const myId = window.__currentUserId;
+
+  const submit = async (status) => {
+    if (saving) return;
+    const body = { status, note: note.trim() || undefined };
+    if (who.kind === 'user') body.completed_by_user_id = who.id;
+    if (who.kind === 'helper') body.completed_by_name = who.name;
+    if (who.kind === 'other') {
+      if (!otherName.trim()) { showToast('Who did it? Add a name or pick someone.', 'error'); return; }
+      body.completed_by_name = otherName.trim();
+    }
+    setSaving(true);
+    // v1.105.162 — one writer, shared with the Needs-you card, Next Up and the care-team
+    // panel. It treats 409 ("already checked off") as the success it is, and announces the
+    // change so the other two screens re-read instead of arguing.
+    const r = await CareTaskSync.write(occ.id, body);
+    if (r.ok) { onDone(); onClose(); }
+    else showToast(r.error, 'error');
+    setSaving(false);
+  };
+
+  // ─── v1.105.191 — "who WILL do it", not only "who DID it" ───
+  // Pete: "it defaults to me and if I open it and select dan, my only option in the 'needs
+  // you' pane is to complete the task or skip". Picking a team member now also offers to hand
+  // TONIGHT to them. The task's default person is unchanged; tomorrow it is his again.
+  //
+  // v1.112.4 — Pete, 10/13: "i can mark only 'taken' or 'Skip today' there's no 'not
+  // accomplished, hand to ____'". It was there, but only after picking someone under "Who did
+  // it?" — the question for a task that WAS done. Handing off is the answer for one that
+  // wasn't, so it is its own row now, under Done / Skip, and needs no detour through "who did
+  // it". Same endpoint, same rule: tonight only, and the person is told.
+  const [handing, setHanding] = useState(false);
+  const [handTo, setHandTo] = useState(null); // team member id
+  const handCandidates = (group.teamMembers || []).filter((m) => m.id !== myId && m.id !== occ.assigned_user_id);
+  const pickedMember = handTo ? handCandidates.find((m) => m.id === handTo) : null;
+  const handOff = async () => {
+    if (!pickedMember || handing) return;
+    setHanding(true);
+    try {
+      const res = await apiFetch(`/api/care-tasks/occurrences/${occ.id}/assign`, {
+        method: 'POST', body: JSON.stringify({ userId: pickedMember.id }),
+      });
+      const d = res ? await res.json().catch(() => ({})) : {};
+      if (res?.ok) {
+        showToast(`Handed to ${pickedMember.first_name} \u2014 they\u2019ve been told`, 'success');
+        if (typeof CareTaskSync !== 'undefined') CareTaskSync.announce(occ.id);
+        onDone(); onClose();
+      } else {
+        showToast(d.error || 'Couldn\u2019t hand that off', 'error');
+      }
+    } catch { showToast('Couldn\u2019t reach InPlace', 'error'); }
+    setHanding(false);
+  };
+
+  const chip = (selected) => ({
+    padding: '8px 14px', borderRadius: 20, fontSize: 13, fontWeight: selected ? 700 : 500, cursor: 'pointer',
+    border: selected ? '2px solid var(--role-color)' : '1px solid var(--border-color)',
+    background: selected ? 'var(--role-color-light)' : 'var(--bg-card)',
+    color: selected ? 'var(--role-color)' : 'var(--text-secondary)',
+  });
+
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 1000, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ background: 'var(--bg-card)', borderRadius: '18px 18px 0 0', width: '100%', maxWidth: 520, padding: '20px 20px 28px', maxHeight: '85vh', overflowY: 'auto' }}>
+        <div style={{ fontWeight: 700, fontSize: 17, color: 'var(--text-primary)' }}>
+          {careTaskIcon(occ.task_type)} {occ.title}
+        </div>
+        <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 2, marginBottom: 16 }}>
+          Today at {TimezoneHelper.formatTime(occ.occ_time || occ.due_time)} · for {group.recipientFirstName}{detail ? ` · ${detail}` : ''}
+        </div>
+
+        <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 8 }}>Who did it?</div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 6 }}>
+          <button style={chip(who.kind === 'me')} onClick={() => setWho({ kind: 'me' })}>Me</button>
+          {(group.teamMembers || []).filter(m => m.id !== myId).map(m => (
+            <button key={m.id} style={chip(who.kind === 'user' && who.id === m.id)}
+              onClick={() => setWho({ kind: 'user', id: m.id })}>{m.first_name} {m.last_name ? m.last_name[0] + '.' : ''}</button>
+          ))}
+          {(group.helpers || []).map(h => (
+            <button key={h.id} style={chip(who.kind === 'helper' && who.name === h.name)}
+              onClick={() => setWho({ kind: 'helper', name: h.name })}>{h.name}</button>
+          ))}
+          <button style={chip(who.kind === 'other')} onClick={() => setWho({ kind: 'other' })}>Someone else…</button>
+        </div>
+        {who.kind === 'other' && (
+          <input value={otherName} onChange={(e) => setOtherName(e.target.value)} placeholder="Their name (we'll remember it)"
+            style={{ width: '100%', padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border-color)', fontSize: 14, marginBottom: 6, background: 'var(--bg-surface)', color: 'var(--text-primary)', boxSizing: 'border-box' }} />
+        )}
+
+        <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', margin: '12px 0 8px' }}>Anything to note? <span style={{ fontWeight: 400, textTransform: 'none' }}>(optional — goes to care notes)</span></div>
+        <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2}
+          placeholder="e.g. Took it with dinner. Seemed calm tonight."
+          style={{ width: '100%', padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border-color)', fontSize: 14, resize: 'vertical', background: 'var(--bg-surface)', color: 'var(--text-primary)', boxSizing: 'border-box' }} />
+
+        <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
+          <button disabled={saving} onClick={() => submit('done')} style={{
+            flex: 1, padding: '13px 0', borderRadius: 12, border: 'none', background: 'var(--color-success)',
+            color: 'var(--text-on-primary)', fontSize: 15, fontWeight: 700, cursor: 'pointer', opacity: saving ? 0.6 : 1,
+          }}>{occ.task_type === 'medication' ? '\u2713 Taken' : '\u2713 Done'}</button>
+          <button disabled={saving} onClick={() => submit('skipped')} style={{
+            padding: '13px 18px', borderRadius: 12, border: '1px solid var(--border-color)', background: 'var(--bg-surface)',
+            color: 'var(--text-secondary)', fontSize: 14, fontWeight: 600, cursor: 'pointer',
+          }}>Skip today</button>
+        </div>
+
+        {handCandidates.length > 0 && (
+          <div data-testid="care-task-hand-off" style={{ marginTop: 18, paddingTop: 14, borderTop: '1px solid var(--border-light)' }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 8 }}>
+              Not done yet? Hand it to{'\u2026'}
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              {handCandidates.map((m) => (
+                <button key={m.id} style={chip(handTo === m.id)} onClick={() => setHandTo(handTo === m.id ? null : m.id)}>
+                  {m.first_name} {m.last_name ? m.last_name[0] + '.' : ''}
+                </button>
+              ))}
+            </div>
+            {pickedMember && (
+              <button disabled={handing || saving} onClick={handOff} style={{
+                width: '100%', marginTop: 10, padding: '12px 0', borderRadius: 12,
+                border: '1.5px solid var(--role-color)', background: 'var(--role-color-light)',
+                color: 'var(--role-color)', fontSize: 14, fontWeight: 700, cursor: 'pointer', opacity: handing ? 0.6 : 1,
+              }}>{handing ? 'Handing off\u2026' : `Hand this task to ${pickedMember.first_name} \u2014 not completed`}</button>
+            )}
+            <div style={{ fontSize: 11.5, color: 'var(--text-tertiary)', marginTop: 6 }}>
+              Just this one. They{'\u2019'}re told, and it{'\u2019'}s back to the usual person tomorrow.
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// ─── 14-day adherence strip ───
+const CareTaskStrip = ({ recent }) => {
+  const cells = [...(recent || [])].reverse();
+  const color = (s) => s === 'done' ? 'var(--color-success)' : s === 'missed' ? 'var(--color-error)' : s === 'skipped' ? 'var(--text-muted)' : 'var(--border-color)';
+  return (
+    <div style={{ display: 'flex', gap: 3, marginTop: 6 }} title="Last 14 days: green done, red missed, gray skipped">
+      {cells.map((c, i) => (
+        <div key={i} style={{ width: 10, height: 10, borderRadius: 3, background: color(c.status), opacity: c.status === 'pending' ? 0.5 : 1 }} />
+      ))}
+    </div>
+  );
+};
+
+// ─── Create/edit modal ───
+const CareTaskFormModal = ({ recipientId, recipientFirstName, teamMembers, existing, onClose, onSaved }) => {
+  const { showToast } = useToast();
+  const ex = existing || {};
+  const exDetails = (() => { try { return JSON.parse(ex.details || '{}') || {}; } catch { return {}; } })();
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const [title, setTitle] = useState(ex.title || '');
+  const [type, setType] = useState(ex.task_type || 'medication');
+  const [medName, setMedName] = useState(exDetails.med_name || '');
+  const [dose, setDose] = useState(exDetails.dose || '');
+  // v1.105.147 — Pete: "Would like more availability to check this task off three times where
+  // I can mark morning lunch and dinner medication." One time became a list of them.
+  const [times, setTimes] = useState(() => {
+    const t = careTaskTimesOf(ex);
+    return t.length ? t : ['19:00'];
+  });
+  const [recurrence, setRecurrence] = useState(ex.recurrence || 'daily');
+  const [days, setDays] = useState((ex.recurrence_days || 'mon,tue,wed,thu,fri,sat,sun').split(','));
+  const [startDate, setStartDate] = useState(ex.start_date || todayStr);
+  const [hasEnd, setHasEnd] = useState(!!ex.end_date);
+  const [endDate, setEndDate] = useState(ex.end_date || '');
+  const [assignee, setAssignee] = useState(ex.assigned_user_id || '');
+  const [grace, setGrace] = useState(ex.grace_minutes ?? 45);
+  const [saving, setSaving] = useState(false);
+  // v1.109.9 — Pete (e4cd314a): "It's set up like everything is recurring. There needs to be a
+  // to-do option." A new task starts by asking which kind; an existing one is always recurring.
+  const [kind, setKind] = useState('recurring');
+  const DOW = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
+
+  const save = async () => {
+    if (saving) return;
+    const details = type === 'medication' && (medName.trim() || dose.trim())
+      ? { med_name: medName.trim() || undefined, dose: dose.trim() || undefined } : null;
+    const body = {
+      care_recipient_id: recipientId, title: title.trim(), task_type: type, details,
+      recurrence, recurrence_days: recurrence === 'days' ? days.join(',') : undefined,
+      due_times: times, start_date: startDate, end_date: hasEnd ? (endDate || undefined) : null,
+      assigned_user_id: assignee || null, grace_minutes: Number(grace),
+    };
+    setSaving(true);
+    try {
+      const res = await apiFetch(existing ? `/api/care-tasks/${existing.id}` : '/api/care-tasks', {
+        method: existing ? 'PUT' : 'POST', body: JSON.stringify(body),
+      });
+      if (res?.ok) { showToast(existing ? 'Task updated' : 'Task created', 'success'); onSaved(); onClose(); }
+      else { const d = await res.json().catch(() => ({})); showToast(d.error || 'Could not save task', 'error'); }
+    } catch { showToast('Could not save task', 'error'); }
+    setSaving(false);
+  };
+
+  const chip = (selected) => ({
+    padding: '7px 12px', borderRadius: 18, fontSize: 13, fontWeight: selected ? 700 : 500, cursor: 'pointer',
+    border: selected ? '2px solid var(--role-color)' : '1px solid var(--border-color)',
+    background: selected ? 'var(--role-color-light)' : 'var(--bg-card)',
+    color: selected ? 'var(--role-color)' : 'var(--text-secondary)',
+  });
+  const label = { fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', margin: '14px 0 6px' };
+  const input = { width: '100%', padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border-color)', fontSize: 14, background: 'var(--bg-surface)', color: 'var(--text-primary)', boxSizing: 'border-box' };
+
+  // A to-do asks only what and, optionally, details — none of the schedule below applies.
+  if (!existing && kind === 'todo' && typeof CareTodoForm !== 'undefined') {
+    return (
+      <CareTodoForm recipientId={recipientId} recipientFirstName={recipientFirstName}
+        onClose={onClose} onSaved={onSaved} onSwitchToRecurring={() => setKind('recurring')} />
+    );
+  }
+
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ background: 'var(--bg-card)', borderRadius: 16, width: '100%', maxWidth: 480, padding: 20, maxHeight: '90vh', overflowY: 'auto' }}>
+        <div style={{ fontWeight: 700, fontSize: 17, color: 'var(--text-primary)', marginBottom: 4 }}>
+          {existing ? 'Edit task' : `New task for ${recipientFirstName}`}
+        </div>
+        {!existing && typeof CareTaskKindChoice !== 'undefined' && (
+          <div style={{ marginBottom: 8 }}><CareTaskKindChoice kind={kind} onChange={setKind} /></div>
+        )}
+        <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginBottom: 4 }}>
+          The team gets reminded, checks it off, and it's on the record.
+        </div>
+
+        <div style={label}>What kind?</div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+          {CARE_TASK_TYPES.map(t => (
+            <button key={t.id} style={chip(type === t.id)} onClick={() => setType(t.id)}>{t.icon} {t.label}</button>
+          ))}
+        </div>
+
+        <div style={label}>Task</div>
+        <input style={input} value={title} onChange={(e) => setTitle(e.target.value)}
+          placeholder={type === 'medication' ? `Give ${recipientFirstName} the evening medication` : type === 'hygiene' ? 'Help with a bath' : type === 'meal' ? 'Make sure dinner happened' : type === 'checkin' ? 'Stop by and check in' : 'What needs doing?'} />
+        {type === 'medication' && (
+          <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+            <input style={{ ...input, flex: 2 }} value={medName} onChange={(e) => setMedName(e.target.value)} placeholder="Medication name (optional)" />
+            <input style={{ ...input, flex: 1 }} value={dose} onChange={(e) => setDose(e.target.value)} placeholder="Dose" />
+          </div>
+        )}
+
+        <div style={label}>When</div>
+        {/* v1.105.147 — one row per time of day. Three doses of one medication is ONE task
+            with three times, not three tasks: three tasks means three names to read, three
+            histories, and three rows that never add up to "did she get her meds today". */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 10 }}>
+          {times.map((t, i) => (
+            <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <input type="time" style={{ ...input, width: 130 }} value={t}
+                onChange={(e) => setTimes(times.map((x, j) => (j === i ? e.target.value : x)))} />
+              {times.length > 1 && (
+                <button onClick={() => setTimes(times.filter((_, j) => j !== i))}
+                  aria-label={`Remove the ${TimezoneHelper.formatTime(t)} time`}
+                  style={{ minHeight: 44, minWidth: 44, background: 'none', border: 'none', color: 'var(--text-tertiary)', fontSize: 20, cursor: 'pointer' }}>
+                  {'\u00D7'}
+                </button>
+              )}
+            </div>
+          ))}
+          {times.length < 6 && (
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+              <button onClick={() => setTimes([...times, '12:00'])}
+                style={{ minHeight: 44, padding: '0 14px', background: 'var(--bg-teal-light)', color: 'var(--role-color)', border: 'none', borderRadius: 10, fontSize: 13.5, fontWeight: 700, cursor: 'pointer' }}>
+                + Add a time
+              </button>
+              {/* The case he actually described, in one tap. */}
+              {times.length === 1 && (
+                <button onClick={() => setTimes(['08:00', '12:30', '18:00'])}
+                  style={{ minHeight: 44, padding: '0 14px', background: 'none', color: 'var(--accent-color)', border: 'none', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+                  Morning, lunch & dinner
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          <button style={chip(recurrence === 'daily')} onClick={() => setRecurrence('daily')}>Every day</button>
+          <button style={chip(recurrence === 'days')} onClick={() => setRecurrence('days')}>Some days</button>
+          <button style={chip(recurrence === 'weekly')} onClick={() => setRecurrence('weekly')}>Weekly</button>
+        </div>
+        {recurrence === 'days' && (
+          <div style={{ display: 'flex', gap: 5, marginTop: 8 }}>
+            {DOW.map(d => (
+              <button key={d} onClick={() => setDays(days.includes(d) ? days.filter(x => x !== d) : [...days, d])}
+                style={{ ...chip(days.includes(d)), padding: '6px 0', flex: 1, textAlign: 'center', textTransform: 'capitalize' }}>{d[0].toUpperCase() + d[1]}</button>
+            ))}
+          </div>
+        )}
+
+        <div style={label}>Starting · for how long</div>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          <input type="date" style={{ ...input, width: 150 }} value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+          <button style={chip(!hasEnd)} onClick={() => setHasEnd(false)}>Ongoing</button>
+          <button style={chip(hasEnd)} onClick={() => setHasEnd(true)}>Until…</button>
+          {hasEnd && <input type="date" style={{ ...input, width: 150 }} value={endDate} onChange={(e) => setEndDate(e.target.value)} />}
+        </div>
+
+        <div style={label}>Whose job is it?</div>
+        <select style={input} value={assignee} onChange={(e) => setAssignee(e.target.value)}>
+          <option value="">Whole care team (everyone gets the reminder)</option>
+          {(teamMembers || []).map(m => (
+            <option key={m.id} value={m.id}>{m.first_name} {m.last_name}</option>
+          ))}
+        </select>
+
+        <div style={label}>If it's not checked off…</div>
+        <select style={input} value={grace} onChange={(e) => setGrace(e.target.value)}>
+          {[15, 30, 45, 60, 90, 120].map(g => (
+            <option key={g} value={g}>Alert the whole team after {g >= 60 ? `${g / 60} hour${g > 60 ? 's' : ''}` : `${g} minutes`}</option>
+          ))}
+        </select>
+
+        <div style={{ display: 'flex', gap: 10, marginTop: 18 }}>
+          <button disabled={saving || !title.trim()} onClick={save} style={{
+            flex: 1, padding: '12px 0', borderRadius: 12, border: 'none', background: 'var(--accent-color)',
+            color: 'var(--text-on-primary)', fontSize: 15, fontWeight: 700, cursor: 'pointer', opacity: saving || !title.trim() ? 0.5 : 1,
+          }}>{existing ? 'Save changes' : 'Create task'}</button>
+          <button onClick={onClose} style={{ padding: '12px 18px', borderRadius: 12, border: '1px solid var(--border-color)', background: 'var(--bg-surface)', color: 'var(--text-secondary)', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>Cancel</button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ─── Task history (v1.109.3) ───
+//
+// Pete, 9/18: "i can pause them, delete them, but they stay there. can we archive? it's a
+// great idea to archive and be able to see how long or who did what previously."
+//
+// Remove now archives: the task leaves the list, every occurrence stays. This is where that
+// record is read — how long it ran, how much of it got done, and who did it.
+
+// 'YYYY-MM-DD' is a naive date. new Date('2026-09-18') parses it as UTC midnight and renders
+// as the 17th west of Greenwich, so it is built and read in UTC on purpose.
+const careTaskDay = window.careTaskDay = (d, opts) => {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(d || ''));
+  if (!m) return '';
+  return new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]))
+    .toLocaleDateString('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric', ...(opts || {}) });
+};
+
+const careTaskRan = window.careTaskRan = (summary) => {
+  if (!summary || !summary.firstDue) return null;
+  const span = careTaskDay(summary.firstDue) + (summary.lastDue && summary.lastDue !== summary.firstDue ? ` – ${careTaskDay(summary.lastDue)}` : '');
+  const d = summary.days || 0;
+  const how = d >= 60 ? `${Math.round(d / 30)} months` : d >= 14 ? `${Math.round(d / 7)} weeks` : d === 1 ? '1 day' : `${d} days`;
+  return `${how} · ${span}`;
+};
+
+const CareTaskHistorySheet = window.CareTaskHistorySheet = ({ task, onClose }) => {
+  const [data, setData] = useState(null);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await apiFetch(`/api/care-tasks/${task.id}/history`);
+        if (res?.ok) { setData(await res.json()); return; }
+      } catch {}
+      setFailed(true);
+    })();
+  }, [task.id]);
+
+  const s = data?.summary;
+  const STATUS = {
+    done: { label: 'Done', color: 'var(--color-success)' },
+    skipped: { label: 'Dismissed', color: 'var(--text-muted)' },
+    missed: { label: 'Missed', color: 'var(--color-error)' },
+    pending: { label: 'Not recorded', color: 'var(--text-tertiary)' },
+  };
+
+  return (
+    <div onClick={onClose} data-testid="care-task-history" style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 1000, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
+      <div onClick={(e) => e.stopPropagation()} style={{
+        background: 'var(--bg-card)', borderRadius: '16px 16px 0 0', width: '100%', maxWidth: 480,
+        maxHeight: '85vh', overflowY: 'auto', padding: 20, paddingBottom: 'calc(20px + env(safe-area-inset-bottom, 0px))',
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10, marginBottom: 4 }}>
+          <div style={{ fontWeight: 700, fontSize: 16, color: 'var(--text-primary)' }}>
+            {careTaskIcon(task.task_type)} {task.title}
+          </div>
+          <button onClick={onClose} style={{ border: 'none', background: 'none', fontSize: 20, color: 'var(--text-muted)', cursor: 'pointer', lineHeight: 1 }}>{'×'}</button>
+        </div>
+
+        {failed && <div style={{ fontSize: 13, color: 'var(--text-tertiary)', padding: '10px 0' }}>Couldn{'’'}t load the history just now.</div>}
+        {!data && !failed && <div style={{ fontSize: 13, color: 'var(--text-tertiary)', padding: '10px 0' }}>Loading{'…'}</div>}
+
+        {s && (
+          <div style={{ marginBottom: 14 }}>
+            <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{careTaskRan(s) || 'Nothing recorded yet'}</div>
+            {s.answered > 0 && (
+              <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 2 }}>
+                Done {s.done} of {s.answered}{s.doneRate !== null ? ` · ${s.doneRate}%` : ''}
+                {s.missed ? ` · ${s.missed} missed` : ''}{s.skipped ? ` · ${s.skipped} dismissed` : ''}
+              </div>
+            )}
+            {s.people.length > 0 && (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
+                {s.people.map((p) => (
+                  <span key={p.name} style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', background: 'var(--bg-surface)', border: '1px solid var(--border-color)', borderRadius: 12, padding: '3px 10px' }}>
+                    {p.name} {'·'} {p.count}
+                  </span>
+                ))}
+              </div>
+            )}
+            {data.task.archived_at && (
+              <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 8 }}>
+                Removed {careTaskDay(String(data.task.archived_at).slice(0, 10))}
+                {data.task.archived_by_first_name ? ` by ${data.task.archived_by_first_name}` : ''} {'·'} the record stays.
+              </div>
+            )}
+          </div>
+        )}
+
+        {data && data.occurrences.length === 0 && !failed && (
+          <div style={{ fontSize: 13, color: 'var(--text-tertiary)' }}>Nothing was ever recorded for this one.</div>
+        )}
+        {data && data.occurrences.map((o) => {
+          const st = STATUS[o.status] || STATUS.pending;
+          return (
+            <div key={o.id} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, padding: '7px 0', borderBottom: '1px solid var(--border-light)' }}>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 13, color: 'var(--text-primary)' }}>
+                  {careTaskDay(o.dueDate, { weekday: 'short' })}
+                  {o.by && <span style={{ color: 'var(--text-tertiary)' }}> {'·'} {o.by}</span>}
+                </div>
+                {o.note && <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>{o.note}</div>}
+              </div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: st.color, flexShrink: 0 }}>{st.label}</div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+// ─── Quick-create from the dashboard "+ Task" pill (v1.99.3) ───
+// Pete: task creation must be obvious to someone just opening the app — a
+// "+ Task" pill lives next to "+ Request Care" in Next Up. This wrapper
+// picks the recipient (auto if there's only one), pulls the team for the
+// assignee dropdown, then hands off to the same CareTaskFormModal the
+// profile card uses.
+const CareTaskQuickCreate = window.CareTaskQuickCreate = ({ recipients, onClose, onCreated }) => {
+  const list = (recipients || []).map(r => ({
+    id: r.id, firstName: r.first_name || r.firstName || 'your loved one',
+    name: `${r.first_name || r.firstName || ''} ${r.last_name || r.lastName || ''}`.trim(),
+  }));
+  const [chosen, setChosen] = useState(list.length === 1 ? list[0] : null);
+  const [teamMembers, setTeamMembers] = useState(null);
+
+  useEffect(() => {
+    if (!chosen) return;
+    (async () => {
+      try {
+        const res = await apiFetch(`/api/care-tasks/recipient/${chosen.id}`);
+        if (res?.ok) { const d = await res.json(); setTeamMembers(d.teamMembers || []); return; }
+      } catch {}
+      setTeamMembers([]);
+    })();
+  }, [chosen?.id]);
+
+  if (!chosen) {
+    return (
+      <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+        <div onClick={(e) => e.stopPropagation()} style={{ background: 'var(--bg-card)', borderRadius: 16, width: '100%', maxWidth: 380, padding: 20 }}>
+          <div style={{ fontWeight: 700, fontSize: 16, color: 'var(--text-primary)', marginBottom: 12 }}>New task — for whom?</div>
+          {list.map(r => (
+            <button key={r.id} onClick={() => setChosen(r)} style={{
+              display: 'block', width: '100%', textAlign: 'left', padding: '12px 14px', marginBottom: 8,
+              borderRadius: 10, border: '1px solid var(--border-color)', background: 'var(--bg-surface)',
+              color: 'var(--text-primary)', fontSize: 14, fontWeight: 600, cursor: 'pointer',
+            }}>{r.name}</button>
+          ))}
+        </div>
+      </div>
+    );
+  }
+  if (teamMembers === null) return null; // one paint while the team loads
+  return (
+    <CareTaskFormModal recipientId={chosen.id} recipientFirstName={chosen.firstName}
+      teamMembers={teamMembers} existing={null} onClose={onClose} onSaved={onCreated} />
+  );
+};
+
+// ─── Recipient-profile card: manage task definitions ───
+const CareTasksSection = window.CareTasksSection = ({ recipientId, recipientFirstName, hideTodos, foldKey, defaultOpen, title }) => {
+  // v1.105.171 — remembered on the account. Pete: "make all the menus collapsible on the
+  // care team and betty pages. it should stick, too."
+  // v1.121.0 — on Betty's page this is the SETUP fold under the combined To do list
+  // (LovedOneToDo), so it takes its own key, starts folded, and leaves the to-dos to the list
+  // above it (`hideTodos`) instead of showing them twice.
+  const [sectionOpen, setSectionOpen] = useStickySection(foldKey || 'lovedOne.careTasks', defaultOpen === undefined ? true : defaultOpen);
+  const { showToast } = useToast();
+  const [data, setData] = useState(null);
+  const [showForm, setShowForm] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [historyFor, setHistoryFor] = useState(null);
+  const [showArchived, setShowArchived] = useState(false);
+
+  const load = async () => {
+    try {
+      const res = await apiFetch(`/api/care-tasks/recipient/${recipientId}`);
+      if (res?.ok) setData(await res.json());
+    } catch {}
+  };
+  useEffect(() => { if (recipientId) load(); }, [recipientId]);
+  // v1.105.162 — Pete: "the care team level would just read from the main task." It does now:
+  // check a task off anywhere and this panel re-reads, rather than showing yesterday's answer
+  // until someone navigates away and back.
+  useEffect(() => CareTaskSync.onChange(() => { if (recipientId) load(); }), [recipientId]);
+
+  if (!data) return null;
+  const { tasks, canManage, teamMembers } = data;
+  const archived = data.archived || [];
+
+  const scheduleLine = (t) => {
+    const time = careTaskTimesOf(t).map((x) => TimezoneHelper.formatTime(x)).join(', ');
+    const rep = t.recurrence === 'daily' ? 'every day'
+      : t.recurrence === 'weekly' ? 'weekly'
+      : (t.recurrence_days || '').split(',').map(d => d && d[0].toUpperCase() + d.slice(1, 3)).join(' ');
+    const until = t.end_date ? ` · until ${t.end_date}` : '';
+    const who = t.assignee_first_name ? ` · ${t.assignee_first_name}'s job` : ' · whole team';
+    return `${time} · ${rep}${until}${who}`;
+  };
+
+  const removeTask = async (t) => {
+    if (!window.confirm(`Remove "${t.title}"? It moves to Archived \u2014 it stops coming up, and everything already recorded stays where you can read it.`)) return;
+    try {
+      const res = await apiFetch(`/api/care-tasks/${t.id}`, { method: 'DELETE' });
+      const d = res ? await res.json().catch(() => ({})) : {};
+      if (res?.ok) { showToast('Moved to Archived \u2014 history kept', 'success'); setShowArchived(true); load(); if (typeof CareTaskSync !== 'undefined') CareTaskSync.announce(null); }
+      else showToast(d.error || 'Couldn\u2019t remove that', 'error');
+    } catch { showToast('Couldn\u2019t reach InPlace', 'error'); }
+  };
+  const toggleActive = async (t) => {
+    try {
+      const res = await apiFetch(`/api/care-tasks/${t.id}`, { method: 'PUT', body: JSON.stringify({ is_active: t.is_active ? 0 : 1 }) });
+      if (res?.ok) load(); else showToast('Could not update', 'error');
+    } catch { showToast('Could not update', 'error'); }
+  };
+  // Back on the list PAUSED: a course that stopped six weeks ago must not start reminding
+  // anyone the second it returns. Resume is one more tap, and it is a deliberate one.
+  const restoreTask = async (t) => {
+    try {
+      const res = await apiFetch(`/api/care-tasks/${t.id}/restore`, { method: 'POST' });
+      if (res?.ok) { showToast('Back on the list \u2014 paused', 'success'); load(); if (typeof CareTaskSync !== 'undefined') CareTaskSync.announce(null); }
+      else showToast('Could not restore that', 'error');
+    } catch { showToast('Could not restore that', 'error'); }
+  };
+
+  return (
+    <div className="card">
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+        {/* v1.105.172 — Pete: "i want to standardize where the collapse button is... I prefer
+            end-justified." So the chevron is the LAST thing in every header, hard against the
+            right edge, wherever else the header's own buttons sit. What it must not become is
+            the whole row: "+ Add" lives here too, and folding the section when you meant to
+            add something is worse than not folding at all. Title and chevron toggle; the
+            button between them does not. */}
+        <div className="card-header" style={{ margin: 0, cursor: 'pointer' }}
+          role="button" tabIndex={0} aria-expanded={sectionOpen}
+          onClick={() => setSectionOpen(!sectionOpen)}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSectionOpen(!sectionOpen); } }}>
+          <span className="card-icon">{'✅'}</span>{title || 'Care Tasks'}{title && tasks.length > 0 ? ` (${tasks.length})` : ''}
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+          {sectionOpen && canManage && (
+            <button onClick={(e) => { e.stopPropagation(); setEditing(null); setShowForm(true); }}
+              style={{ padding: '6px 12px', borderRadius: 8, border: 'none', background: 'var(--accent-color)', color: 'var(--text-on-primary)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+              + Add task
+            </button>
+          )}
+          <span role="button" tabIndex={0} aria-hidden="true"
+            onClick={() => setSectionOpen(!sectionOpen)}
+            style={{ fontSize: 16, color: 'var(--text-muted)', cursor: 'pointer', transition: 'transform 0.2s', transform: sectionOpen ? 'rotate(180deg)' : 'rotate(0)' }}>{'▼'}</span>
+        </div>
+      </div>
+      {/* display, not unmount: reopening must not refetch the list or lose a half-typed form */}
+      <div style={{ display: sectionOpen ? 'block' : 'none' }}>
+      {tasks.length === 0 ? (
+        <div style={{ fontSize: 13, color: 'var(--text-tertiary)', padding: '8px 0' }}>
+          Recurring things the care team keeps on track — medications, baths, check-ins.
+          Reminders go out, whoever's there checks it off, and it's on the record.
+        </div>
+      ) : tasks.map(t => (
+        <div key={t.id} style={{ padding: '10px 0', borderBottom: '1px solid var(--border-light)', opacity: t.is_active ? 1 : 0.55 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-primary)' }}>
+                {careTaskIcon(t.task_type)} {t.title}{!t.is_active && <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600 }}> · paused</span>}
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>{scheduleLine(t)}</div>
+              <CareTaskStrip recent={t.recent} />
+            </div>
+            {canManage && (
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                <button onClick={() => { setEditing(t); setShowForm(true); }}
+                  style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid var(--border-color)', background: 'var(--bg-surface)', color: 'var(--text-secondary)', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>Edit</button>
+                <button onClick={() => setHistoryFor(t)}
+                  style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid var(--border-color)', background: 'var(--bg-surface)', color: 'var(--text-secondary)', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>History</button>
+                <button onClick={() => toggleActive(t)}
+                  style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid var(--border-color)', background: 'var(--bg-surface)', color: 'var(--text-tertiary)', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
+                  {t.is_active ? 'Pause' : 'Resume'}
+                </button>
+                {/* v1.105.191 — Pete: "i still can't cancel tasks." DELETE existed on the
+                    server since Phase 1; nothing on screen called it. Pause keeps a finished
+                    course of antibiotics on the list forever. History is kept either way. */}
+                <button onClick={() => removeTask(t)}
+                  style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid #fdd', background: 'var(--bg-surface)', color: 'var(--color-red-strong)', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
+                  Remove
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      ))}
+
+      {/* v1.109.9 — one-time to-dos sit with the tasks: same people look at both (e4cd314a). */}
+      {!hideTodos && typeof CareTodoList !== 'undefined' && (
+        <div style={{ marginTop: 12, borderTop: '1px solid var(--border-light)', paddingTop: 10 }}>
+          <CareTodoList recipientIds={[recipientId]} heading="To-dos for the next visit" showAdd />
+        </div>
+      )}
+
+      {/* v1.109.3 — archived tasks. Out of the way, never gone: this is how long it ran and
+          who did it. Restore brings it back paused. */}
+      {archived.length > 0 && (
+        <div data-testid="care-tasks-archived" style={{ marginTop: 10, borderTop: '1px solid var(--border-light)', paddingTop: 10 }}>
+          <button onClick={() => setShowArchived(!showArchived)} aria-expanded={showArchived}
+            style={{ border: 'none', background: 'none', padding: 0, cursor: 'pointer', fontSize: 12, fontWeight: 700, color: 'var(--text-muted)' }}>
+            Archived ({archived.length}) {showArchived ? '\u25B2' : '\u25BC'}
+          </button>
+          {showArchived && archived.map((t) => (
+            <div key={t.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10, padding: '8px 0', borderBottom: '1px solid var(--border-light)' }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-secondary)' }}>{careTaskIcon(t.task_type)} {t.title}</div>
+                <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2 }}>
+                  Removed {careTaskDay(String(t.archived_at).slice(0, 10))}{t.archived_by_first_name ? ` by ${t.archived_by_first_name}` : ''}
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                <button onClick={() => setHistoryFor(t)}
+                  style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid var(--border-color)', background: 'var(--bg-surface)', color: 'var(--text-secondary)', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>History</button>
+                {canManage && (
+                  <button onClick={() => restoreTask(t)}
+                    style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid var(--border-color)', background: 'var(--bg-surface)', color: 'var(--text-tertiary)', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>Restore</button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      </div>
+      {historyFor && <CareTaskHistorySheet task={historyFor} onClose={() => setHistoryFor(null)} />}
+      {showForm && (
+        <CareTaskFormModal recipientId={recipientId} recipientFirstName={recipientFirstName}
+          teamMembers={teamMembers} existing={editing}
+          onClose={() => setShowForm(false)} onSaved={load} />
+      )}
+    </div>
+  );
+};
+
+// ─── v1.107.5 — Today at Betty's, on the caregiver's Home ───
+//
+// Pete, 9/15: "I need the caregiver to be able to be the one to mark off tasks. Yes, even
+// medications...they're just going to mark off that the person took them, not that they are
+// administering them ... Tina sees the events below the 'in progress' card, like today for
+// instance, there's two appointments at betty's that Tina should be tracking."
+//
+// The server has let an assigned caregiver check a task off since v1.99; she was never shown
+// one. This sits directly under the pinned visit card and lists, for the people she is with
+// TODAY, today's appointments and today's tasks. Scoped by the hub's own sessions, so a
+// caregiver who is also someone's family doesn't get her family's list repeated here.
+const CaregiverTodayAtVisit = window.CaregiverTodayAtVisit = ({ recipientIds }) => {
+  const { showToast } = useToast();
+  const [groups, setGroups] = useState([]);
+  const [events, setEvents] = useState([]);
+  const [taskSheet, setTaskSheet] = useState(null);
+  const [eventSheet, setEventSheet] = useState(null);
+  const saving = useRef(new Set());
+  const idsKey = (recipientIds || []).slice().sort().join(',');
+
+  const load = async () => {
+    if (!idsKey) { setGroups([]); setEvents([]); return; }
+    const ids = new Set(idsKey.split(','));
+    try {
+      const [t, e] = await Promise.all([
+        apiFetch('/api/care-tasks/today').then((r) => (r && r.ok ? r.json() : { groups: [] })),
+        apiFetch('/api/care-events/upcoming').then((r) => (r && r.ok ? r.json() : { events: [] })),
+      ]);
+      setGroups((t.groups || []).filter((g) => ids.has(g.careRecipientId)));
+      // onShift events were already cut to her shift by the server (an overnight can reach into
+      // tomorrow morning). Anyone else here is on the team, and gets today's.
+      setEvents((e.events || []).filter((ev) => ids.has(ev.care_recipient_id)
+        && (ev.onShift || ev.event_date === TimezoneHelper.getToday(ev.timezone || TimezoneHelper.DEFAULT_TZ))));
+    } catch { /* the visit card above still works; this list re-reads on the next change */ }
+  };
+  useEffect(() => { load(); }, [idsKey]);
+  useEffect(() => CareTaskSync.onChange(() => load()), [idsKey]);
+
+  const patch = (occId, fields) => setGroups((prev) => prev.map((g) => ({
+    ...g, occurrences: g.occurrences.map((o) => (o.id === occId ? { ...o, ...fields } : o)),
+  })));
+  const quickCheck = async (occ) => {
+    if (saving.current.has(occ.id)) return;
+    saving.current.add(occ.id);
+    patch(occ.id, { status: 'done', completed_by_user_id: window.__currentUserId || null, completed_by_name: null, __saving: true });
+    const r = await CareTaskSync.write(occ.id, { status: 'done' });
+    saving.current.delete(occ.id);
+    if (!r.ok) { patch(occ.id, { status: occ.status, __saving: false }); showToast(r.error, 'error'); }
+    else if (occ.task_type === 'medication') showToast('Marked taken', 'success');
+    load();
+  };
+  const undo = async (occ) => {
+    const r = await CareTaskSync.undo(occ.id);
+    if (!r.ok) showToast(r.error, 'error');
+    load();
+  };
+
+  const rows = [];
+  for (const ev of events) {
+    const tz = ev.timezone || TimezoneHelper.DEFAULT_TZ;
+    const dayKey = ev.event_date === TimezoneHelper.getToday(tz) ? '0' : '1';
+    rows.push({ key: `e-${ev.id}`, sort: `${dayKey}${ev.event_time || '00:00'}`, ev });
+  }
+  for (const g of groups) {
+    for (const occ of g.occurrences) rows.push({ key: `t-${occ.id}`, sort: `0${occ.occ_time || occ.due_time || ''}`, occ, group: g });
+  }
+  // v1.109.9 — "reminds the next person that shows up at her house" (e4cd314a). She is that
+  // person, so the to-dos go first, above the clock-bound things.
+  const todos = typeof CareTodoList !== 'undefined'
+    ? <CareTodoList recipientIds={recipientIds} heading="To-dos for this visit" hideWhenNothingOpen />
+    : null;
+  if (rows.length === 0) return todos ? <div style={{ marginBottom: 16 }}>{todos}</div> : null;
+  rows.sort((a, b) => a.sort.localeCompare(b.sort));
+
+  const names = [...new Set([...groups.map((g) => g.recipientFirstName), ...events.map((e) => e.recipientFirstName)].filter(Boolean))];
+  const title = names.length === 1 ? `Today at ${names[0]}’s` : 'Today at your visits';
+  const hasMeds = groups.some((g) => g.occurrences.some((o) => o.task_type === 'medication'));
+
+  return (
+    <div data-testid="caregiver-today-at-visit" style={{ marginBottom: 16 }}>
+      {todos}
+      <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', margin: '4px 2px 8px' }}>{title}</div>
+      {hasMeds && (
+        <div style={{ fontSize: 12, color: 'var(--text-tertiary)', margin: '-4px 2px 8px' }}>
+          Checking off a medication records that it was taken. It doesn{'’'}t mean you gave it.
+        </div>
+      )}
+      {rows.map((r) => r.ev ? (
+        <CareEventNextUpRow key={r.key} ev={r.ev} onOpenSheet={() => setEventSheet(r.ev)} />
+      ) : (
+        <CareTaskNextUpRow key={r.key} occ={r.occ} group={r.group}
+          onQuickCheck={() => quickCheck(r.occ)}
+          onOpenSheet={() => setTaskSheet({ occ: r.occ, group: r.group })}
+          onUndo={() => undo(r.occ)} />
+      ))}
+      {taskSheet && (
+        <CareTaskCheckSheet occ={taskSheet.occ} group={taskSheet.group}
+          onClose={() => setTaskSheet(null)} onDone={() => load()} />
+      )}
+      {eventSheet && (
+        <CareEventSheet ev={eventSheet} canManage={false}
+          onClose={() => setEventSheet(null)} onChanged={() => load()} onEdit={() => setEventSheet(null)} />
+      )}
+    </div>
+  );
+};
+
+// ─── v1.121.0 (Batch 2 step 3) — "To do" on Betty's page ───
+//
+// Pete, 10/15 (a747e1cb): "then tasks, events, and to-dos (maybe we combine into something
+// useful?)" — and the page should "convey the same sense of priority" as Home: the next thing
+// first, later things below.
+//
+// Before, this stop was the task SETUP card — definitions with Edit / Pause / Remove — with
+// the to-dos tucked under it. What a family member opens Betty's page to find out is what's
+// left today, so that leads, grouped by when:
+//
+//   Now          — due within the next two hours, or overdue (a late dose is never "later")
+//   Later today  — the rest of today's tasks and appointments
+//   Next visit   — the one-time to-dos (CareTodoList, with + Add)
+//   Done today   — folded; what was checked off and by whom
+//
+// Setting tasks up is still one tap away, folded underneath ("Recurring tasks"). Checking off
+// is the same write as Home's Next Up (CareTaskSync), so the two never disagree.
+const LOVED_ONE_NOW_MS = 2 * 60 * 60 * 1000;
+
+const lovedOneToDoBuckets = window.lovedOneToDoBuckets = (occurrences, events, nowMs) => {
+  const now = [], later = [], done = [];
+  for (const occ of occurrences || []) {
+    if (occ.status === 'done' || occ.status === 'skipped') { done.push({ key: `t-${occ.id}`, occ }); continue; }
+    const due = new Date(occ.due_at).getTime();
+    const row = { key: `t-${occ.id}`, sort: `${occ.occ_time || occ.due_time || ''}`, occ };
+    if (!Number.isFinite(due) || due - nowMs <= LOVED_ONE_NOW_MS) now.push(row); else later.push(row);
+  }
+  for (const ev of events || []) {
+    const row = { key: `e-${ev.id}`, sort: ev.event_time || '00:00', ev };
+    // An appointment with no time is an all-day thing: it belongs to "now".
+    if (!ev.event_time || !(ev.__untilMs > LOVED_ONE_NOW_MS)) now.push(row); else later.push(row);
+  }
+  const bySort = (a, b) => String(a.sort).localeCompare(String(b.sort));
+  return { now: now.sort(bySort), later: later.sort(bySort), done };
+};
+
+const LovedOneToDo = window.LovedOneToDo = ({ recipientId, recipientFirstName }) => {
+  const { showToast } = useToast();
+  const [group, setGroup] = useState(null);
+  const [events, setEvents] = useState([]);
+  const [loaded, setLoaded] = useState(false);
+  const [doneOpen, setDoneOpen] = useState(false);
+  const [taskSheet, setTaskSheet] = useState(null);
+  const [eventSheet, setEventSheet] = useState(null);
+  const [, tick] = useState(0);
+  const saving = useRef(new Set());
+
+  const load = async () => {
+    if (!recipientId) return;
+    try {
+      const [t, e] = await Promise.all([
+        apiFetch('/api/care-tasks/today').then((r) => (r && r.ok ? r.json() : { groups: [] })),
+        apiFetch('/api/care-events/upcoming').then((r) => (r && r.ok ? r.json() : { events: [] })),
+      ]);
+      setGroup((t.groups || []).find((g) => g.careRecipientId === recipientId) || null);
+      setEvents((e.events || []).filter((ev) => ev.care_recipient_id === recipientId
+        && ev.event_date === TimezoneHelper.getToday(ev.timezone || TimezoneHelper.DEFAULT_TZ)));
+    } catch { /* keeps the last good list; the setup fold below still works */ }
+    setLoaded(true);
+  };
+  useEffect(() => { load(); }, [recipientId]);
+  useEffect(() => CareTaskSync.onChange(() => load()), [recipientId]);
+  // "Now" is a moving line: re-sort every few minutes while the page is open.
+  useEffect(() => { const id = setInterval(() => tick((n) => n + 1), 5 * 60 * 1000); return () => clearInterval(id); }, []);
+
+  const patch = (occId, fields) => setGroup((g) => (g ? { ...g, occurrences: g.occurrences.map((o) => (o.id === occId ? { ...o, ...fields } : o)) } : g));
+  const quickCheck = async (occ) => {
+    if (saving.current.has(occ.id)) return;
+    saving.current.add(occ.id);
+    patch(occ.id, { status: 'done', completed_by_user_id: window.__currentUserId || null, __saving: true });
+    const r = await CareTaskSync.write(occ.id, { status: 'done' });
+    saving.current.delete(occ.id);
+    if (!r.ok) { patch(occ.id, { status: occ.status, __saving: false }); showToast(r.error, 'error'); }
+    else if (occ.task_type === 'medication') showToast('Marked taken', 'success');
+    load();
+  };
+  const undo = async (occ) => {
+    const r = await CareTaskSync.undo(occ.id);
+    if (!r.ok) showToast(r.error, 'error');
+    load();
+  };
+
+  // How far off each appointment is. The client's TimezoneHelper.buildDateTime returns the TRUE
+  // instant of "h:m on that day where the care happens" (unlike the server's shifted-frame
+  // helper), so it compares against the real clock.
+  const evs = events.map((ev) => {
+    let untilMs = -Infinity; // no time, or unreadable → treat as now
+    try {
+      const tz = ev.timezone || TimezoneHelper.DEFAULT_TZ;
+      if (ev.event_time) {
+        const d = TimezoneHelper.buildDateTime(ev.event_date, ev.event_time, tz).getTime() - TimezoneHelper.realNowMs();
+        if (Number.isFinite(d)) untilMs = d;
+      }
+    } catch { /* stays "now" */ }
+    return { ...ev, __untilMs: untilMs };
+  });
+  const occs = (group && group.occurrences) || [];
+  const { now, later, done } = lovedOneToDoBuckets(occs, evs, Date.now());
+  const hasMeds = occs.some((o) => o.task_type === 'medication');
+  const name = recipientFirstName || 'them';
+
+  const heading = (text, count, testid) => (
+    <div data-testid={testid} style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', margin: '14px 2px 8px' }}>
+      {text}{count ? ` · ${count}` : ''}
+    </div>
+  );
+  const renderRow = (r) => (r.ev ? (
+    <CareEventNextUpRow key={r.key} ev={r.ev} onOpenSheet={() => setEventSheet(r.ev)} />
+  ) : (
+    <CareTaskNextUpRow key={r.key} occ={r.occ} group={group}
+      onQuickCheck={() => quickCheck(r.occ)}
+      onOpenSheet={() => setTaskSheet({ occ: r.occ, group })}
+      onUndo={() => undo(r.occ)} />
+  ));
+
+  return (
+    <div data-testid="loved-one-todo">
+      <div className="card" style={{ paddingTop: 4 }}>
+        {heading('Now', now.length, 'todo-now')}
+        {now.length > 0 ? now.map(renderRow) : (
+          <div style={{ fontSize: 13, color: 'var(--text-tertiary)', padding: '0 2px 6px' }}>
+            {loaded ? (later.length ? `Nothing due in the next two hours for ${name}.` : `Nothing left on ${name}’s list today.`) : 'Loading…'}
+          </div>
+        )}
+        {hasMeds && now.length > 0 && (
+          <div style={{ fontSize: 12, color: 'var(--text-tertiary)', margin: '-2px 2px 6px' }}>
+            Checking off a medication records that it was taken. It doesn{'’'}t mean you gave it.
+          </div>
+        )}
+        {later.length > 0 && (
+          <>
+            {heading('Later today', later.length, 'todo-later')}
+            {later.map(renderRow)}
+          </>
+        )}
+        {typeof CareTodoList !== 'undefined' && (
+          <div data-testid="todo-next-visit" style={{ marginTop: 12, borderTop: '1px solid var(--border-light)', paddingTop: 10 }}>
+            <CareTodoList recipientIds={[recipientId]} heading="Next visit" showAdd />
+          </div>
+        )}
+        {done.length > 0 && (
+          <div style={{ marginTop: 10, borderTop: '1px solid var(--border-light)', paddingTop: 10 }}>
+            <button type="button" data-testid="todo-done-today" onClick={() => setDoneOpen(!doneOpen)} aria-expanded={doneOpen}
+              style={{ border: 'none', background: 'none', padding: '6px 0', minHeight: 36, cursor: 'pointer', fontSize: 12, fontWeight: 700, color: 'var(--text-muted)' }}>
+              Done today ({done.length}) {doneOpen ? '▲' : '▼'}
+            </button>
+            {doneOpen && done.map(renderRow)}
+          </div>
+        )}
+      </div>
+      <CareTasksSection recipientId={recipientId} recipientFirstName={recipientFirstName}
+        hideTodos foldKey="lovedOne.careTasksSetup" defaultOpen={false} title="Recurring tasks" />
+      {taskSheet && (
+        <CareTaskCheckSheet occ={taskSheet.occ} group={taskSheet.group}
+          onClose={() => setTaskSheet(null)} onDone={() => load()} />
+      )}
+      {eventSheet && (
+        <CareEventSheet ev={eventSheet} canManage={false}
+          onClose={() => setEventSheet(null)} onChanged={() => load()} onEdit={() => setEventSheet(null)} />
+      )}
+    </div>
+  );
+};

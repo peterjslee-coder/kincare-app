@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>InPlace — Unified Booking Flow Mockup</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f8f9fa; color: #333; }
+
+  .mockup-header {
+    background: #1b6b5a; color: #fff; padding: 16px 20px;
+    font-size: 13px; font-weight: 600; letter-spacing: 0.5px;
+    display: flex; align-items: center; gap: 12px;
+  }
+  .mockup-header .badge { background: #e8724a; padding: 2px 8px; border-radius: 4px; font-size: 10px; }
+
+  .flow-container { max-width: 420px; margin: 0 auto; padding: 16px; }
+
+  .flow-step {
+    background: #fff; border-radius: 12px; padding: 20px; margin-bottom: 16px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.08); display: none;
+  }
+  .flow-step.active { display: block; }
+
+  .step-label { font-size: 11px; font-weight: 700; color: #1b6b5a; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px; }
+
+  /* Calendar grid */
+  .cal-nav { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+  .cal-nav .month { font-size: 15px; font-weight: 700; color: #1b6b5a; }
+  .cal-nav button { background: none; border: none; cursor: pointer; font-size: 16px; color: #666; padding: 4px 8px; }
+
+  .cal-header { display: grid; grid-template-columns: repeat(7, 1fr); text-align: center; font-size: 10px; font-weight: 600; color: #aaa; margin-bottom: 4px; }
+
+  .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+  .cal-day {
+    aspect-ratio: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    font-size: 13px; cursor: pointer; border-radius: 50%; position: relative;
+    transition: all 0.15s;
+  }
+  .cal-day:hover:not(.past):not(.empty) { background: #f0f0f0; }
+  .cal-day.selected { background: #1b6b5a; color: #fff; font-weight: 700; }
+  .cal-day.today { font-weight: 800; color: #e8724a; }
+  .cal-day.today.selected { color: #fff; }
+  .cal-day.past { color: #ccc; cursor: default; opacity: 0.5; }
+  .cal-day .dots { display: flex; gap: 2px; position: absolute; bottom: 3px; }
+  .cal-day .dot-booked { width: 5px; height: 5px; border-radius: 50%; background: #1b6b5a; }
+  .cal-day .dot-requested { width: 5px; height: 5px; border-radius: 50%; border: 1.5px solid #e8724a; }
+  .cal-day.selected .dot-booked { background: rgba(255,255,255,0.85); }
+  .cal-day.selected .dot-requested { border-color: rgba(255,255,255,0.85); }
+
+  .cal-legend { display: flex; gap: 12px; font-size: 10px; color: #999; justify-content: flex-end; margin-top: 6px; align-items: center; }
+  .cal-legend span { display: flex; align-items: center; gap: 3px; }
+
+  /* Day detail panel */
+  .day-detail {
+    margin-top: 12px; padding: 12px; background: #f0faf7; border: 1px solid #d4edda; border-radius: 8px;
+    animation: slideDown 0.2s ease;
+  }
+  @keyframes slideDown { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
+
+  .day-detail .detail-title { font-size: 12px; font-weight: 700; color: #1b6b5a; margin-bottom: 8px; }
+
+  .session-row {
+    display: flex; align-items: center; gap: 8px; font-size: 12px; color: #555; padding: 6px 0;
+    border-bottom: 1px solid rgba(0,0,0,0.05);
+  }
+  .session-row:last-child { border-bottom: none; }
+  .session-row .time { font-weight: 600; min-width: 28px; }
+  .session-row .status { margin-left: auto; font-size: 10px; font-weight: 600; text-transform: capitalize; }
+  .session-row .status.confirmed { color: #1b6b5a; }
+  .session-row .status.requested { color: #e8724a; }
+
+  .book-btn {
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+    width: 100%; padding: 14px; margin-top: 10px;
+    background: #e8724a; color: #fff; border: none; border-radius: 8px;
+    font-size: 14px; font-weight: 700; cursor: pointer;
+    box-shadow: 0 2px 8px rgba(232, 114, 74, 0.3);
+    transition: transform 0.1s;
+  }
+  .book-btn:hover { transform: scale(1.01); }
+
+  /* Booking flow (modal-like, but inline) */
+  .booking-flow { animation: slideDown 0.25s ease; }
+
+  .pill-row { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
+  .pill {
+    padding: 8px 14px; border-radius: 20px; font-size: 13px; font-weight: 600;
+    cursor: pointer; border: 1px solid #e0e0e0; background: #fff; transition: all 0.15s;
+  }
+  .pill.selected { border: 2px solid #1b6b5a; background: #e8f5e9; }
+  .pill:hover:not(.selected) { border-color: #aaa; }
+
+  .field-label { font-size: 11px; font-weight: 600; color: #888; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+
+  /* Overlap warning */
+  .overlap-warning {
+    padding: 10px 14px; background: #fff3e0; border: 1px solid #ffe082; border-radius: 8px;
+    font-size: 13px; color: #795548; margin-bottom: 14px;
+    display: flex; align-items: center; gap: 8px;
+  }
+
+  .month-summary {
+    display: flex; gap: 16px; flex-wrap: wrap; font-size: 13px; color: #666; margin-top: 12px;
+  }
+  .month-summary strong { color: #333; }
+
+  /* Flow navigation */
+  .flow-nav { display: flex; gap: 8px; margin-top: 16px; }
+  .btn-primary { padding: 12px 28px; background: #1b6b5a; color: #fff; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; }
+  .btn-outline { padding: 12px 28px; background: #fff; color: #666; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; }
+
+  .annotation {
+    background: #fffde7; border-left: 3px solid #ffc107; padding: 10px 14px; margin: 12px 0;
+    font-size: 12px; color: #795548; border-radius: 0 8px 8px 0;
+  }
+  .annotation strong { color: #e65100; }
+</style>
+</head>
+<body>
+
+<div class="mockup-header">
+  <span>MOCKUP</span>
+  <span class="badge">NOT LIVE</span>
+  <span style="flex:1"></span>
+  <span style="font-size:11px; opacity:0.7">Unified Booking Flow</span>
+</div>
+
+<div class="flow-container" id="app"></div>
+
+<script>
+const { useState, useEffect, createElement: h, Fragment } = React;
+
+function App() {
+  const [view, setView] = useState('calendar'); // calendar | booking
+  const [selectedDate, setSelectedDate] = useState(null);
+  const [serviceType, setServiceType] = useState('');
+  const [selectedTime, setSelectedTime] = useState('');
+  const [duration, setDuration] = useState('');
+
+  const today = new Date();
+  const todayStr = `2026-03-${String(today.getDate()).padStart(2,'0')}`;
+
+  // Mock session data
+  const sessions = {
+    '2026-03-09': [
+      { time: '9a', type: 'Companion', caregiver: 'Cary Taker', status: 'confirmed', hours: 3, cost: '$84' },
+    ],
+    '2026-03-10': [
+      { time: '10a', type: 'Companion', caregiver: 'Waiting...', status: 'requested', hours: 2, cost: '$56' },
+    ],
+    '2026-03-12': [
+      { time: '8a', type: 'Personal Care', caregiver: 'Cary Taker', status: 'confirmed', hours: 4, cost: '$120' },
+      { time: '2p', type: 'Companion', caregiver: 'Cary Taker', status: 'confirmed', hours: 2, cost: '$56' },
+    ],
+    '2026-03-15': [
+      { time: '9a', type: 'Errands', caregiver: 'Waiting...', status: 'requested', hours: 3, cost: '$84' },
+    ],
+    '2026-03-19': [
+      { time: '10a', type: 'Companion', caregiver: 'Cary Taker', status: 'confirmed', hours: 3, cost: '$84' },
+    ],
+  };
+
+  const days = ['S','M','T','W','T','F','S'];
+  const firstDay = new Date(2026, 2, 1).getDay(); // March 2026
+  const daysInMonth = 31;
+
+  const handleBookCare = () => {
+    setServiceType('');
+    setSelectedTime('');
+    setDuration('');
+    setView('booking');
+  };
+
+  const dateLabel = selectedDate ? (() => {
+    const [y,m,d] = selectedDate.split('-').map(Number);
+    return new Date(y,m-1,d).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+  })() : '';
+
+  const shortDateLabel = selectedDate ? (() => {
+    const [y,m,d] = selectedDate.split('-').map(Number);
+    return new Date(y,m-1,d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  })() : '';
+
+  // Check overlap
+  const hasOverlap = selectedTime && duration && sessions[selectedDate];
+
+  if (view === 'booking') {
+    const daySess = sessions[selectedDate] || [];
+    return h('div', { className: 'booking-flow' },
+      // Header
+      h('div', { style: { marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between' } },
+        h('div', null,
+          h('div', { style: { fontSize: 18, fontWeight: 700, color: '#1b6b5a' } }, `Book care for ${shortDateLabel}`),
+          h('div', { style: { fontSize: 13, color: '#888', marginTop: 2 } }, dateLabel),
+        ),
+        h('button', { onClick: () => setView('calendar'), style: { background: 'none', border: 'none', fontSize: 24, color: '#999', cursor: 'pointer' } }, '×'),
+      ),
+
+      // Existing sessions on this day
+      daySess.length > 0 && h('div', { style: { padding: '10px 12px', background: '#f0faf7', border: '1px solid #d4edda', borderRadius: 8, marginBottom: 16 } },
+        h('div', { style: { fontSize: 11, fontWeight: 600, color: '#1b6b5a', marginBottom: 4 } }, 'Already scheduled:'),
+        ...daySess.map((s, i) => h('div', { key: i, className: 'session-row' },
+          h('span', { className: 'time' }, s.time),
+          h('span', null, `${s.type} · ${s.hours}hr`),
+          h('span', { className: `status ${s.status}` }, s.status),
+        )),
+      ),
+
+      // Service type
+      h('div', { style: { marginBottom: 14 } },
+        h('div', { className: 'field-label' }, 'Type of care'),
+        h('div', { className: 'pill-row' },
+          ...['Companion', 'Personal Care', 'Errands', 'Transportation', 'Respite'].map(t =>
+            h('button', { key: t, className: `pill ${serviceType === t ? 'selected' : ''}`, onClick: () => setServiceType(t) }, t)
+          ),
+        ),
+      ),
+
+      // Time
+      h('div', { style: { marginBottom: 14 } },
+        h('div', { className: 'field-label' }, 'Start time'),
+        h('div', { className: 'pill-row' },
+          ...['7a','8a','9a','10a','11a','12p','1p','2p','3p','4p','5p','6p','7p','8p'].map(t =>
+            h('button', { key: t, className: `pill ${selectedTime === t ? 'selected' : ''}`, onClick: () => setSelectedTime(t) }, t)
+          ),
+        ),
+      ),
+
+      // Overlap warning
+      selectedTime === '9a' && daySess.some(s => s.time === '9a') && h('div', { className: 'overlap-warning' },
+        h('span', null, '⚠️'),
+        h('span', null, 'This overlaps with an existing ', h('strong', null, 'Companion'), ' session at 9a. Double-booking is allowed but you may want a different time.'),
+      ),
+
+      // Duration
+      h('div', { style: { marginBottom: 14 } },
+        h('div', { className: 'field-label' }, 'Duration'),
+        h('div', { className: 'pill-row' },
+          ...['1 hr', '2 hr', '3 hr', '4 hr', '6 hr', '8 hr'].map(d =>
+            h('button', { key: d, className: `pill ${duration === d ? 'selected' : ''}`, onClick: () => setDuration(d) }, d)
+          ),
+        ),
+      ),
+
+      h('div', { className: 'annotation' },
+        h('strong', null, 'Design note: '), 'No calendar picker needed here — they already selected the date. This goes straight to service type → time → duration → caregiver match → confirm. The rest of the existing RequestCareModal flow (caregiver matching, cost preview, submit) follows after this.',
+      ),
+
+      // Nav
+      h('div', { className: 'flow-nav' },
+        h('button', { className: 'btn-primary', disabled: !serviceType || !selectedTime || !duration }, 'Next — Match Caregivers'),
+        h('button', { className: 'btn-outline', onClick: () => setView('calendar') }, 'Back'),
+      ),
+    );
+  }
+
+  // Calendar view
+  return h(Fragment, null,
+    // Title
+    h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 } },
+      h('h2', { style: { fontSize: 20, fontWeight: 700, color: '#333' } }, 'Schedule'),
+    ),
+
+    h('div', { className: 'annotation' },
+      h('strong', null, 'What changed: '), 'The orange "Request Care" sidebar button now navigates here (to Schedule) instead of opening a modal. The "+ Request Care" button below the title and the floating "+" FAB are removed — booking starts by tapping a day.',
+    ),
+
+    // Calendar card
+    h('div', { style: { background: '#fff', borderRadius: 12, padding: 16, boxShadow: '0 1px 4px rgba(0,0,0,0.08)' } },
+      // Month nav
+      h('div', { className: 'cal-nav' },
+        h('button', null, '◀'),
+        h('span', { className: 'month' }, 'March 2026'),
+        h('button', null, '▶'),
+      ),
+      // Day headers
+      h('div', { className: 'cal-header' },
+        ...days.map((d, i) => h('div', { key: i }, d))
+      ),
+      // Grid
+      h('div', { className: 'cal-grid' },
+        // Empty cells
+        ...Array.from({ length: firstDay }, (_, i) => h('div', { key: `e${i}`, className: 'cal-day empty' })),
+        // Days
+        ...Array.from({ length: daysInMonth }, (_, i) => {
+          const day = i + 1;
+          const ds = `2026-03-${String(day).padStart(2, '0')}`;
+          const isPast = day < today.getDate();
+          const isToday = day === today.getDate();
+          const isSel = ds === selectedDate;
+          const daySess = sessions[ds] || [];
+          const hasBooked = daySess.some(s => s.status === 'confirmed');
+          const hasRequested = daySess.some(s => s.status === 'requested');
+
+          let cls = 'cal-day';
+          if (isPast) cls += ' past';
+          if (isToday) cls += ' today';
+          if (isSel) cls += ' selected';
+
+          return h('div', { key: day, className: cls, onClick: () => !isPast && setSelectedDate(isSel ? null : ds) },
+            day,
+            (hasBooked || hasRequested) && h('div', { className: 'dots' },
+              hasBooked && h('span', { className: 'dot-booked' }),
+              hasRequested && h('span', { className: 'dot-requested' }),
+            ),
+          );
+        }),
+      ),
+      // Legend
+      h('div', { className: 'cal-legend' },
+        h('span', null, h('span', { className: 'dot-booked', style: { width: 5, height: 5, borderRadius: '50%', background: '#1b6b5a', display: 'inline-block' } }), ' Booked'),
+        h('span', null, h('span', { style: { width: 5, height: 5, borderRadius: '50%', border: '1.5px solid #e8724a', display: 'inline-block' } }), ' Requested'),
+      ),
+    ),
+
+    // Selected date detail
+    selectedDate && h('div', { className: 'day-detail', style: { marginTop: 12, background: '#fff', borderRadius: 12, padding: 16, boxShadow: '0 1px 4px rgba(0,0,0,0.08)', border: 'none' } },
+      h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 } },
+        h('div', { style: { fontSize: 15, fontWeight: 700, color: '#333' } }, `📋 ${dateLabel}`),
+        h('span', { style: { fontSize: 12, color: '#1b6b5a', fontWeight: 600 } },
+          `${(sessions[selectedDate] || []).reduce((s, x) => s + x.hours, 0)} hours`
+        ),
+      ),
+
+      (sessions[selectedDate] || []).length > 0 ? h(Fragment, null,
+        ...(sessions[selectedDate] || []).map((s, i) => h('div', { key: i, style: { display: 'flex', alignItems: 'center', gap: 8, padding: '10px 0', borderBottom: '1px solid #f0f0f0', fontSize: 13 } },
+          h('div', null,
+            h('div', { style: { fontWeight: 600 } }, `${s.time} ${s.type}`),
+            h('div', { style: { fontSize: 12, color: '#888', marginTop: 1 } }, `${s.caregiver} · ${s.hours}hr · ${s.cost}`),
+          ),
+          h('span', { style: { marginLeft: 'auto', fontSize: 11, fontWeight: 600, color: s.status === 'confirmed' ? '#1b6b5a' : '#e8724a' } }, s.status === 'confirmed' ? 'Confirmed' : 'Requested'),
+        )),
+        // Book more care on this day
+        h('button', { className: 'book-btn', onClick: handleBookCare, style: { marginTop: 12 } },
+          h('span', { style: { fontSize: 18 } }, '+'),
+          `Book more care on ${shortDateLabel}`,
+        ),
+      ) : h(Fragment, null,
+        h('p', { style: { fontSize: 14, color: '#888', marginBottom: 14, textAlign: 'center' } }, 'No care scheduled for this day yet.'),
+        h('button', { className: 'book-btn', onClick: handleBookCare },
+          h('span', { style: { fontSize: 18 } }, '+'),
+          `Book care on ${shortDateLabel}`,
+        ),
+      ),
+    ),
+
+    // Month summary
+    h('div', { className: 'month-summary', style: { marginTop: 16, padding: '0 4px' } },
+      h('span', null, '📅 ', h('strong', null, '6'), ' sessions'),
+      h('span', null, '📆 ', h('strong', null, '5'), ' care days'),
+      h('span', null, '⏱️ ', h('strong', null, '17'), ' total hours'),
+      h('span', null, '💰 ', h('strong', null, '$484'), ' estimated'),
+    ),
+
+    h('div', { className: 'annotation', style: { marginTop: 16 } },
+      h('strong', null, 'Flow summary: '), 'Sidebar "Request Care" → lands on Schedule → tap a day → see existing sessions → tap "Book care on [date]" → service type / time / duration (with overlap warning) → caregiver match → confirm. One path, no duplicate buttons.',
+    ),
+  );
+}
+
+ReactDOM.render(React.createElement(App), document.getElementById('app'));
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script>ReactDOM.render(React.createElement(App), document.getElementById('app'));</script>
+</body>
+</html>

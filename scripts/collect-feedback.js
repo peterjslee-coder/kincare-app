@@ -1,0 +1,515 @@
+#!/usr/bin/env node
+/**
+ * collect-feedback.js — Fetch and triage user feedback from production
+ *
+ * Usage:
+ *   node scripts/collect-feedback.js                     # Full fetch → FEEDBACK.md
+ *   node scripts/collect-feedback.js --triage             # Quick triage: show new items + counts
+ *   node scripts/collect-feedback.js --mark-reviewed      # Mark all 'new' items as 'reviewed'
+ *   node scripts/collect-feedback.js --local              # Use localhost:3001 instead of production
+ *   node scripts/collect-feedback.js --pull               # THE closed loop: fetch everything →
+ *                                                         # FEEDBACK.md, append new items to
+ *                                                         # FEEDBACK_INBOX.md, then mark them
+ *                                                         # reviewed on the server. Next pull
+ *                                                         # only surfaces genuinely new items.
+ *
+ * Authenticates via ADMIN_API_KEY (bypasses 2FA) or email/password login.
+ * Run this before planning any new version to incorporate real user input.
+ */
+
+const https = require("https");
+const http = require("http");
+const fs = require("fs");
+const path = require("path");
+
+// ─── v1.109.6 — read the file the error message points at ───
+//
+// The fix text below has always said "add ADMIN_API_KEY to kincare-repo/.env", and this file
+// never read .env. Pete added the key exactly where he was told and got the same error, because
+// the only way the key could arrive was an exported shell variable. Load the repo-root .env
+// here, anchored to this file rather than the working directory so it works from anywhere.
+// dotenv never overrides a variable that is already set, so an exported value still wins.
+require("dotenv").config({ path: path.join(__dirname, "..", ".env") });
+
+const PROD_URL = "https://yourinplace.com";
+const LOCAL_URL = "http://localhost:3001";
+
+const ADMIN_EMAIL = "peterjslee@gmail.com";
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || null; // never hardcode — 2FA blocks password login anyway
+const ADMIN_API_KEY = process.env.ADMIN_API_KEY || null;
+
+const isLocal = process.argv.includes("--local");
+const isTriage = process.argv.includes("--triage");
+const isMarkReviewed = process.argv.includes("--mark-reviewed");
+const isPull = process.argv.includes("--pull");
+const BASE_URL = isLocal ? LOCAL_URL : PROD_URL;
+
+// ─── v1.106.36 — leave by the door that is already open ───
+//
+// Pete's pull failed twice in one day with IP_VERIFICATION_REQUIRED from two DIFFERENT
+// addresses, same machine, same desk: 2606:a800:9d80:2630:... in the morning and
+// 204.111.165.7 in the evening. Node 18+ dials dual-stack hosts with Happy Eyeballs
+// (autoSelectFamily): it races the A and AAAA records and keeps whichever connects first, so
+// the same command presents a different address run to run.
+//
+// v1.106.35 pinned that to IPv4 on the reasoning that a residential IPv4 is stable. That was
+// the wrong half. The constraint is not stability — it is that ONLY A BROWSER CAN VERIFY AN
+// ADDRESS, via passkey, so the script has to present the same family the browser does. His
+// trusted list is three rows and every one is IPv6:
+//
+//   2606:a800:9d80:2630:b938:...  Mac / Chrome     (the machine this runs on)
+//   2606:a800:9d80:2630:288d:...  iPhone, home
+//   2605:59c0:54b:cb10:e19a:...   iPhone, cellular
+//
+// There is no IPv4 row and there never will be, because the browser that would create one
+// does not use IPv4. Pinning to v4 asked him to verify an address he had no way to verify.
+//
+// IPv6 first, then. His Mac's /64 has been trusted since Sept 13 and v1.106.21 keys on the
+// /64, so this works with no passkey prompt at all. IPv4 remains as a FALLBACK — tried only
+// when IPv6 cannot connect, never raced against it, so the address stays deterministic on
+// any given network. On a v6-less network it will present the v4 address and the explainer
+// below says what to do about it.
+const IP_FAMILY = process.env.INPLACE_IP_FAMILY ? Number(process.env.INPLACE_IP_FAMILY) : null;
+const FAMILY_ORDER = IP_FAMILY ? [IP_FAMILY] : [6, 4];
+
+// ─── v1.106.45 — a request that never answers ───
+//
+// Pete, watching it sit on "Feedback pull (closed loop) from https://yourinplace.com...":
+// "unable to pull feedback...appears stuck."
+//
+// Stuck is the right word: there was no timeout anywhere in this file. `http.request` with
+// none waits on the operating system, which for a connection that opens and then says nothing
+// is forever.
+//
+// And it is worse than a slow script, because of a change I made in v1.106.36. That one put
+// IPv6 first on purpose, so the address the server sees stays the same between runs. The
+// fallback to IPv4 fires on `isUnreachable`, which is a list of ERRORS — and a hang is not an
+// error. So IPv6-first plus no timeout means a network where IPv6 stalls rather than refuses
+// never reaches the fallback at all. I built the fallback and then made it unreachable.
+//
+// Every attempt is now bounded, a timeout counts as "this family cannot get there", and the
+// script says which one it is trying so that waiting is legible instead of silent.
+const ATTEMPT_TIMEOUT_MS = Number(process.env.INPLACE_TIMEOUT_MS || 15000);
+
+/** True for the errors that mean "this address family cannot get there from here". */
+function isUnreachable(err) {
+  return [
+    "ENETUNREACH", "EHOSTUNREACH", "EAI_AGAIN", "ENOTFOUND", "EAFNOSUPPORT",
+    // v1.106.45. ETIMEDOUT is the stall this fix is about. ECONNREFUSED means something
+    // answered with a refusal, which is as definite a "not this way" as a routing error.
+    "ETIMEDOUT", "ECONNREFUSED",
+  ].includes(err?.code);
+}
+
+/** An unrecognised-network refusal is a two-minute fix, not a bug. Say so. */
+function explainIpGate(data) {
+  if (!data || data.code !== "IP_VERIFICATION_REQUIRED") return;
+  console.error("");
+  console.error("   This network hasn't been verified for admin access yet.");
+  console.error(`   Address seen by the server: ${data.ip}`);
+  console.error("");
+  console.error("   To fix, on THIS machine:");
+  console.error("     1. open https://yourinplace.com and sign in");
+  console.error("     2. go to the Admin panel — it will prompt for your passkey");
+  console.error("     3. verify, then re-run this script");
+  console.error("");
+  console.error("   Trust lasts 90 days per network. This script tries IPv6 first and only");
+  console.error("   falls back to IPv4, so the address it presents stays the same run to run.");
+  console.error("   Force one with INPLACE_IP_FAMILY=6 (or 4).");
+  console.error("");
+}
+
+function requestOn(family, url, options = {}) {
+  return new Promise((resolve, reject) => {
+    const mod = url.startsWith("https") ? https : http;
+    const req = mod.request(url, {
+      method: options.method || "GET",
+      family,
+      // An inactivity timeout, so it covers both halves: a connect that never completes and a
+      // connection that opens and then never answers.
+      timeout: ATTEMPT_TIMEOUT_MS,
+      // `family` alone is not enough on Node 20+: autoSelectFamily defaults on and will
+      // still race both records, which is the whole bug.
+      autoSelectFamily: false,
+      headers: {
+        "Content-Type": "application/json",
+        ...(options.headers || {}),
+      },
+    }, (res) => {
+      let data = "";
+      res.on("data", (chunk) => data += chunk);
+      res.on("end", () => {
+        try {
+          resolve({ status: res.statusCode, data: JSON.parse(data) });
+        } catch {
+          resolve({ status: res.statusCode, data });
+        }
+      });
+    });
+    req.on("timeout", () => {
+      // destroy(err) surfaces as the 'error' event below, so there is one exit path.
+      const err = new Error(`no answer over IPv${family} within ${Math.round(ATTEMPT_TIMEOUT_MS / 1000)}s`);
+      err.code = "ETIMEDOUT";
+      req.destroy(err);
+    });
+    req.on("error", reject);
+    if (options.body) req.write(JSON.stringify(options.body));
+    req.end();
+  });
+}
+
+/** Tries each family IN ORDER — never in parallel, so the address we present is predictable. */
+async function request(url, options = {}) {
+  let lastErr;
+  for (const family of FAMILY_ORDER) {
+    try {
+      return await requestOn(family, url, options);
+    } catch (err) {
+      lastErr = err;
+      if (!isUnreachable(err)) throw err; // a real failure, not a family problem
+      // Said out loud. A script that is quietly failing over looks identical to one that has
+      // hung, which is the whole reason this run was reported as stuck.
+      const next = FAMILY_ORDER[FAMILY_ORDER.indexOf(family) + 1];
+      console.error(`   IPv${family}: ${err.code === "ETIMEDOUT" ? err.message : err.code}` +
+        (next ? ` — trying IPv${next}` : ""));
+    }
+  }
+  throw lastErr;
+}
+
+async function getAuthHeaders() {
+  if (ADMIN_API_KEY) {
+    return { "X-Admin-API-Key": ADMIN_API_KEY };
+  }
+
+  // Try email/password login as fallback (requires ADMIN_PASSWORD env; 2FA usually blocks this)
+  if (!ADMIN_PASSWORD) {
+    console.error("❌ No ADMIN_API_KEY set (and no ADMIN_PASSWORD fallback).\n");
+    console.error(`   Looked in the environment and in ${path.join(__dirname, "..", ".env")}.`);
+    console.error("   Fix: add a line ADMIN_API_KEY=<value> to that file (value in Railway → Variables).");
+    process.exit(1);
+  }
+  const loginRes = await request(`${BASE_URL}/api/auth/login`, {
+    method: "POST",
+    body: { email: ADMIN_EMAIL, password: ADMIN_PASSWORD },
+  });
+
+  // 2FA blocks automated login — fail fast with clear instructions
+  if (loginRes.data && loginRes.data.requires2FA) {
+    console.error("❌ Admin account requires 2FA — can't authenticate without ADMIN_API_KEY.\n");
+    console.error("   Fix: Add ADMIN_API_KEY to your .env file (get it from Railway env vars):");
+    console.error("   echo 'ADMIN_API_KEY=your-key-here' >> .env\n");
+    process.exit(1);
+  }
+
+  if (loginRes.status !== 200 || !loginRes.data.token) {
+    console.error("❌ Login failed:", loginRes.data);
+    console.error("💡 Tip: Set ADMIN_API_KEY env var to bypass login/2FA");
+    process.exit(1);
+  }
+  return { Authorization: `Bearer ${loginRes.data.token}` };
+}
+
+async function triageMode() {
+  console.log(`\n⚡ Quick triage from ${BASE_URL}...\n`);
+  const authHeaders = await getAuthHeaders();
+
+  const res = await request(`${BASE_URL}/api/admin/feedback/triage`, { headers: authHeaders });
+  if (res.status !== 200) {
+    console.error("❌ Triage fetch failed:", res.data);
+    explainIpGate(res.data);
+    process.exit(1);
+  }
+
+  const { counts, newItems, recentReviewed, summary } = res.data;
+  console.log(`📊 ${summary}\n`);
+
+  if (newItems.length === 0) {
+    console.log("✅ No new feedback to triage!\n");
+    if (recentReviewed.length) {
+      console.log(`📋 ${recentReviewed.length} reviewed/planned item(s) from last 7 days:\n`);
+      for (const f of recentReviewed) {
+        console.log(`  [${f.status.toUpperCase()}] ${f.category} — ${f.description.substring(0, 70)} (${f.userName})`);
+      }
+    }
+    return;
+  }
+
+  console.log(`🆕 ${newItems.length} NEW item(s) to triage:\n`);
+  for (let i = 0; i < newItems.length; i++) {
+    const f = newItems[i];
+    const ctx = f.pageContext;
+    console.log(`  ${i + 1}. [${f.category.toUpperCase()}] ${f.description.substring(0, 80)}`);
+    console.log(`     From: ${f.userName} (${f.userEmail}) — ${f.userRole}`);
+    if (ctx?.page) console.log(`     Page: ${ctx.page} | ${ctx.browser || '?'} on ${ctx.os || '?'}`);
+    console.log(`     Date: ${new Date(f.createdAt).toLocaleDateString()}`);
+    console.log(`     ID: ${f.id}`);
+    console.log('');
+  }
+
+  console.log(`💡 Run with --mark-reviewed to mark all ${newItems.length} new items as reviewed.`);
+}
+
+async function markReviewedMode() {
+  console.log(`\n📝 Marking all 'new' items as 'reviewed' on ${BASE_URL}...\n`);
+  const authHeaders = await getAuthHeaders();
+
+  // First get all new items
+  const triageRes = await request(`${BASE_URL}/api/admin/feedback/triage`, { headers: authHeaders });
+  if (triageRes.status !== 200) {
+    console.error("❌ Triage fetch failed:", triageRes.data);
+    explainIpGate(triageRes.data);
+    process.exit(1);
+  }
+
+  const { newItems } = triageRes.data;
+  if (newItems.length === 0) {
+    console.log("✅ No new items to mark.\n");
+    return;
+  }
+
+  const updates = newItems.map(f => ({ id: f.id, status: "reviewed" }));
+  const bulkRes = await request(`${BASE_URL}/api/admin/feedback/bulk-update`, {
+    method: "POST",
+    headers: authHeaders,
+    body: { updates },
+  });
+
+  if (bulkRes.status !== 200) {
+    console.error("❌ Bulk update failed:", bulkRes.data);
+    process.exit(1);
+  }
+
+  console.log(`✅ Marked ${bulkRes.data.updated} item(s) as reviewed.\n`);
+}
+
+// ── Pull mode: fetch → write files → mark reviewed (in that order, so a failure
+// can never lose feedback). FEEDBACK_INBOX.md accumulates unprocessed items
+// across pulls (deduped by id); Claude clears entries once they're fixed/triaged.
+async function pullMode() {
+  console.log(`\n🔄 Feedback pull (closed loop) from ${BASE_URL}...\n`);
+  const authHeaders = await getAuthHeaders();
+
+  // 1. Snapshot what's NEW right now
+  const t = await request(`${BASE_URL}/api/admin/feedback/triage`, { headers: authHeaders });
+  if (t.status !== 200) { console.error("❌ Triage fetch failed:", t.data); explainIpGate(t.data); process.exit(1); }
+  const newItems = t.data.newItems || [];
+  console.log(`🆕 ${newItems.length} new item(s) since last pull`);
+
+  // 2. Full ledger → FEEDBACK.md
+  await collectMode();
+
+  // 3. Append new items to FEEDBACK_INBOX.md (dedupe by id)
+  const inboxPath = path.join(__dirname, "..", "FEEDBACK_INBOX.md");
+  let inbox = fs.existsSync(inboxPath) ? fs.readFileSync(inboxPath, "utf8") : "";
+  if (!inbox) {
+    inbox = "# InPlace Feedback Inbox — unprocessed items\n\n" +
+      "> New feedback lands here on every pull and is marked 'reviewed' on the server.\n" +
+      "> Claude works from this file and REMOVES entries once they're fixed or triaged\n" +
+      "> into TASKS.md — so anything still in here is still owed a response.\n";
+  }
+  const fresh = newItems.filter((f) => !inbox.includes(`(id: ${f.id})`));
+  if (fresh.length) {
+    const today = new Date().toISOString().split("T")[0];
+    let section = `\n## Pulled ${today}\n\n`;
+    for (const f of fresh) {
+      const ctx = f.pageContext || {};
+      section += `### [${f.category.toUpperCase()}] ${f.description.substring(0, 80)} (id: ${f.id})\n`;
+      section += `- From: ${f.userName} (${f.userEmail || "anonymous"}) — ${f.userRole || "visitor"}\n`;
+      section += `- Date: ${new Date(f.createdAt).toLocaleDateString()} | Page: ${ctx.page || "?"} | ${ctx.browser || "?"} on ${ctx.os || "?"}\n`;
+      if (ctx.recentErrors && ctx.recentErrors.length) {
+        section += `- ⚠️ Console errors: ${ctx.recentErrors.map((e) => e.message.substring(0, 70)).join("; ")}\n`;
+      }
+      section += `- Full: ${f.description}\n\n`;
+    }
+    fs.writeFileSync(inboxPath, inbox + section, "utf8");
+    console.log(`📥 ${fresh.length} item(s) appended to FEEDBACK_INBOX.md`);
+  } else {
+    console.log("📥 Nothing new for the inbox.");
+  }
+
+  // 4. ONLY NOW mark the captured items reviewed on the server
+  if (newItems.length) {
+    const updates = newItems.map((f) => ({ id: f.id, status: "reviewed" }));
+    const bulkRes = await request(`${BASE_URL}/api/admin/feedback/bulk-update`, {
+      method: "POST", headers: authHeaders, body: { updates },
+    });
+    if (bulkRes.status !== 200) {
+      console.error("⚠️ Files are written, but marking reviewed FAILED — items will show as new again next pull (safe, just noisy):", bulkRes.data);
+    } else {
+      console.log(`✅ Marked ${bulkRes.data.updated} item(s) reviewed on the server.`);
+    }
+  }
+  console.log(`\n✅ Pull complete. Tell Claude: "look at the new feedback" (it reads FEEDBACK_INBOX.md).\n`);
+}
+
+async function main() {
+  if (isTriage) return triageMode();
+  if (isMarkReviewed) return markReviewedMode();
+  if (isPull) return pullMode();
+  return collectMode();
+}
+
+async function collectMode() {
+  console.log(`\n📋 Collecting feedback from ${BASE_URL}...\n`);
+
+  // 1. Authenticate — prefer API key (bypasses 2FA), fall back to email/password login
+  const authHeaders = await getAuthHeaders();
+  console.log("✅ Authenticated");
+
+  // 2. Fetch all feedback (paginated, up to 500)
+  let allFeedback = [];
+  let offset = 0;
+  const limit = 50;
+
+  while (true) {
+    const fbRes = await request(
+      `${BASE_URL}/api/feedback?limit=${limit}&offset=${offset}`,
+      { headers: authHeaders }
+    );
+
+    if (fbRes.status !== 200) {
+      console.error("❌ Fetch failed:", fbRes.data);
+      console.error("   NOT writing FEEDBACK.md (won't clobber good data with an empty file).");
+      process.exitCode = 1;
+      return; // v1.74.2 — a failed fetch must not overwrite FEEDBACK.md
+    }
+
+    const items = fbRes.data.feedback || [];
+    allFeedback = allFeedback.concat(items);
+
+    if (items.length < limit) break;
+    offset += limit;
+    if (offset >= 500) break; // safety cap
+  }
+
+  console.log(`📬 Found ${allFeedback.length} feedback item(s)\n`);
+
+  // 3. Generate FEEDBACK.md
+  const now = new Date().toISOString().split("T")[0];
+  let md = `# InPlace User Feedback\n\n`;
+  md += `> Last collected: ${now} from ${isLocal ? "localhost" : "production"}\n`;
+  md += `> Total items: ${allFeedback.length}\n\n`;
+
+  if (allFeedback.length === 0) {
+    md += `No feedback submitted yet.\n`;
+  } else {
+    // Summary stats
+    const byCategory = {};
+    const byStatus = {};
+    const byMood = {};
+    const byBrowser = {};
+    const byOS = {};
+    const byDevice = {};
+    const hasErrors = [];
+    for (const f of allFeedback) {
+      byCategory[f.category] = (byCategory[f.category] || 0) + 1;
+      byStatus[f.status] = (byStatus[f.status] || 0) + 1;
+      if (f.mood) byMood[f.mood] = (byMood[f.mood] || 0) + 1;
+      if (f.pageContext?.browser) byBrowser[f.pageContext.browser] = (byBrowser[f.pageContext.browser] || 0) + 1;
+      if (f.pageContext?.os) byOS[f.pageContext.os] = (byOS[f.pageContext.os] || 0) + 1;
+      if (f.pageContext?.device) byDevice[f.pageContext.device] = (byDevice[f.pageContext.device] || 0) + 1;
+      if (f.pageContext?.recentErrors?.length) hasErrors.push(f);
+    }
+
+    md += `## Summary\n\n`;
+    md += `| Category | Count |\n|----------|-------|\n`;
+    for (const [k, v] of Object.entries(byCategory)) md += `| ${k} | ${v} |\n`;
+    md += `\n`;
+    md += `| Status | Count |\n|--------|-------|\n`;
+    for (const [k, v] of Object.entries(byStatus)) md += `| ${k} | ${v} |\n`;
+    md += `\n`;
+    if (Object.keys(byMood).length) {
+      md += `| Mood | Count |\n|------|-------|\n`;
+      for (const [k, v] of Object.entries(byMood)) md += `| ${k} | ${v} |\n`;
+      md += `\n`;
+    }
+
+    if (Object.keys(byBrowser).length) {
+      md += `| Browser | Count |\n|---------|-------|\n`;
+      for (const [k, v] of Object.entries(byBrowser)) md += `| ${k} | ${v} |\n`;
+      md += `\n`;
+    }
+
+    if (Object.keys(byOS).length) {
+      md += `| OS | Count |\n|----|-------|\n`;
+      for (const [k, v] of Object.entries(byOS)) md += `| ${k} | ${v} |\n`;
+      md += `\n`;
+    }
+
+    if (Object.keys(byDevice).length) {
+      md += `| Device | Count |\n|--------|-------|\n`;
+      for (const [k, v] of Object.entries(byDevice)) md += `| ${k} | ${v} |\n`;
+      md += `\n`;
+    }
+
+    if (hasErrors.length) {
+      md += `## ⚠️ Feedback With Console Errors\n\n`;
+      md += `${hasErrors.length} item(s) captured JavaScript errors at time of submission:\n\n`;
+      for (const f of hasErrors) {
+        md += `- **${f.userName}** on ${f.pageContext.page}: ${f.pageContext.recentErrors.map(e => e.message.substring(0, 60)).join("; ")}\n`;
+      }
+      md += `\n`;
+    }
+
+    // Individual items
+    md += `## All Feedback\n\n`;
+    for (const f of allFeedback) {
+      const date = new Date(f.createdAt).toLocaleDateString("en-US", {
+        year: "numeric", month: "short", day: "numeric",
+      });
+      md += `### ${f.category.toUpperCase()}: ${f.description.substring(0, 80)}${f.description.length > 80 ? "..." : ""}\n`;
+      md += `- **From:** ${f.userName} (${f.userEmail || "anonymous"}) — ${f.userRole || "visitor"}\n`;
+      md += `- **Date:** ${date}\n`;
+      md += `- **Status:** ${f.status}`;
+      if (f.mood) md += ` | **Mood:** ${f.mood}`;
+      md += `\n`;
+      if (f.pageContext) {
+        md += `- **Page:** ${f.pageContext.page || "unknown"} (v${f.pageContext.version || "?"})`;
+        if (f.pageContext.currentUrl) md += ` — URL: ${f.pageContext.currentUrl}`;
+        md += `\n`;
+        if (f.pageContext.browser || f.pageContext.os) {
+          md += `- **Environment:** ${f.pageContext.browser || "?"} on ${f.pageContext.os || "?"} — ${f.pageContext.device || "?"} (${f.pageContext.screenResolution || "?"}, viewport ${f.pageContext.viewportSize || "?"})`;
+          if (f.pageContext.touchSupport === 'yes') md += ` [touch]`;
+          if (f.pageContext.isPWA === 'yes') md += ` [PWA]`;
+          if (f.pageContext.connectionType && f.pageContext.connectionType !== 'unknown') md += ` [${f.pageContext.connectionType}]`;
+          md += `\n`;
+        }
+        if (f.pageContext.recentErrors?.length) {
+          md += `- **⚠️ Console errors (${f.pageContext.recentErrors.length}):** ${f.pageContext.recentErrors.map(e => "`" + e.message.substring(0, 80) + "`").join(", ")}\n`;
+        }
+      }
+      md += `- **Full description:** ${f.description}\n`;
+      if (f.adminNotes) md += `- **Admin notes:** ${f.adminNotes}\n`;
+      if (f.tags && f.tags.length) md += `- **Tags:** ${f.tags.join(", ")}\n`;
+      md += `\n`;
+    }
+  }
+
+  // 4. Write to project root
+  const outPath = path.join(__dirname, "..", "FEEDBACK.md");
+  fs.writeFileSync(outPath, md, "utf8");
+  console.log(`✅ Written to FEEDBACK.md (${allFeedback.length} items)\n`);
+
+  // 5. Print actionable items for quick review
+  const actionable = allFeedback.filter(f => f.status === "new" || f.status === "reviewed");
+  if (actionable.length) {
+    console.log(`⚡ ${actionable.length} actionable item(s):\n`);
+    for (const f of actionable) {
+      console.log(`  [${f.status.toUpperCase()}] ${f.category} — ${f.description.substring(0, 60)} (${f.userName})`);
+    }
+    console.log("");
+  }
+}
+
+// v1.106.45 — exported so tests/feedbackScriptNetwork.test.js can drive the transport against
+// a server that deliberately never answers. That case cannot be reached from the outside, and
+// it is the one that had Pete watching a spinner.
+module.exports = { request, requestOn, isUnreachable, ATTEMPT_TIMEOUT_MS };
+
+if (require.main === module) {
+  main().catch((err) => {
+    console.error("❌ Error:", err.message);
+    process.exit(1);
+  });
+}

@@ -1,0 +1,174 @@
+/**
+ * Integration test harness (infra #6, v1.86.0)
+ *
+ * Boots a REAL embedded PostgreSQL, runs the app's actual schema
+ * initialization (baseline + MIGRATIONS_V2 + per-boot statements), and mounts
+ * the real routers on a plain express app — the same pattern used for ad-hoc
+ * testing during the July 2026 hardening runs, now checked in.
+ *
+ * Why not boot src/server.js? It starts six pollers, sockets, and Kindred —
+ * none of which we want under jest (and it stalls in sandboxes). The routers
+ * ARE the behavior under test; the harness gives them a real DB over HTTP.
+ *
+ * Usage in a test file:
+ *   const { startHarness, stopHarness } = require("./harness");
+ *   let h; beforeAll(async () => { h = await startHarness(); }, 120000);
+ *   afterAll(async () => { await stopHarness(h); });
+ *   // h.request  → supertest instance
+ *   // h.db       → DatabaseWrapper (prepare/get/all/run/exec)
+ *   // h.createUser({ roles, isAdmin, ... }) → { user, token }
+ */
+const path = require("path");
+const os = require("os");
+const fs = require("fs");
+const { execFileSync } = require("child_process");
+const express = require("express");
+const supertest = require("supertest");
+const { v4: uuid } = require("uuid");
+
+// Env must be in place BEFORE any src/ module is required.
+process.env.JWT_SECRET = process.env.JWT_SECRET || "integration-test-secret";
+process.env.NODE_ENV = "test";
+delete process.env.SENTRY_DSN; // never report test errors
+
+const ROUTERS = {
+  "/api/reimbursements": "../../src/routes/reimbursements",
+  "/api/messages": "../../src/routes/messages",
+  "/api/payments": "../../src/routes/payments",
+  "/api/sessions": "../../src/routes/sessions",
+  "/api/feedback": "../../src/routes/feedback",
+  "/api/care-intelligence": "../../src/routes/careIntelligence",
+};
+
+async function startHarness({ routers = ROUTERS } = {}) {
+  // The embedded-postgres wrapper is ESM-only (jest here is CJS), so we drive
+  // the platform binaries it installs (@embedded-postgres/<platform>) directly.
+  const platDir = fs.readdirSync(path.join(__dirname, "../../node_modules/@embedded-postgres"))[0];
+  if (!platDir) throw new Error("@embedded-postgres platform binaries not installed — run npm install");
+  const bin = path.join(__dirname, "../../node_modules/@embedded-postgres", platDir, "native", "bin");
+
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "inplace-itest-pg-"));
+  const port = 5500 + Math.floor(process.pid % 400); // stable per-process, avoids collisions
+  execFileSync(path.join(bin, "initdb"), [
+    "-D", dataDir, "-U", "itest", "--auth=trust", "--no-sync", "-E", "UTF8",
+  ], { stdio: "pipe" });
+  execFileSync(path.join(bin, "pg_ctl"), [
+    "-D", dataDir, "-w", "-t", "60",
+    "-o", `-p ${port} -c listen_addresses=127.0.0.1 -c fsync=off -c unix_socket_directories='${dataDir}'`,
+    "-l", path.join(dataDir, "pg.log"),
+    "start",
+  ], { stdio: "pipe" });
+  const pg = {
+    stop: () => execFileSync(path.join(bin, "pg_ctl"), ["-D", dataDir, "-w", "-m", "immediate", "stop"], { stdio: "pipe" }),
+  };
+  process.env.DATABASE_URL = `postgresql://itest@127.0.0.1:${port}/postgres`;
+
+  // Now (and only now) load app modules — they read DATABASE_URL at first use.
+  const { getDb, initializeDatabase } = require("../../src/models/database");
+  await initializeDatabase(); // real baseline + MIGRATIONS_V2 + per-boot statements
+  const db = await getDb();
+
+  const app = express();
+  app.use(express.json({ limit: "10mb" }));
+  for (const [mount, mod] of Object.entries(routers)) {
+    // An array mounts several routers on one path, in order (offers + sessions, as server.js).
+    for (const m of [].concat(mod)) app.use(mount, require(m));
+  }
+
+  const { generateToken } = require("../../src/middleware/auth");
+
+  /**
+   * Insert a user and mint a real JWT for them.
+   *
+   * v1.112.0 — the identity gate (src/utils/careAccess.js) refuses care data to anyone without
+   * an approved ID. Almost every suite is testing something else, so a harness user is a
+   * VERIFIED person by default: an approved identity document filed under their own account,
+   * the shape My Account writes and a human approves. Gate tests opt out:
+   *   idVerified: false    → no document (gated unless graceUntil / admin / demo)
+   *   graceUntil: Date|str → users.id_gate_grace_until
+   *   isDemo: true         → users.is_demo
+   *   careToolsOpen: false → care tools follow the real rule (v1.114.0)
+   */
+  async function createUser(overrides = {}) {
+    const id = overrides.id || uuid();
+    const roles = overrides.roles || ["family"];
+    const email = overrides.email || `${id.slice(0, 8)}@itest.local`;
+    await db.prepare(`
+      INSERT INTO users (id, email, password_hash, first_name, last_name, role, roles,
+                         is_active, is_admin, is_demo, account_approved, email_verified,
+                         id_gate_grace_until, created_at)
+      VALUES (?, ?, 'x', ?, ?, ?, ?, 1, ?, ?, 1, 1, ?, NOW())
+    `).run(
+      id, email,
+      overrides.firstName || "Test", overrides.lastName || "User",
+      roles[0], JSON.stringify(roles),
+      overrides.isAdmin ? 1 : 0,
+      overrides.isDemo ? 1 : 0,
+      overrides.graceUntil ? new Date(overrides.graceUntil).toISOString() : null
+    );
+    if (overrides.idVerified !== false) await verifyIdentity(id);
+    // v1.114.0 — care tools come with booked care (utils/careTools.js). Most suites test
+    // something else, so a harness user's tools are open by default — the admin switch.
+    // Gate tests opt out with careToolsOpen: false.
+    if (overrides.careToolsOpen !== false) {
+      await db.prepare("UPDATE users SET care_tools_open_at = NOW() WHERE id = ?").run(id);
+    }
+    const user = { id, email, roles, role: roles[0] };
+    if (overrides.isDemo) user.is_demo = true;
+    return { user, token: generateToken(user) };
+  }
+
+  /** An approved identity document under the user's own account — what an admin approval leaves. */
+  async function verifyIdentity(userId) {
+    await db.prepare(`
+      INSERT INTO verified_documents (id, owner_id, owner_type, uploaded_by, category, document_type,
+                                      file_data, status, is_verified, created_at)
+      VALUES (?, ?, 'user', ?, 'identity', 'ID_Front', '', 'approved', 1, NOW())
+    `).run(uuid(), userId, userId);
+  }
+
+  /** Create recipient + care team (+ optional billing contact), return ids. */
+  async function createCareTeam({ familyUserId, billingUserId = null, name = "ITest Team" } = {}) {
+    const recipientId = uuid();
+    await db.prepare(`
+      INSERT INTO care_recipients (id, family_user_id, first_name, last_name, created_at)
+      VALUES (?, ?, 'Betty', 'ITest', NOW())
+    `).run(recipientId, familyUserId);
+    const teamId = uuid();
+    await db.prepare(`
+      INSERT INTO care_teams (id, care_recipient_id, name, created_by, billing_user_id, created_at)
+      VALUES (?, ?, ?, ?, ?, NOW())
+    `).run(teamId, recipientId, name, familyUserId, billingUserId);
+    await db.prepare(`
+      INSERT INTO care_team_members (id, care_team_id, user_id, role, created_at)
+      VALUES (?, ?, ?, 'leader', NOW())
+    `).run(uuid(), teamId, familyUserId);
+    return { recipientId, teamId };
+  }
+
+  async function addTeamMember(teamId, userId, role = "member") {
+    await db.prepare(`
+      INSERT INTO care_team_members (id, care_team_id, user_id, role, created_at)
+      VALUES (?, ?, ?, ?, NOW())
+    `).run(uuid(), teamId, userId, role);
+  }
+
+  return {
+    pg, dataDir, db, app,
+    request: supertest(app),
+    createUser, createCareTeam, addTeamMember, verifyIdentity,
+    auth: (token) => ({ Authorization: `Bearer ${token}` }),
+  };
+}
+
+async function stopHarness(h) {
+  if (!h) return;
+  try {
+    const { closeDb } = require("../../src/models/database");
+    if (closeDb) await closeDb(); // close the app's pool before stopping PG
+  } catch (_) { /* noop */ }
+  try { h.pg.stop(); } catch (_) { /* noop */ }
+  try { fs.rmSync(h.dataDir, { recursive: true, force: true }); } catch (_) { /* noop */ }
+}
+
+module.exports = { startHarness, stopHarness };

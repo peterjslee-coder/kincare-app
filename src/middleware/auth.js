@@ -1,0 +1,462 @@
+const jwt = require("jsonwebtoken");
+const crypto = require("crypto");
+// v1.105.3 — deployment shape derived from APP_URL, NOT NODE_ENV (unset on Railway).
+const { cookiesSecure } = require("../utils/env");
+// v1.112.0 — the identity gate in front of every care record. See utils/careAccess.js.
+const { careGateRefusal } = require("../utils/careAccess");
+
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) throw new Error("JWT_SECRET environment variable is required");
+const ADMIN_API_KEY = process.env.ADMIN_API_KEY || null;
+
+function generateToken(user) {
+  // Dual-role support: encode roles array in JWT
+  // Parse roles from DB (JSON string) or fall back to single role
+  let roles;
+  if (user.roles) {
+    roles = typeof user.roles === "string" ? JSON.parse(user.roles) : user.roles;
+  } else {
+    roles = [user.role || "family"];
+  }
+
+  // v1.106.4 — carry is_demo in the token. `POST /api/auth/demo-login` hands anyone a real
+  // 7-day JWT with no password, so "is this a demo session" is a question the expensive and
+  // real-data routes have to be able to ask, and asking it should not cost a query per request.
+  const payload = { id: user.id, email: user.email, roles, role: roles[0] };
+  if (user.is_demo) payload.demo = true;
+  return jwt.sign(payload, JWT_SECRET, { expiresIn: "7d" });
+}
+
+// ─── The endpoints an admin API key alone may reach ───
+//
+// Read-only feedback + treasury: safe with the key on its own, no TOTP. This list exists for
+// scripts/collect-feedback.js and has since the key was introduced.
+//
+// v1.106.37 — exported, because routes/admin/index.js needs the SAME list to decide which
+// requests may skip the network check. Two copies of a security boundary is two places for it
+// to drift, and the drift would be silent: a path added here and not there would authenticate
+// and then be refused for the wrong reason.
+const API_KEY_SAFE_PATHS = [
+  "/api/admin/feedback/triage",
+  "/api/admin/feedback/bulk-update",
+  "/api/feedback",
+  "/api/admin/treasury",
+];
+
+async function authenticate(req, res, next) {
+  // Option 1: Admin API key (+ TOTP for sensitive endpoints)
+  const apiKey = req.headers["x-admin-api-key"];
+  if (apiKey && ADMIN_API_KEY && apiKey === ADMIN_API_KEY) {
+    const fullPath = req.originalUrl || req.path;
+    const isTotpExempt = API_KEY_SAFE_PATHS.some(p => fullPath.startsWith(p));
+
+    const totpCode = req.headers["x-admin-totp"];
+    if (!totpCode && !isTotpExempt) {
+      return res.status(401).json({ error: "Admin TOTP code required (x-admin-totp header)" });
+    }
+    try {
+      const { getDb } = require("../models/database");
+      const db = await getDb();
+      // Find any admin user with 2FA enabled to validate the TOTP code against
+      const adminUser = await db.prepare(
+        "SELECT u.id, u.email, t.totp_secret FROM users u JOIN user_2fa t ON u.id = t.user_id WHERE u.is_admin = 1 AND t.is_enabled = 1 LIMIT 1"
+      ).get();
+      if (!adminUser || !adminUser.totp_secret) {
+        // For exempt paths, fall back to any admin user even without 2FA
+        if (isTotpExempt) {
+          const anyAdmin = await db.prepare("SELECT id, email FROM users WHERE is_admin = 1 LIMIT 1").get();
+          if (anyAdmin) {
+            req.user = { id: anyAdmin.id, email: anyAdmin.email, roles: ["family"], role: "family" };
+            req.isAdmin = true;
+            req.authVia = "admin_api_key";
+            return next();
+          }
+        }
+        return res.status(401).json({ error: "No admin 2FA configured — cannot validate TOTP" });
+      }
+      // Skip TOTP verification for exempt paths
+      if (!isTotpExempt) {
+        const otplib = require("otplib");
+        const verifyResult = otplib.verifySync({ token: totpCode, secret: adminUser.totp_secret });
+        if (!verifyResult.valid) {
+          return res.status(401).json({ error: "Invalid TOTP code" });
+        }
+      }
+      req.user = { id: adminUser.id, email: adminUser.email, roles: ["family"], role: "family" };
+      req.isAdmin = true;
+      req.authVia = "admin_api_key";
+      return next();
+    } catch (err) {
+      return res.status(401).json({ error: "TOTP verification failed" });
+    }
+  }
+
+  // Option 2: Bearer JWT token (header or httpOnly cookie)
+  const header = req.headers.authorization;
+  const cookieToken = req.cookies?.auth_token;
+  const tokenSource = header?.startsWith("Bearer ") ? header.split(" ")[1] : cookieToken;
+  if (!tokenSource) {
+    const fullPath = req.originalUrl || req.path;
+    console.log(`[Auth 401] No token — path: ${fullPath}, hasBearerHeader: ${!!header}, hasCookie: ${!!cookieToken}, cookieKeys: ${Object.keys(req.cookies || {}).join(',')}`);
+    return res.status(401).json({ error: "Authentication required" });
+  }
+
+  try {
+    const token = tokenSource;
+    const decoded = jwt.verify(token, JWT_SECRET);
+
+    // Block soft-deleted accounts — JWT was issued before deletion so it's still valid,
+    // but the account has been deactivated in the DB. Quick check on every request.
+    if (decoded.id && decoded.id !== 'api-key-admin') {
+      const { getDb } = require("../models/database");
+      const db = await getDb();
+      const userCheck = await db.prepare(
+        "SELECT is_active, password_changed_at FROM users WHERE id = ?"
+      ).get(decoded.id);
+      if (!userCheck || !userCheck.is_active) {
+        return res.status(401).json({ error: "Account has been deleted" });
+      }
+
+      // v1.106.4 — a token issued before the password changed is dead.
+      //
+      // Changing your password did not end any session: `revokeAllUserRefreshTokens` was
+      // written, exported and imported into routes/auth.js, and then never called from
+      // anywhere. So a stolen access token stayed good for its full 7 days, and a stolen
+      // refresh token renewed itself forever — the one action a person takes when they think
+      // they have been compromised did nothing at all.
+      //
+      // The 5-second grace is for clock granularity, not for security: `iat` is whole seconds
+      // while password_changed_at has sub-second precision, so a token minted in the same
+      // second as the change would otherwise be rejected as older than it.
+      if (decoded.iat && userCheck.password_changed_at) {
+        const changedAt = new Date(userCheck.password_changed_at).getTime();
+        if (Number.isFinite(changedAt) && decoded.iat * 1000 < changedAt - 5000) {
+          return res.status(401).json({ error: "Session ended — please sign in again." });
+        }
+      }
+    }
+
+    // Backward compat: old tokens have role but not roles
+    if (!decoded.roles && decoded.role) {
+      decoded.roles = [decoded.role];
+    }
+    if (decoded.roles && !decoded.role) {
+      decoded.role = decoded.roles[0];
+    }
+
+    // Active role: frontend can send X-Active-Role header to select which role view
+    const activeRole = req.headers["x-active-role"];
+    if (activeRole && decoded.roles && decoded.roles.includes(activeRole)) {
+      decoded.activeRole = activeRole;
+    } else {
+      decoded.activeRole = decoded.roles ? decoded.roles[0] : decoded.role;
+    }
+
+    req.user = decoded;
+
+    // ─── v1.109.1 — view as user is READ-ONLY, here, for everything ───
+    //
+    // Pete: "It is intended to allow me to help troubleshoot what other roles are seeing when
+    // they log in, not to change anything." Seventeen routes carried blockWhileImpersonating;
+    // there are 314 write routes. Booking, cancelling, paying, messaging as her, accepting a
+    // legal agreement in her name — all of it was reachable. The rule belongs at the door.
+    //
+    // The per-route guards stay: they are the specific refusal messages, and they are what
+    // tests pin.
+    if (decoded.impersonatedBy) {
+      const { readOnlyRefusal } = require("./noImpersonation");
+      const refusal = readOnlyRefusal(req.method, req.originalUrl || req.path);
+      if (refusal) {
+        try {
+          const { writeAuditLog, getClientIp } = require("./auditLog");
+          writeAuditLog({
+            userId: decoded.id, userEmail: decoded.email,
+            userRole: Array.isArray(decoded.roles) ? decoded.roles.join(",") : decoded.role,
+            action: "impersonation_blocked_write", endpoint: req.originalUrl || req.path,
+            method: req.method, ipAddress: getClientIp(req),
+            userAgent: req.headers["user-agent"] || null,
+            details: { impersonatedBy: decoded.impersonatedBy, blocked: "read-only view" },
+            severity: "warning",
+          }).catch(() => { /* a refusal must not depend on the log */ });
+        } catch { /* same */ }
+        return res.status(403).json({
+          error: `You're viewing this account as an admin, so you can't ${refusal} here. Do it from the admin panel under your own name.`,
+          code: "IMPERSONATION_BLOCKED",
+        });
+      }
+    }
+
+    // ─── v1.112.0 — no verified ID, no care data. Here, once, for every route ───
+    //
+    // Pete: "We should absolutely require someone to verify their ID before they are able to
+    // sign up for care." A person without an approved ID (and past their grace period) keeps
+    // their ACCOUNT — sign-in, My Account, uploading the ID — and every care-data path answers
+    // 403 ID_REQUIRED before its handler runs. Before the handler is the point: accept-invite
+    // refused here never touches the invite, so it still works after approval.
+    // The list of care paths and the states live in utils/careAccess.js. Fails CLOSED: if we
+    // cannot tell whether someone may see a care record, they do not see it this time.
+    if (decoded.id && decoded.id !== "api-key-admin") {
+      try {
+        const { getDb } = require("../models/database");
+        const db = await getDb();
+        const refusal = await careGateRefusal(db, req);
+        if (refusal) return res.status(403).json(refusal);
+        // v1.114.0 — care tools come with care booked through InPlace. See utils/careTools.js.
+        // Reads are never refused (locked = read-only), so this only costs a lookup on writes
+        // and on the handful of tool paths.
+        // Fails OPEN, unlike the identity gate: a lookup error must never stop a medication
+        // check-off. The worst case is a family using a tool for free once.
+        let tools = { feature: null, refusal: null };
+        try {
+          tools = await require("../utils/careTools").careToolsCheck(db, req);
+        } catch (toolsErr) {
+          try { require("../utils/sentry").captureException(toolsErr, { where: "care tools gate" }); } catch { /* ignore */ }
+        }
+        if (tools.refusal) return res.status(403).json(tools.refusal);
+        // Count successful uses of a tool for the admin usage report. Not while viewing as
+        // someone, and not under test (the write would outlive an integration harness).
+        if (tools.feature && !decoded.impersonatedBy && process.env.NODE_ENV !== "test") {
+          res.on("finish", () => {
+            if (res.statusCode < 400) require("../utils/careTools").recordToolUse(db, decoded.id, tools.feature);
+          });
+        }
+      } catch (gateErr) {
+        console.error("[care gate] lookup failed:", gateErr.message);
+        return res.status(503).json({ error: "Could not confirm access right now. Please try again." });
+      }
+    }
+
+    // v1.105.44 — correct the app-icon badge AFTER this request has done its work.
+    // On `finish`, not here: reading a conversation sets last_read_at inside the HANDLER,
+    // so running now would push the very number the icon is already showing. Debounced
+    // per user, silent unless the count changed — see utils/badgeSync.js.
+    // Not under test: the debounce's trailing timer outlives an integration run and fires
+    // after the harness has torn down its database, which surfaces as an unrelated suite
+    // failing. A badge is not what those tests are testing; badgeSync has its own.
+    // v1.109.1 — and not while viewing as her: this pushes a badge to HER phone, which is a
+    // real notification caused by an admin reading her screen.
+    if (process.env.NODE_ENV !== "test" && !decoded.impersonatedBy) {
+      try {
+        const { touchBadge } = require("../utils/badgeSync");
+        res.on("finish", () => touchBadge(decoded.id));
+      } catch { /* a badge is never load-bearing */ }
+    }
+
+    next();
+  } catch (err) {
+    const isExpired = err.name === 'TokenExpiredError';
+    const fullPath = req.originalUrl || req.path;
+    console.log(`[Auth 401] Token verify failed — path: ${fullPath}, error: ${err.name}: ${err.message}, source: ${header ? 'bearer' : 'cookie'}`);
+    return res.status(401).json({ error: isExpired ? "Your session has expired. Please sign in again." : "Authentication failed. Please sign in again.", code: isExpired ? "TOKEN_EXPIRED" : "TOKEN_INVALID" });
+  }
+}
+
+function requireRole(...roles) {
+  return (req, res, next) => {
+    // Dual-role: check if ANY of the user's roles match the required roles
+    const userRoles = req.user.roles || [req.user.role];
+    const hasRole = userRoles.some(r => roles.includes(r));
+    if (!hasRole) {
+      return res.status(403).json({ error: "Insufficient permissions" });
+    }
+    next();
+  };
+}
+
+function requireAdmin(req, res, next) {
+  // Check is_admin flag from DB (set on req by admin routes after authenticate)
+  if (!req.isAdmin) {
+    return res.status(403).json({ error: "Admin access required" });
+  }
+  next();
+}
+
+// Set JWT as httpOnly cookie (used by login, register, OAuth exchange)
+// remember=false → session cookie (no maxAge): browser clears it on close, so a
+// shared/unknown device won't silently re-auth. Defaults true (persistent) for
+// callers that don't opt in (OAuth, register, refresh). (v1.98.11)
+function setAuthCookie(res, token, remember = true) {
+  const isProduction = cookiesSecure;  // v1.105.3 — see utils/env.js: NODE_ENV is unset on Railway
+  const opts = {
+    httpOnly: true,
+    secure: isProduction,
+    sameSite: "lax",
+    path: "/",
+  };
+  if (remember) opts.maxAge = 7 * 24 * 60 * 60 * 1000; // 7 days (matches JWT expiry)
+  res.cookie("auth_token", token, opts);
+}
+
+// Refresh tokens — long-lived, revocable, stored hashed in DB
+async function generateRefreshToken(userId) {
+  const { getDb } = require("../models/database");
+  const db = await getDb();
+  const rawToken = crypto.randomBytes(48).toString("hex");
+  const tokenHash = crypto.createHash("sha256").update(rawToken).digest("hex");
+  const id = crypto.randomUUID();
+  const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(); // 30 days
+  await db.prepare(
+    "INSERT INTO refresh_tokens (id, user_id, token_hash, expires_at) VALUES (?, ?, ?, ?)"
+  ).run(id, userId, tokenHash, expiresAt);
+  return rawToken;
+}
+
+function setRefreshCookie(res, refreshToken, remember = true) {
+  const isProduction = cookiesSecure;  // v1.105.3 — see utils/env.js: NODE_ENV is unset on Railway
+  const opts = {
+    httpOnly: true,
+    secure: isProduction,
+    sameSite: "lax",
+    path: "/api/auth/refresh", // only sent to refresh endpoint
+  };
+  if (remember) opts.maxAge = 30 * 24 * 60 * 60 * 1000; // 30 days
+  res.cookie("refresh_token", refreshToken, opts);
+}
+
+async function revokeRefreshToken(rawToken) {
+  if (!rawToken) return;
+  const { getDb } = require("../models/database");
+  const db = await getDb();
+  const tokenHash = crypto.createHash("sha256").update(rawToken).digest("hex");
+  await db.prepare("DELETE FROM refresh_tokens WHERE token_hash = ?").run(tokenHash);
+}
+
+async function revokeAllUserRefreshTokens(userId) {
+  const { getDb } = require("../models/database");
+  const db = await getDb();
+  await db.prepare("DELETE FROM refresh_tokens WHERE user_id = ?").run(userId);
+}
+
+// ─── Trusted-device token (v1.106.4) ───
+//
+// The old "device fingerprint" was computed in the browser as a 32-bit hash of
+// userAgent | screenSize | timeZone, sent in the login body, and matched against
+// trusted_devices to skip 2FA. It was neither secret nor unique: given a password, an attacker
+// could enumerate a few dozen common iPhone and Android combinations and land on a valid value,
+// and correct-password attempts do not increment failed_login_attempts. A second factor you can
+// guess from a device's public characteristics is not a second factor.
+//
+// It is now a 256-bit random value the SERVER issues, held in an httpOnly cookie the page cannot
+// read, and stored only as a SHA-256 hash — so a database copy does not let anyone skip 2FA either.
+const TRUSTED_DEVICE_COOKIE = "td";
+const TRUSTED_DEVICE_DAYS = 30;
+
+function hashDeviceToken(raw) {
+  return crypto.createHash("sha256").update(String(raw)).digest("hex");
+}
+
+function issueTrustedDeviceToken(res) {
+  const raw = crypto.randomBytes(32).toString("hex");
+  res.cookie(TRUSTED_DEVICE_COOKIE, raw, {
+    httpOnly: true,
+    secure: cookiesSecure,
+    sameSite: "lax",
+    path: "/api/auth",
+    maxAge: TRUSTED_DEVICE_DAYS * 24 * 60 * 60 * 1000,
+  });
+  return hashDeviceToken(raw);
+}
+
+function readTrustedDeviceHash(req) {
+  const raw = req.cookies?.[TRUSTED_DEVICE_COOKIE];
+  return raw ? hashDeviceToken(raw) : null;
+}
+
+function clearAuthCookie(res) {
+  res.clearCookie("auth_token", { path: "/" });
+  res.clearCookie("refresh_token", { path: "/api/auth/refresh" });
+}
+
+// CSRF protection — double-submit cookie pattern
+// Server sets a JS-readable csrf_token cookie; frontend reads it and sends as X-CSRF-Token header.
+// Server compares header to cookie. An attacker on a different origin can't read the cookie.
+function setCsrfCookie(res, remember = true) {
+  const token = crypto.randomBytes(32).toString("hex");
+  const isProduction = cookiesSecure;  // v1.105.3 — see utils/env.js: NODE_ENV is unset on Railway
+  const opts = {
+    httpOnly: false, // must be readable by frontend JS
+    secure: isProduction,
+    sameSite: "lax",
+    path: "/",
+  };
+  if (remember) opts.maxAge = 7 * 24 * 60 * 60 * 1000;
+  res.cookie("csrf_token", token, opts);
+  return token;
+}
+
+function verifyCsrf(req, res, next) {
+  // Skip for safe methods (GET, HEAD, OPTIONS)
+  if (["GET", "HEAD", "OPTIONS"].includes(req.method)) return next();
+  // Skip for admin API key auth (server-to-server, no cookie)
+  if (req.headers["x-admin-api-key"]) return next();
+  // Use originalUrl for path checks — req.path is relative to mount point
+  // (e.g. mounted at /api means req.path strips the /api prefix)
+  const fullPath = req.originalUrl || req.path;
+  // Skip for public auth endpoints (login, register, demo-login, etc.)
+  // These are entry points that may be called with a stale auth cookie from a previous session
+  const publicAuthPaths = ["/api/auth/login", "/api/auth/register", "/api/auth/demo-login",
+    "/api/auth/verify-email", "/api/auth/refresh", "/api/auth/passkey-login",
+    "/api/auth/passkey-login-verify", "/api/auth/logout",
+    "/api/oauth/exchange", "/api/oauth/complete-signup",
+    "/api/passkeys/authenticate/options", "/api/passkeys/authenticate/verify",
+    "/api/passkeys/register/options", "/api/passkeys/register/verify"];
+  if (publicAuthPaths.some(p => fullPath === p || fullPath.startsWith(p + "?"))) return next();
+  // Skip for webhook endpoints (server-to-server, no cookie/CSRF)
+  if (fullPath.startsWith("/api/checkr/webhook") || fullPath.startsWith("/api/payments/webhook") || fullPath.startsWith("/api/sms/")) return next();
+  // Skip for the client-crash beacon (v1.104.5): a fire-and-forget telemetry
+  // sink with no state change and no CSRF token available at crash time. Without
+  // this, a logged-in user's ErrorBoundary report is rejected 403 — exactly the
+  // white-screens we're trying to capture would be the ones we never see.
+  if (fullPath.startsWith("/api/client-error")) return next();
+  // v1.117.0 — the journey beacon (routes/track.js). navigator.sendBeacon cannot set a header,
+  // and the route refuses to attach an account to a cross-site request on its own. EXACT match:
+  // a prefix would also exempt /api/tasks, /api/team and every other /api/t... route.
+  if (fullPath === "/api/t") return next();
+  // Skip for Kindred (separate PWA, uses JWT + companion_access gate instead)
+  if (fullPath.startsWith("/api/kindred")) return next();
+  // Skip if no auth cookie present
+  if (!req.cookies?.auth_token) return next();
+
+  const cookieToken = req.cookies?.csrf_token;
+  const headerToken = req.headers["x-csrf-token"];
+  if (!cookieToken || !headerToken || cookieToken !== headerToken) {
+    return res.status(403).json({ error: "Invalid CSRF token" });
+  }
+  next();
+}
+
+/**
+ * Block demo sessions (v1.106.4).
+ *
+ * `POST /api/auth/demo-login` issues a full 7-day JWT for five seeded accounts with no
+ * credentials at all — that is the point of it, so anyone can try the product. What it must not
+ * be is a free key to things that cost money or touch real people: the AI routes bill Anthropic
+ * per call, and the user directory returns real families' names and email addresses.
+ *
+ * Reads the token claim first and only falls back to a query for tokens minted before this
+ * shipped, so the common case costs nothing.
+ */
+async function denyDemo(req, res, next) {
+  try {
+    if (!req.user) return next();
+    let isDemo = req.user.demo === true;
+    if (!isDemo && req.user.demo === undefined && req.user.id !== "api-key-admin") {
+      const { getDb } = require("../models/database");
+      const db = await getDb();
+      const row = await db.prepare("SELECT is_demo FROM users WHERE id = ?").get(req.user.id);
+      isDemo = !!row?.is_demo;
+    }
+    if (isDemo) {
+      return res.status(403).json({
+        error: "This is a demo account. Sign up for a free account to use this.",
+        demoBlocked: true,
+      });
+    }
+    return next();
+  } catch (e) {
+    return next(e);
+  }
+}
+
+module.exports = { generateToken, authenticate, denyDemo,
+  issueTrustedDeviceToken, readTrustedDeviceHash, TRUSTED_DEVICE_DAYS, requireRole, requireAdmin, setAuthCookie, clearAuthCookie, generateRefreshToken, setRefreshCookie, revokeRefreshToken, revokeAllUserRefreshTokens, setCsrfCookie, verifyCsrf , API_KEY_SAFE_PATHS};
