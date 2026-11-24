@@ -53,6 +53,12 @@ async function view(db, cr, userId) {
     candidates,
     chosen: (hub.dropInUserIds || []).filter((id) => candidates.length === 0 || candidates.some((c) => c.userId === id)),
     noticeAwake: !!hub.noticeAwake,
+    // v1.158.2 — the most recent time the Hub noticed her up (times and which signals only),
+    // so the leader can see noticing works. Pete, 11/24: "how do we test if it's noticing?"
+    lastNoticed: leader && hub.noticeAwake ? await (async () => {
+      const r = await db.prepare("SELECT started_at, ended_at, motion_minutes, voice_minutes, touches FROM hub_awake WHERE care_recipient_id = ? ORDER BY ended_at DESC LIMIT 1").get(cr.id);
+      return r ? { startedAt: r.started_at, endedAt: r.ended_at, motion: r.motion_minutes > 0, talking: r.voice_minutes > 0, touches: r.touches > 0 } : null;
+    })() : null,
     // 1.3 — may THIS person drop in right now (the same check call_invite makes), and on whom.
     mayDropIn: await D.mayDropIn(db, cr.id, userId),
     hubUserId: await (async () => {
