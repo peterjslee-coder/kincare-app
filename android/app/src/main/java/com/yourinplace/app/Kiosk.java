@@ -91,6 +91,13 @@ final class Kiosk {
         }
     }
 
+    /** Five taps again while unlocked: lock now instead of waiting out the 10 minutes. */
+    static void resume(Activity activity) {
+        Context ctx = activity.getApplicationContext();
+        ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putLong(KEY_PAUSED_UNTIL, 0).apply();
+        apply(activity);
+    }
+
     static boolean isLocked(Context ctx) {
         ActivityManager am = (ActivityManager) ctx.getSystemService(Context.ACTIVITY_SERVICE);
         return am != null && am.getLockTaskModeState() != ActivityManager.LOCK_TASK_MODE_NONE;
@@ -100,7 +107,9 @@ final class Kiosk {
     static void set(Activity activity, boolean on) {
         Context ctx = activity.getApplicationContext();
         SharedPreferences.Editor e = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit();
-        e.putBoolean(KEY_ON, on).apply();
+        // The family's choice from their phone wins over a corner-tap unlock still running
+        // (Pete, 11/24: after five taps, turning the switch on didn't relock it).
+        e.putBoolean(KEY_ON, on).putLong(KEY_PAUSED_UNTIL, 0).apply();
         apply(activity);
     }
 

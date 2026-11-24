@@ -69,13 +69,20 @@ public class MainActivity extends BridgeActivity {
     @Override
     public boolean dispatchTouchEvent(android.view.MotionEvent ev) {
         try {
-            if (ev.getActionMasked() == android.view.MotionEvent.ACTION_DOWN && Kiosk.isLocked(this)) {
+            // Counted while locked (to unlock) and while a corner-tap unlock is running (to lock
+            // again at once — Pete, 11/24: "can we have the 5 taps to lock it and unlock it?").
+            if (ev.getActionMasked() == android.view.MotionEvent.ACTION_DOWN && (Kiosk.isLocked(this) || Kiosk.paused(this))) {
                 float corner = 80 * getResources().getDisplayMetrics().density;
                 if (ev.getX() < corner && ev.getY() < corner) {
                     long now = System.currentTimeMillis();
                     if (now - firstCornerTap > 4000) { firstCornerTap = now; cornerTaps = 0; }
                     if (++cornerTaps >= 5) {
                         cornerTaps = 0;
+                        if (Kiosk.paused(this)) {
+                            Kiosk.resume(this);
+                            android.widget.Toast.makeText(this, "Locked to InPlace", android.widget.Toast.LENGTH_LONG).show();
+                            return super.dispatchTouchEvent(ev);
+                        }
                         Kiosk.pause(this);
                         android.widget.Toast.makeText(this, "Unlocked for 10 minutes", android.widget.Toast.LENGTH_LONG).show();
                         // Then come back to the front (a device owner may) and lock again.
