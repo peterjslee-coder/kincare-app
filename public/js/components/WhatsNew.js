@@ -508,6 +508,21 @@ const WN_PREVIEWS = {
       </div>
     </div>
   ),
+  // v1.155.2 — "Jane will be here soon" on the Hub
+  hubArriving: () => (
+    <div style={{ background: '#1d1b19', borderRadius: 12, padding: 6 }}>
+      <div style={{ background: 'rgba(16, 40, 33, 0.9)', borderRadius: 7, padding: 10, display: 'flex', justifyContent: 'center' }}>
+        <div style={{ background: 'var(--bg-surface)', borderRadius: 10, border: '2px solid #1b6b5a', padding: '8px 10px', display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ width: 44, height: 44, borderRadius: 22, border: '3px solid #1b6b5a', background: '#e1f0eb', color: '#1b6b5a', fontSize: 18, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>J</div>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--text-primary)' }}>Jane will be here soon</div>
+            <div style={{ fontSize: 10.5, color: 'var(--text-secondary)' }}>at 9:00 AM</div>
+            <div style={{ marginTop: 4, display: 'inline-block', background: '#1b6b5a', color: '#fff', borderRadius: 6, padding: '2px 12px', fontSize: 11, fontWeight: 800 }}>OK</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  ),
   // v1.155.1 — Tomorrow at a glance, and the Hub's own Call button beside Text
   hubTomorrow: () => (
     <div style={{ background: '#1d1b19', borderRadius: 12, padding: 6 }}>

@@ -370,7 +370,7 @@ State travels through `window`, not props. This table is the registry.
 | `window.__openRequestCareModal` | app.js, CareToolsSheet.js | 21 |
 | `window.__openTaskCreate` | — | 1 |
 | `window.__originalSearch` | app.js | 4 |
-| `window.__pendingCall` | app.js, Messages.js, RecipientPhone.js | 8 |
+| `window.__pendingCall` | app.js, Messages.js, RecipientPhone.js | 7 |
 | `window.__pendingConversation` | app.js, CheckinOverdueSheet.js, QuickAdd.js | 8 |
 | `window.__pendingFocus` | app.js, AttentionCard.js, CancelFeeSheet.js | 58 |
 | `window.__pendingLogVisit` | TeamNotes.js | 2 |

@@ -1239,7 +1239,15 @@ const App = () => {
       // throws on iOS, so an incoming call on an iPhone did nothing whatsoever: no alert,
       // and the app didn't even switch to Messages. Ordering it this way means a
       // notification problem can never cost the navigation again.
+      // v1.155.2 — Pete: "When I 'call Peter' from the hub it doesn't ring my phone while the
+      // app is open." This navigated to Messages, but Messages' own call_incoming listener only
+      // exists once Messages has mounted — after this event had already gone by. So the app
+      // jumped to Messages and nothing rang (the notification below does nothing in the iOS
+      // app). Park the call where Messages picks it up on mount, as the push path already does.
       if (currentPage !== 'messages') {
+        try {
+          window.__pendingCall = { roomName: data.roomName, callType: data.callType, callerId: data.callerId, callerName: data.callerName, at: Date.now() };
+        } catch { /* Messages still opens */ }
         setCurrentPage('messages');
       }
       const typeLabel = data.callType === 'video' ? 'Video' : 'Voice';

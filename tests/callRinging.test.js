@@ -69,7 +69,7 @@ describe("tapping the call push actually answers", () => {
   test("Messages picks it up on mount", () => {
     // Otherwise the tap lands her in Messages with no idea why she is there.
     expect(messages).toMatch(/window\.__pendingCall/);
-    expect(messages).toMatch(/setIncomingCall\(window\.__pendingCall\)/);
+    expect(messages).toMatch(/const pc = window\.__pendingCall;[\s\S]{0,200}setIncomingCall\(pc\)/);
   });
 });
 

@@ -132,10 +132,10 @@ const PhotoActions = window.PhotoActions = ({ photo, onChanged, hubRecipients })
 // InPlace Hub. Shown only when at least one loved one has the Hub on. No `capture` attribute:
 // it would force the camera and hide the photo library.
 // v1.155.1 — Pete: "downsize photos to share with mom. Crop option...to fit right." The photo
-// opens in a frame the shape of the Hub's photo space (4:3): drag to move it, slide to zoom, or
+// opens in a frame the shape of the Hub's photo space (16:9): drag to move it, slide to zoom, or
 // pick "Whole photo". The server does the cutting and shrinking (utils/photoShrink.js), so a
 // photo the phone's browser cannot decode still uploads, just without the frame.
-const HUB_PHOTO_ASPECT = 4 / 3;
+const HUB_PHOTO_ASPECT = 16 / 9; // v1.155.2 — the Hub's photo space is 16:9 (Pete: "What I crop to isn't the same aspect as on the screen"); must match HUB_PHOTO_SLOT in RecipientPhone.js
 const PhotoCropFrame = ({ src, onCrop, onUnreadable }) => {
   const boxRef = React.useRef(null);
   const [W, setW] = React.useState(320);
