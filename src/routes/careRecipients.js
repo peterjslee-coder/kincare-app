@@ -671,6 +671,7 @@ router.get("/:id/simple-mode", requireRole("family"), async (req, res) => {
       maxButtons: sm.MAX_BUTTONS,
       maxCalls: sm.MAX_CALLS,
       hub: mode.hub, // v1.152.0 — InPlace Hub
+      hubStatus: require("../utils/hubStatus").get(cr.id), // v1.158.0 — the Hub's last report
       callType: mode.callType, // v1.153.0 — in-app Call buttons: voice or video
       candidates: candidates.map((c) => ({ userId: c.userId, firstName: c.firstName, lastName: c.lastName, hasPhone: !!c.phone })),
     });
@@ -877,6 +878,41 @@ router.post("/:id/simple-screen/hub-shape", async (req, res) => {
   } catch (err) {
     captureException(err, { where: "careRecipients: hub-shape" });
     res.status(500).json({ error: "Couldn't record that" });
+  }
+});
+
+// v1.158.0 — the Hub's live status (online, version, locked, battery), every two minutes.
+// Only her own account reports it; nothing is stored (utils/hubStatus.js).
+router.post("/:id/simple-screen/hub-status", async (req, res) => {
+  try {
+    const db = await getDb();
+    const { cr, ok } = await asTheLinkedPerson(db, req);
+    if (!cr) return res.status(404).json({ error: "Not found" });
+    if (!ok) return res.status(403).json({ error: "Not allowed" });
+    if (req.user.impersonatedBy) return res.json({ recorded: false });
+    require("../utils/hubStatus").record(cr.id, req.body);
+    res.json({ recorded: true });
+  } catch (err) {
+    captureException(err, { where: "careRecipients: hub-status" });
+    res.status(500).json({ error: "Couldn't record that" });
+  }
+});
+
+// v1.158.0 — "Refresh the Hub" from the family's phone: the Hub reloads its screen (and so
+// picks up a new version). Leader or owner only, like every other Hub setting.
+router.post("/:id/simple-screen/hub-refresh", requireRole("family"), async (req, res) => {
+  try {
+    const db = await getDb();
+    const { cr, ok } = await leaderOrOwner(db, req.params.id, req.user.id);
+    if (!cr) return res.status(404).json({ error: "Care recipient not found" });
+    if (!ok) return res.status(403).json({ error: "Only the care team leader can change this" });
+    const linkedUserId = await trustedLinkedUserId(db, cr);
+    if (!linkedUserId) return res.status(409).json({ error: "They don't have their own login yet" });
+    const sent = require("../utils/callRegistry").emitToUser(linkedUserId, "hub_refresh", { at: Date.now() });
+    res.json({ sent });
+  } catch (err) {
+    captureException(err, { where: "careRecipients: hub-refresh" });
+    res.status(500).json({ error: "Couldn't reach the Hub" });
   }
 });
 

@@ -201,3 +201,30 @@ test("v1.155.6: nobody here → the Hub names who comes next, with a face; someo
     await db.prepare("UPDATE care_sessions SET status = 'in_progress' WHERE care_recipient_id = ? AND scheduled_date = ? AND status = 'completed'").run(recipientId, soon(0));
   }
 });
+
+describe("v1.158.0 — seeing and refreshing the Hub from the family's phone", () => {
+  test("only her own account reports; the leader sees it; nobody else can refresh", async () => {
+    require("../../src/utils/hubStatus")._reset();
+    const before = await h.request.get(`/api/care-recipients/${recipientId}/simple-mode`).set(h.auth(leader.token));
+    expect(before.body.hubStatus).toBeNull();
+
+    const notHer = await h.request.post(`/api/care-recipients/${recipientId}/simple-screen/hub-status`).set(h.auth(sister.token))
+      .send({ version: "9.9.9" });
+    expect(notHer.status).toBe(403);
+    const hers = await h.request.post(`/api/care-recipients/${recipientId}/simple-screen/hub-status`).set(h.auth(mom.token))
+      .send({ version: "1.158.0", kiosk: { deviceOwner: true, locked: true }, battery: { level: 97.4, charging: true }, junk: "<script>" });
+    expect(hers.status).toBe(200);
+
+    const after = await h.request.get(`/api/care-recipients/${recipientId}/simple-mode`).set(h.auth(leader.token));
+    expect(after.body.hubStatus).toMatchObject({ version: "1.158.0", online: true, kiosk: { deviceOwner: true, locked: true }, battery: { level: 97, charging: true } });
+    expect(after.body.hubStatus.junk).toBeUndefined();
+
+    const sent = [];
+    require("../../src/utils/callRegistry").setEmitter((uid, event) => { sent.push(`${uid}:${event}`); return 1; });
+    expect((await h.request.post(`/api/care-recipients/${recipientId}/simple-screen/hub-refresh`).set(h.auth(tina.token))).status).toBe(403);
+    const ok = await h.request.post(`/api/care-recipients/${recipientId}/simple-screen/hub-refresh`).set(h.auth(leader.token));
+    expect(ok.status).toBe(200);
+    expect(ok.body.sent).toBe(1);
+    expect(sent).toEqual([`${mom.user.id}:hub_refresh`]);
+  });
+});
