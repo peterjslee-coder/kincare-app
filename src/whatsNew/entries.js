@@ -31,6 +31,20 @@ const WINDOW_DAYS = 45;
 
 const ENTRIES = [
   {
+    id: "hub-next-caregiver",
+    version: "1.155.6",
+    date: "2026-11-23",
+    audience: ["family"],
+    title: "The Hub shows who comes next",
+    body: "When no caregiver is there, the Hub shows who comes next, with their photo and when. It switches back to \"Jane is here\" when the visit starts.",
+    howTo: [
+      "Nothing to set up: it uses your confirmed visits for the week",
+      "A visit needs a caregiver and a start time to show here",
+    ],
+    examples: ["Next: Jane, Tomorrow at 9:00 AM", "Next: Sam, Thursday at 5:00 PM"],
+    preview: "inplaceHub",
+  },
+  {
     id: "hub-sky-weather",
     version: "1.155.5",
     date: "2026-11-23",

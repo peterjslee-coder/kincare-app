@@ -703,6 +703,18 @@ const HubBoard = ({ hub, first, now, show, calls, note, s, failed, readFlash, re
           </div>
         )}
 
+        {/* v1.155.6 — Pete: "yes to the next caregiver." Nobody here: who comes next, with their face. */}
+        {!hub.here && hub.next && (
+          <div data-testid="hub-next" style={{ ...card, display: 'flex', alignItems: 'center', gap: '2.2vh' }}>
+            <SimpleFace photo={hub.next.photo} name={hub.next.firstName} size={Math.round(window.innerHeight * 0.12)} />
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: '3vh', fontWeight: 800, letterSpacing: 1, color: 'var(--role-color)', textTransform: 'uppercase' }}>Next</div>
+              <div style={{ fontSize: '5.2vh', fontWeight: 800, color: 'var(--text-primary)', lineHeight: 1.1 }}>{hub.next.firstName}</div>
+              <div style={{ fontSize: '3.8vh', color: 'var(--text-secondary)', lineHeight: 1.25 }}>{hub.next.day}{hub.next.time ? ` at ${simpleFmtTime(hub.next.time)}` : ''}</div>
+            </div>
+          </div>
+        )}
+
         {show.comingUp && (todayRows.length > 0 || !hub.here) && (
           <div style={card}>
             <div style={{ ...label, color: 'var(--role-color)' }}>Today</div>

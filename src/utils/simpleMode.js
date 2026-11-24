@@ -281,6 +281,32 @@ async function hubScreenFor(db, recipient, linkedUserId, todayStr, hubCfg) {
     out.here = { firstName: here.who, photo: photoUrl({ id: here.who_id, has_photo: here.has_photo }), until: addHours(here.scheduled_time, here.duration_hours) };
   }
 
+  // v1.155.6 — Pete: "yes to the next caregiver." When nobody is here, the "is here" spot says
+  // who comes next, with their face: the earliest confirmed visit that has not started yet
+  // (later today, or a coming day within the week).
+  out.next = null;
+  if (!out.here) {
+    const { getNowInZone } = require("./timezone");
+    const nz = getNowInZone(recipient.timezone || undefined);
+    const nowHHMM = `${String(nz.getHours()).padStart(2, "0")}:${String(nz.getMinutes()).padStart(2, "0")}`;
+    const nx = await db.prepare(`
+      SELECT cs.scheduled_date, cs.scheduled_time, u.id AS who_id, u.first_name AS who, ${photoSql()}
+      FROM care_sessions cs
+      JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+      JOIN users u ON cp.user_id = u.id
+      WHERE cs.care_recipient_id = ? AND cs.status = 'confirmed'
+        AND ((cs.scheduled_date = ? AND COALESCE(cs.scheduled_time, '23:59') >= ?) OR (cs.scheduled_date > ? AND cs.scheduled_date <= ?))
+      ORDER BY cs.scheduled_date ASC, cs.scheduled_time ASC
+      LIMIT 1
+    `).get(recipient.id, todayStr, nowHHMM, todayStr, addDays(todayStr, 6));
+    if (nx && nx.who_id !== linkedUserId) {
+      out.next = {
+        firstName: nx.who, photo: photoUrl({ id: nx.who_id, has_photo: nx.has_photo }),
+        date: nx.scheduled_date, time: nx.scheduled_time || null, day: nextVisitLabel(nx.scheduled_date, todayStr),
+      };
+    }
+  }
+
   // v1.155.2 — Pete: "Yes to the Chime and card with photo...a pop up style that disappears
   // either after she checks it [off] or Tina checks in." A confirmed visit that starts within the
   // next 15 minutes (or started up to an hour ago and nobody has checked in yet). It goes away by

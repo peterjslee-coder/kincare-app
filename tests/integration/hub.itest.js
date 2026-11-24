@@ -185,3 +185,19 @@ test("v1.155.3: the tablet reports its photo space's shape; only her own account
   const g2 = await h.request.get(`/api/care-recipients/${recipientId}/simple-mode`).set(h.auth(leader.token));
   expect(g2.body.hub.photoAspect).toBe(0.861);
 });
+
+test("v1.155.6: nobody here → the Hub names who comes next, with a face; someone here → no Next", async () => {
+  let hub = (await h.request.get("/api/dashboard").set(h.auth(mom.token))).body.simpleScreen.hub;
+  expect(hub.here).not.toBeNull();
+  expect(hub.next).toBeNull();
+  await db.prepare("UPDATE care_sessions SET status = 'completed' WHERE care_recipient_id = ? AND scheduled_date = ? AND status = 'in_progress'").run(recipientId, soon(0));
+  try {
+    hub = (await h.request.get("/api/dashboard").set(h.auth(mom.token))).body.simpleScreen.hub;
+    expect(hub.here).toBeNull();
+    expect(hub.next).toMatchObject({ firstName: "Tina", date: soon(3), time: "10:00" });
+    expect(hub.next).toHaveProperty("photo");
+    expect(typeof hub.next.day).toBe("string");
+  } finally {
+    await db.prepare("UPDATE care_sessions SET status = 'in_progress' WHERE care_recipient_id = ? AND scheduled_date = ? AND status = 'completed'").run(recipientId, soon(0));
+  }
+});
