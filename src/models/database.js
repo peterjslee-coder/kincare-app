@@ -3880,6 +3880,26 @@ async function initializeDatabase() {
         `CREATE INDEX IF NOT EXISTS idx_call_devices_user ON call_devices (user_id)`,
       ],
     },
+    {
+      // v1.156.1 — Pete: "my sister is POA...I would prefer we have a feature that someone can
+      // sign up / setup and she gets a 'needs you' card to click approve." The leader asks the
+      // agent; the agent's Needs-you card opens the consent to read and sign. One row per ask;
+      // answered_at is stamped when she signs or declines (or the ask is withdrawn).
+      // Numbered 101: 100 is call_devices on the native-1.3 branch.
+      id: "101_drop_in_requests",
+      statements: [
+        `CREATE TABLE IF NOT EXISTS drop_in_requests (
+          id TEXT PRIMARY KEY,
+          care_recipient_id TEXT NOT NULL,
+          requested_by TEXT NOT NULL,
+          requested_of TEXT NOT NULL,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          answered_at TIMESTAMPTZ,
+          answer TEXT
+        )`,
+        `CREATE INDEX IF NOT EXISTS idx_drop_in_requests_of ON drop_in_requests(requested_of) WHERE answered_at IS NULL`,
+      ],
+    },
   ];
   for (const m of MIGRATIONS_V2) {
     if (applied.has(m.id)) continue;

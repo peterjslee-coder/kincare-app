@@ -847,7 +847,9 @@ const App = () => {
           callType: d.callType,
           callerId: d.callerId,
           callerName: d.callerName,
+          at: Date.now(), // v1.156.1 — stamped from the tap, so Messages offers it
         };
+        try { window.dispatchEvent(new Event('inplace:pending-call')); } catch { /* Messages picks it up on mount */ }
         target = 'messages';
       } else if ((t === 'message' || t === 'video_call') && d.conversationId) {
         window.__pendingConversation = d.conversationId;
@@ -1230,6 +1232,10 @@ const App = () => {
   // ─── Global incoming call notification (browser notification when not on Messages) ───
   useEffect(() => {
     if (typeof onSocketEvent !== 'function') return;
+    // v1.156.1 — a call parked for Messages but answered on another device is dropped.
+    const offElsewhere = onSocketEvent('call_answered_elsewhere', (d) => {
+      try { if (window.__pendingCall && window.__pendingCall.roomName === d?.roomName) window.__pendingCall = null; } catch { /* nothing parked */ }
+    });
     const cleanup = onSocketEvent('call_incoming', (data) => {
       // Start pulling the 624 KB video SDK now, while the phone is still ringing (v1.106.6).
       if (typeof warmVideoSdk === 'function') warmVideoSdk();
@@ -1271,7 +1277,7 @@ const App = () => {
     if ('Notification' in window && typeof Notification.requestPermission === 'function' && Notification.permission === 'default') {
       Notification.requestPermission();
     }
-    return cleanup;
+    return () => { cleanup(); offElsewhere(); };
   }, [currentPage]);
 
   // ─── calls-native (1.3): answered on the phone's own call screen → go to the call ───

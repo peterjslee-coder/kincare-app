@@ -57,7 +57,7 @@ describe("a call pushes as well as ringing the app (v1.155.4)", () => {
     // calling" — the live socket may be his laptop, or an app he has navigated away inside.
     const ifBranch = inviteHandler.slice(0, inviteHandler.indexOf("} else {"));
     expect(ifBranch).toMatch(/emit\("call_incoming"/);
-    expect(ifBranch).toMatch(/pushCall\(false\)/);
+    expect(ifBranch).toMatch(/pushCall\(false, \[\.\.\.liveKinds\]\)/);
     expect(inviteHandler).toMatch(/\} else \{\s*pushCall\(true\);/);
     expect(inviteHandler).toMatch(/if \(acks\) ack\(nativeRang > 0 \? "phone" : sent > 0 \? "push" : "nowhere", sent \+ nativeRang\);/);
   });
@@ -527,7 +527,7 @@ describe("the caller is told what happened to the invite", () => {
     expect(msgs).toMatch(/onSocketEvent\('call_ring_status'/);
     expect(msgs).toMatch(/setRingStatus\(null\); \/\/ this call's answer, not the last one's/);
     expect(msgs).toMatch(/ringStatus: ringStatus,/);
-    expect(msgs).toMatch(/cleanupRing\(\); cleanup\(\); cleanup2\(\); cleanup3\(\); cleanup4\(\);/);
+    expect(msgs).toMatch(/return \(\) => \{ cleanupRing\(\); cleanup\(\); cleanup2\(\); cleanup3\(\); cleanup4\(\);/);
   });
 
   test("each outcome gets a sentence, not a status word", () => {
@@ -652,4 +652,27 @@ describe("a call that has been hung up stops offering to be answered", () => {
     expect(overlay).toMatch(/function handleEndCall\(\) \{\s*\n\s*clearEmptyRoomTimer\(\);/);
     expect(overlay).toMatch(/if \(emptyRoomTimer\.current\) \{ clearTimeout\(emptyRoomTimer\.current\); emptyRoomTimer\.current = null; \}\s*\n\s*if \(roomRef\.current\) \{/);
   });
+});
+
+describe("v1.156.1 — one device answers, the others go quiet; no push on top of an open app", () => {
+  test("accepting or declining tells MY other devices, never the caller", () => {
+    expect(server).toMatch(/const quietMyOtherDevices = \(roomName, how\) => \{[\s\S]*?if \(sid !== socket\.id\) io\.to\(sid\)\.emit\("call_answered_elsewhere"/);
+    const accept = server.slice(server.indexOf('socket.on("call_accept"'), server.indexOf('socket.on("call_decline"'));
+    expect(accept).toContain('quietMyOtherDevices(data && data.roomName, "answered")');
+    expect(messages).toMatch(/onSocketEvent\('call_answered_elsewhere'/);
+    expect(read("public/js/components/RecipientPhone.js")).toMatch(/onSocketEvent\('call_answered_elsewhere'/);
+  });
+
+  test("the call push skips the kinds of device that already have the app open", () => {
+    expect(inviteHandler).toMatch(/if \(ua === "ios" \|\| ua === "android"\) liveKinds\.add\(ua\);/);
+    expect(read("src/routes/push.js")).toMatch(/if \(skipKinds\.size && skipKinds\.has\(/);
+  });
+});
+
+test("v1.156.1 — a call push tapped on a locked iPhone parks the call itself, and an open Messages picks it up", () => {
+  const utils = read("public/js/utils.js");
+  const tap = utils.slice(utils.indexOf("addListener('pushNotificationActionPerformed'"));
+  expect(tap.indexOf("data.type === 'call_incoming'")).toBeGreaterThan(-1);
+  expect(tap.indexOf("window.__pendingCall = {")).toBeLessThan(tap.indexOf("window.__handlePushNavigate"));
+  expect(read("public/js/components/Messages.js")).toMatch(/window\.addEventListener\('inplace:pending-call', pickUpParkedCall\)/);
 });

@@ -368,13 +368,23 @@ io.on("connection", (socket) => {
       // know to go in app bc she's calling." A live socket can be his laptop, or an app he has
       // just navigated away from inside, so a call now ALSO pushes. Calls are the one exception
       // to "no push while you are in the app" (97783012): a ringing phone is the whole point.
-      // Devices that rang natively are skipped (skipEndpoints) — no banner on top of a ringing phone.
-      pushCall(false);
+      // v1.156.1 — but not to a KIND of device that already has the app open and ringing. Pete:
+      // "the push notification covers the 'answer' button at the top of the app when it's open."
+      // An open iPhone app skips the iPhone push; an open Chrome tab skips web push; his phone
+      // still buzzes while only the laptop has InPlace open.
+      const liveKinds = new Set();
+      for (const sid of targetSockets) {
+        const t = io.sockets.sockets.get(sid);
+        const ua = t && t.data && t.data.ua;
+        if (ua === "ios" || ua === "android") liveKinds.add(ua);
+        else if (ua === "desktop") liveKinds.add("web");
+      }
+      pushCall(false, [...liveKinds]);
     } else {
       pushCall(true);
     }
 
-    function pushCall(acks) {
+    function pushCall(acks, skipKinds) {
       const kind = data.callType === "video" ? "Video call" : "Call";
       const who = socket.user.displayName || "Someone";
       // Fire and forget, but never silently: a push that fails is the difference between a
@@ -399,7 +409,7 @@ io.on("connection", (socket) => {
               callerId: userId,
               callerName: who,
             },
-          }, undefined, { skipEndpoints });
+          }, undefined, { skipEndpoints, skipKinds });
           const sent = (result && result.sent) || 0;
           console.log(`[call] invite from=${String(userId).slice(0, 8)} to=${String(data.targetUserId).slice(0, 8)} via=${nativeRang > 0 ? "phone" : sent > 0 ? "push" : "nowhere"} sent=${sent} native=${nativeRang}${acks ? "" : " (also in app)"}`);
           if (acks) ack(nativeRang > 0 ? "phone" : sent > 0 ? "push" : "nowhere", sent + nativeRang);
@@ -423,14 +433,18 @@ io.on("connection", (socket) => {
       const call = registry.getCall(roomName);
       if (!call) return;
       if (state === "ended" ? (call.callerId !== userId && call.targetUserId !== userId) : call.targetUserId !== userId) return;
-      const r = registry.finishCall(roomName, state, userId);
-      // Answered on this device: every OTHER app of theirs stops ringing.
-      if (r && r.changed && state === "answered") {
-        for (const sid of connectedUsers.get(userId) || []) {
-          if (sid !== socket.id) io.to(sid).emit("call_answered_elsewhere", { roomName });
-        }
-      }
+      registry.finishCall(roomName, state, userId);
+      // Answered here: quietMyOtherDevices (below) tells every OTHER app of theirs to stop.
     } catch (e) { captureException(e, { where: "socket: settleRing" }); }
+  };
+
+  // v1.156.1 — Pete: "if i pick up a call from betty on my iphone, i'd like the chrome tab to
+  // stop ringing." A call rings every device a person is signed in on; whichever one answers
+  // (or declines) tells that person's OTHER devices to stop. Never sent to the caller.
+  const quietMyOtherDevices = (roomName, how) => {
+    const mine = connectedUsers.get(userId);
+    if (!mine || !roomName) return;
+    for (const sid of mine) if (sid !== socket.id) io.to(sid).emit("call_answered_elsewhere", { roomName, how });
   };
 
   socket.on("call_accept", (data) => {
@@ -442,6 +456,7 @@ io.on("connection", (socket) => {
         io.to(sid).emit("call_accepted", { roomName: data.roomName });
       }
     }
+    quietMyOtherDevices(data && data.roomName, "answered");
   });
 
   socket.on("call_decline", (data) => {
@@ -453,6 +468,7 @@ io.on("connection", (socket) => {
         io.to(sid).emit("call_declined", { roomName: data.roomName });
       }
     }
+    quietMyOtherDevices(data && data.roomName, "declined");
   });
 
   socket.on("call_hangup", (data) => {
@@ -943,7 +959,7 @@ app.use("/api/safety", require("./routes/safety"));
 
 // ─── App version check (lightweight, no auth) ───
 const { cancelPassedPrivateOffers, releaseExpiredExclusiveOffers } = require("./utils/exclusiveOffers");
-const APP_VERSION = "1.156.0";
+const APP_VERSION = "1.156.1";
 app.get("/api/version", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({ version: APP_VERSION, minAppVersion: MIN_APP_VERSION });

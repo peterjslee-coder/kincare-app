@@ -210,10 +210,15 @@ const useSimpleCallHost = (enabled, { answers = true } = {}) => {
     // A call that arrived as a push while the screen was off (app.js parks it here).
     // v1.155.2 — app.js now also parks a call that rang over the live socket (stamped `at`);
     // this screen already heard that one directly, so only a fresh, unseen one is picked up.
-    if (answers) try {
-      const pc = window.__pendingCall;
-      if (pc) { window.__pendingCall = null; if (!pc.at || Date.now() - pc.at < 30000) setIncoming((cur) => cur || pc); }
-    } catch { /* nothing waiting */ }
+    const pickUp = () => {
+      if (!answers) return;
+      try {
+        const pc = window.__pendingCall;
+        if (pc) { window.__pendingCall = null; if (!pc.at || Date.now() - pc.at < 30000) setIncoming((cur) => cur || pc); }
+      } catch { /* nothing waiting */ }
+    };
+    pickUp();
+    window.addEventListener('inplace:pending-call', pickUp); // v1.156.1 — a push tap while open
     const offs = [
       onSocketEvent('call_ring_status', (d) => setRingStatus(d?.via || null)),
       answers && onSocketEvent('call_incoming', (d) => {
@@ -224,8 +229,10 @@ const useSimpleCallHost = (enabled, { answers = true } = {}) => {
       }),
       onSocketEvent('call_ended', () => { setIncoming(null); setCallState(idle); }),
       onSocketEvent('call_declined', () => { setIncoming(null); setCallState(idle); }),
+      // v1.156.1 — answered on another of this person's devices: stop ringing here.
+      onSocketEvent('call_answered_elsewhere', (d) => setIncoming((p) => (p && p.roomName === d?.roomName ? null : p))),
     ];
-    return () => offs.forEach((o) => o && o());
+    return () => { offs.forEach((o) => o && o()); window.removeEventListener('inplace:pending-call', pickUp); };
   }, [enabled]);
 
   // Ring out loud while the card is up: a call is the one thing allowed to make a noise.
@@ -1435,7 +1442,7 @@ const SIMPLE_SECTIONS = [
 // v1.156.0 — drop-in and awake noticing, in the Hub settings. Pete: "we just need an
 // acknowledgment that someone with a durable POA or that person has signed up for drop-ins...
 // We just wanna make sure it is recorded as purposeful." Rules: src/utils/dropIn.js.
-const HubDropInSettings = window.HubDropInSettings = ({ recipientId, name }) => {
+const HubDropInSettings = window.HubDropInSettings = ({ recipientId, name: nameProp, signOnly, onDone }) => {
   const { showToast } = useToast();
   const [v, setV] = useState(null);
   const [typed, setTyped] = useState('');
@@ -1445,12 +1452,13 @@ const HubDropInSettings = window.HubDropInSettings = ({ recipientId, name }) => 
   const load = async () => { try { const r = await apiFetch(`/api/drop-in/${recipientId}`); if (r && r.ok) setV(await r.json()); } catch { /* hidden */ } };
   useEffect(() => { if (recipientId) load(); }, [recipientId]);
   if (!v) return null;
+  const name = nameProp || v.firstName || 'them';
   const call = async (path, method, body, okMsg) => {
     setBusy(true);
     try {
       const r = await apiFetch(`/api/drop-in/${recipientId}${path}`, { method, body: JSON.stringify(body || {}) });
       const d = r ? await r.json().catch(() => ({})) : {};
-      if (r && r.ok) { setV(d); if (okMsg) showToast(okMsg, 'success'); } else showToast(d.error || "Couldn't save that", 'error');
+      if (r && r.ok) { setV(d); if (okMsg) showToast(okMsg, 'success'); if (onDone && (path === '/consent' || path === '/decline')) onDone(); } else showToast(d.error || "Couldn't save that", 'error');
     } catch { showToast("Couldn't save that", 'error'); }
     setBusy(false);
   };
@@ -1481,6 +1489,9 @@ const HubDropInSettings = window.HubDropInSettings = ({ recipientId, name }) => 
         <div style={{ marginTop: 6 }}>
           <div style={{ color: 'var(--text-secondary)' }}>Not signed. Nothing below works until it is.</div>
           {wordingBox(v.wording)}
+          {v.request && v.request.forMe && (
+            <div style={{ margin: '6px 0', fontWeight: 600 }}>{v.request.byFirstName} asked you to review this.</div>
+          )}
           {v.canSign ? (
             <div data-testid="dropin-sign">
               <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', cursor: 'pointer', margin: '6px 0' }}>
@@ -1490,14 +1501,31 @@ const HubDropInSettings = window.HubDropInSettings = ({ recipientId, name }) => 
               <input className="form-input" value={typed} onChange={(e) => setTyped(e.target.value)} placeholder="Type your full name" style={{ width: '100%', boxSizing: 'border-box' }} />
               <button type="button" disabled={busy || !agree || typed.trim().length < 2}
                 onClick={() => call('/consent', 'POST', { signerName: typed.trim(), agree: true, wordingVersion: v.wordingVersion }, 'Consent signed and recorded')}
-                style={{ marginTop: 8, padding: '8px 14px', borderRadius: 8, border: 'none', background: 'var(--role-color)', color: 'var(--text-on-primary)', fontWeight: 700, cursor: 'pointer', opacity: (!agree || typed.trim().length < 2) ? 0.5 : 1 }}>Sign</button>
+                style={{ marginTop: 8, padding: '8px 14px', borderRadius: 8, border: 'none', background: 'var(--role-color)', color: 'var(--text-on-primary)', fontWeight: 700, cursor: 'pointer', opacity: (!agree || typed.trim().length < 2) ? 0.5 : 1 }}>Approve and sign</button>
+              {v.request && v.request.forMe && (
+                <button type="button" disabled={busy} data-testid="dropin-decline" onClick={() => call('/decline', 'POST', {}, 'Answered: not now')}
+                  style={{ marginTop: 8, marginLeft: 8, padding: '8px 14px', borderRadius: 8, border: '1px solid var(--border-color)', background: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}>Not now</button>
+              )}
+            </div>
+          ) : v.isLeader && v.signers.length ? (
+            // v1.156.1 — Pete: "someone can sign up / setup and she gets a 'needs you' card to click approve."
+            <div data-testid="dropin-ask">
+              {v.request
+                ? <div style={{ fontSize: 13 }}>Waiting for {v.request.ofFirstName} to review it. <button type="button" disabled={busy} onClick={() => call('/decline', 'POST', {})} style={{ background: 'none', border: 'none', color: 'var(--accent-color)', cursor: 'pointer', padding: 0, fontSize: 12.5 }}>Withdraw the ask</button></div>
+                : v.signers.map((p) => (
+                  <button key={p.userId} type="button" disabled={busy} data-testid={'dropin-ask-' + p.userId}
+                    onClick={() => call('/request', 'POST', { userId: p.userId }, `Sent to ${p.firstName}. It's on their Needs you card.`)}
+                    style={{ marginTop: 6, marginRight: 8, padding: '8px 14px', borderRadius: 8, border: 'none', background: 'var(--role-color)', color: 'var(--text-on-primary)', fontWeight: 700, cursor: 'pointer' }}>
+                    Ask {p.firstName} to approve <span style={{ fontWeight: 400, opacity: 0.85 }}>({p.capacityLabel})</span>
+                  </button>
+                ))}
             </div>
           ) : (
             <p style={muted}>Only {name}, or the agent recorded under {name}'s durable power of attorney or as healthcare agent, can sign this. Record who that is in Legal readiness, then that person signs here.</p>
           )}
         </div>
       )}
-      {v.isLeader && (
+      {v.isLeader && !signOnly && (
         <div style={{ marginTop: 12, opacity: v.consent ? 1 : 0.55 }}>
           <div style={{ fontWeight: 600, marginBottom: 4 }}>Who may drop in</div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 14px' }}>

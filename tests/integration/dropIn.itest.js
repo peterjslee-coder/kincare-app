@@ -156,3 +156,55 @@ describe("noticing when she is up", () => {
     expect(kept[0].revoked_by).toBe(mom.user.id);
   });
 });
+
+describe("v1.156.1 — the leader asks the agent; she approves from Needs you", () => {
+  let sara;
+  beforeAll(async () => {
+    sara = await h.createUser({ firstName: "Sara", lastName: "Agent" });
+    await db.prepare(`INSERT INTO recipient_authorities (care_recipient_id, kind, user_id, agent_name, set_by) VALUES (?, 'healthcare_agent', ?, 'Sara Agent', ?)
+      ON CONFLICT DO NOTHING`).run(recipientId, sara.user.id, leader.user.id);
+  });
+
+  test("a healthcare agent can sign (the kind is healthcare_agent), even off the care team", async () => {
+    const v = await get(sara);
+    expect(v.status).toBe(200);
+    expect(v.body).toMatchObject({ canSign: true, capacity: "healthcare_agent", capacityLabel: "healthcare agent" });
+  });
+
+  test("the leader asks; it lands on her Needs-you card; she signs; the ask closes", async () => {
+    const lv = await get(leader);
+    const s = lv.body.signers.find((p) => p.userId === sara.user.id);
+    expect(s).toMatchObject({ capacity: "healthcare_agent" });
+    const ask = await h.request.post(`/api/drop-in/${recipientId}/request`).set(h.auth(leader.token)).send({ userId: sara.user.id });
+    expect(ask.status).toBe(201);
+    expect(ask.body.request).toMatchObject({ ofUserId: sara.user.id, forMe: false });
+    const notSigner = await h.request.post(`/api/drop-in/${recipientId}/request`).set(h.auth(leader.token)).send({ userId: stranger.user.id });
+    expect(notSigner.status).toBe(400);
+
+    const { attentionItemsFor } = require("../../src/utils/attention");
+    let att = await attentionItemsFor(db, sara.user.id);
+    const card = att.items.find((i) => i.kind === "dropInConsent");
+    expect(card).toMatchObject({ verb: "Review", action: null, focus: `dropIn:${recipientId}` });
+    expect(att.dropInConsents).toBe(1);
+
+    const sv = await get(sara);
+    expect(sv.body.request.forMe).toBe(true);
+    const ok = await h.request.post(`/api/drop-in/${recipientId}/consent`).set(h.auth(sara.token))
+      .send({ signerName: "Sara Agent", agree: true, wordingVersion: sv.body.wordingVersion });
+    expect(ok.status).toBe(201);
+    expect(ok.body.consent).toMatchObject({ capacity: "healthcare_agent" });
+    expect(ok.body.request).toBeNull();
+    att = await attentionItemsFor(db, sara.user.id);
+    expect(att.items.some((i) => i.kind === "dropInConsent")).toBe(false);
+    await h.request.post(`/api/drop-in/${recipientId}/revoke`).set(h.auth(leader.token)).send({});
+  });
+
+  test("Not now closes the ask and the card", async () => {
+    await h.request.post(`/api/drop-in/${recipientId}/request`).set(h.auth(leader.token)).send({ userId: sara.user.id });
+    const no = await h.request.post(`/api/drop-in/${recipientId}/decline`).set(h.auth(sara.token)).send({});
+    expect(no.status).toBe(200);
+    expect(no.body.request).toBeNull();
+    const { attentionItemsFor } = require("../../src/utils/attention");
+    expect((await attentionItemsFor(db, sara.user.id)).dropInConsents).toBe(0);
+  });
+});

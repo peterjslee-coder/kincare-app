@@ -508,6 +508,27 @@ const WN_PREVIEWS = {
       </div>
     </div>
   ),
+  // v1.156.1 — the agent's Needs-you card, and calls that stop ringing elsewhere
+  agentApprove: () => (
+    <div style={{ ...wnCard, padding: 10, fontSize: 11.5, color: 'var(--text-primary)' }}>
+      <div style={{ fontSize: 10, fontWeight: 800, color: 'var(--text-secondary)', marginBottom: 4 }}>NEEDS YOU</div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 6 }}>
+        <div><strong>Review the InPlace Hub consent for Jane</strong><br /><span style={{ color: 'var(--text-secondary)', fontSize: 10.5 }}>Sam asked you, as the agent on record</span></div>
+        <span style={{ background: 'var(--role-color)', color: 'var(--text-on-primary)', borderRadius: 7, padding: '3px 9px', fontWeight: 800, fontSize: 10.5 }}>Review</span>
+      </div>
+      <div style={{ marginTop: 8, background: 'var(--bg-surface)', borderRadius: 6, padding: '4px 6px', fontSize: 10.5 }}>{'\u{1F4F1}'} Answered on your other device</div>
+    </div>
+  ),
+  // v1.156.1 — the overnight note leads the check-in briefing
+  overnightFirst: () => (
+    <div style={{ ...wnCard, padding: 10, fontSize: 11.5, color: 'var(--text-primary)' }}>
+      <div style={{ borderLeft: '3px solid var(--role-color)', paddingLeft: 7, marginBottom: 6 }}>
+        <div style={{ fontWeight: 800 }}>{'\u{1F319}'} Overnight</div>
+        <div>Jane was up last night from about 2:04 AM to 5:10 AM (about 3 hours). Expect a nap.</div>
+      </div>
+      <div style={{ color: 'var(--text-secondary)', fontSize: 10.5 }}>Hand-off from Sam {'\u00b7'} Today's to-dos {'\u00b7'} What to know today</div>
+    </div>
+  ),
   // v1.156.0 — the drop-in consent, signed and recorded
   hubConsent: () => (
     <div style={{ ...wnCard, padding: 10, fontSize: 11.5, color: 'var(--text-primary)' }}>

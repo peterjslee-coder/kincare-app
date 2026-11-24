@@ -1573,7 +1573,7 @@ router.get("/:id/care-briefing", async (req, res) => {
           // Build context for iPAi
           const notesText = recentNotes.map(n => {
             const dateStr = n.created_at ? new Date(n.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '?';
-            const typeLabel = n.note_type === 'visit_summary' ? '[Visit note]' : '[Care team note]';
+            const typeLabel = n.note_type === 'visit_summary' ? '[Visit note]' : n.note_type === 'hub_night' ? '[Noticed by the InPlace Hub]' : '[Care team note]';
             return `${dateStr} ${typeLabel}: ${n.content}`;
           }).join('\n');
 
@@ -1622,8 +1622,18 @@ SAFETY: this goes to the caregiver. Never mention financial or security vulnerab
       }
     }
 
+    // v1.156.1 — Pete: "For Tina's check in, if there's something to add from the overnight, I
+    // would want that at the top." The Hub's plain line about last night (utils/awake.js) —
+    // only where the consent is signed and noticing is on; null otherwise.
+    let nightNote = null;
+    try {
+      const cr = await db.prepare("SELECT id, first_name, timezone, simple_mode FROM care_recipients WHERE id = ?").get(session.care_recipient_id);
+      if (cr) nightNote = await require("../utils/awake").nightSummary(db, cr);
+    } catch (e) { console.warn("[care-briefing] night note failed (non-blocking):", e.message); }
+
     // Build the briefing
     const briefing = {
+      nightNote,
       recipientName,
       recipientAge: session.age,
       sessionServiceType: serviceLabel,

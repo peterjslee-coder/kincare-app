@@ -370,6 +370,12 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
         }
         return;
       }
+      // v1.156.1 — the agent's Needs-you card for the Hub consent opens it to read and sign.
+      if (f.startsWith('dropIn:')) {
+        window.__pendingFocus = null;
+        setDropInSheet(f.slice('dropIn:'.length));
+        return;
+      }
       if (!f.startsWith('session:')) return;
       const id = f.slice('session:'.length);
       if (!id) return;
@@ -414,6 +420,7 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
     return () => window.removeEventListener('inplace:quick-added', onAdded);
   }, []);
   const [taskSheet, setTaskSheet] = useState(null); // { occ, group } → CareTaskCheckSheet
+  const [dropInSheet, setDropInSheet] = useState(null); // v1.156.1 — care recipient id
   const [showTaskCreate, setShowTaskCreate] = useState(false); // kept: CareTeamManage opens this via window.__openTaskCreate
   const [showLogVisit, setShowLogVisit] = useState(null); // v1.105.38 — { recipientId, position }
   // v1.106.44 — the ids logged in THIS session, unioned with what the server already knows
@@ -2928,6 +2935,20 @@ const Dashboard = window.Dashboard = ({ onNavigate, acceptingInvite }) => {
       })()}
 
       {/* Visit Detail Modal */}
+      {/* v1.156.1 — the Hub consent, opened from the agent's Needs-you card */}
+      {dropInSheet && typeof HubDropInSettings !== 'undefined' && (
+        <div data-testid="dropin-sheet" onClick={() => setDropInSheet(null)}
+          style={{ position: 'fixed', inset: 0, zIndex: 2100, background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+          <div onClick={(e) => e.stopPropagation()}
+            style={{ background: 'var(--bg-surface)', borderRadius: 14, padding: '14px 16px 18px', width: 'min(520px, 100%)', maxHeight: '88vh', overflowY: 'auto', boxSizing: 'border-box' }}>
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <button type="button" onClick={() => setDropInSheet(null)} aria-label="Close" style={{ background: 'none', border: 'none', fontSize: 22, cursor: 'pointer', color: 'var(--text-muted)' }}>{'\u00d7'}</button>
+            </div>
+            <HubDropInSettings recipientId={dropInSheet} name={null}
+              signOnly onDone={() => { setDropInSheet(null); fetchDashboard(); }} />
+          </div>
+        </div>
+      )}
       {taskSheet && (
         <CareTaskCheckSheet occ={taskSheet.occ} group={taskSheet.group}
           onClose={() => setTaskSheet(null)} onDone={() => fetchCareTasks()} />

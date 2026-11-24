@@ -1618,6 +1618,17 @@ const ensureNativePushListeners = window.ensureNativePushListeners = (PushNotifi
 
     PushNotifications.addListener('pushNotificationActionPerformed', (action) => {
       const data = action.notification?.data;
+      // v1.156.1 — Pete: "if I tap on the push notification to answer the call with the ios
+      // screen locked, it opens inplace but doesn't show me an answer." On a locked phone the
+      // tap can arrive before app.js has installed __handlePushNavigate, and the fallback below
+      // only opened the page — the call itself was dropped. Park it here first, whatever
+      // happens next, and announce it so a Messages screen already open picks it up too.
+      if (data && data.type === 'call_incoming' && data.roomName) {
+        try {
+          window.__pendingCall = { roomName: data.roomName, callType: data.callType, callerId: data.callerId, callerName: data.callerName, at: Date.now() };
+          window.dispatchEvent(new Event('inplace:pending-call'));
+        } catch { /* routing below still opens Messages */ }
+      }
       // v1.97.0 — central router: same deep-link handling as web push and the in-app list
       if (window.__handlePushNavigate) window.__handlePushNavigate(data || {});
       else if (data?.page) window.__navigateTo?.(data.page);
