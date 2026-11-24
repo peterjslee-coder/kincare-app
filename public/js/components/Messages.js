@@ -1680,9 +1680,15 @@ const Messages = window.Messages = () => {
     // window.__pendingCall; pick it up on mount so the incoming-call UI appears rather than
     // dumping her into Messages with no idea why she is there.
     try {
-      if (window.__pendingCall) {
-        setIncomingCall(window.__pendingCall);
+      // v1.155.2 — a call parked by the live socket carries `at`; one more than 30 s old has
+      // stopped ringing on the caller's side, so it is dropped rather than offered.
+      const pc = window.__pendingCall;
+      if (pc) {
         window.__pendingCall = null;
+        if (!pc.at || Date.now() - pc.at < 30000) {
+          setIncomingCall(pc);
+          setTimeout(() => { setIncomingCall((prev) => (prev && prev.roomName === pc.roomName ? null : prev)); }, 30000);
+        }
       }
     } catch {}
 

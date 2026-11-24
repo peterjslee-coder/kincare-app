@@ -208,7 +208,12 @@ const useSimpleCallHost = (enabled, { answers = true } = {}) => {
   useEffect(() => {
     if (!enabled || typeof onSocketEvent !== 'function') return undefined;
     // A call that arrived as a push while the screen was off (app.js parks it here).
-    if (answers) try { if (window.__pendingCall) { setIncoming(window.__pendingCall); window.__pendingCall = null; } } catch { /* nothing waiting */ }
+    // v1.155.2 — app.js now also parks a call that rang over the live socket (stamped `at`);
+    // this screen already heard that one directly, so only a fresh, unseen one is picked up.
+    if (answers) try {
+      const pc = window.__pendingCall;
+      if (pc) { window.__pendingCall = null; if (!pc.at || Date.now() - pc.at < 30000) setIncoming((cur) => cur || pc); }
+    } catch { /* nothing waiting */ }
     const offs = [
       onSocketEvent('call_ring_status', (d) => setRingStatus(d?.via || null)),
       answers && onSocketEvent('call_incoming', (d) => {
@@ -359,11 +364,15 @@ const hubPhotoWhen = (iso, now) => {
   return 'on ' + t.toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
 };
 const HUB_PHOTO_MS = 20000;
+const HUB_PHOTO_SLOT = 16 / 9; // the photo space's shape; Add photo's crop frame (Dashboard.js) matches
 const HubPhoto = ({ photos, now, card }) => {
   const [i, setI] = React.useState(0);
   const [broken, setBroken] = React.useState({});
-  // v1.155.1 — a photo framed for the screen (4:3, from Add photo) fills its space; anything
-  // else (a tall phone photo, a caregiver's visit photo) shows whole.
+  // v1.155.1 — a photo framed for the screen (from Add photo) fills its space; anything else
+  // (a tall phone photo, a caregiver's visit photo) shows whole.
+  // v1.155.2 — Pete: "What I crop to isn't the same aspect as on the screen." The space used to
+  // be whatever height the column left over (about 16:9 on Betty's tablet) while the crop was
+  // 4:3. Now the space IS 16:9 (HUB_PHOTO_SLOT), the same shape as the Add photo frame.
   const [fills, setFills] = React.useState({});
   const list = (photos || []).filter((p) => !broken[p.kind + p.id]);
   const key = list.map((p) => p.id).join(',');
@@ -377,14 +386,70 @@ const HubPhoto = ({ photos, now, card }) => {
   const p = list[i % list.length];
   const when = hubPhotoWhen(p.createdAt, now);
   return (
-    <div data-testid="hub-photo" style={{ ...card, padding: 0, flex: '1 1 auto', minHeight: '26vh', position: 'relative', overflow: 'hidden', background: '#000', flexShrink: 1 }}>
+    <div data-testid="hub-photo" style={{ ...card, padding: 0, width: '100%', aspectRatio: '16 / 9', flex: 'none', position: 'relative', overflow: 'hidden', background: '#000' }}>
       <img key={p.kind + p.id} src={p.url} alt={p.caption || (p.from ? `Photo from ${p.from}` : 'Photo')}
         onError={() => setBroken((b) => ({ ...b, [p.kind + p.id]: true }))}
-        onLoad={(e) => { const r = e.target.naturalWidth / (e.target.naturalHeight || 1); const k = p.kind + p.id; const f = r > 1.2 && r < 1.6; setFills((m) => (m[k] === f ? m : { ...m, [k]: f })); }}
+        onLoad={(e) => { const r = e.target.naturalWidth / (e.target.naturalHeight || 1); const k = p.kind + p.id; const f = Math.abs(r - HUB_PHOTO_SLOT) < 0.2; setFills((m) => (m[k] === f ? m : { ...m, [k]: f })); }}
         style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: fills[p.kind + p.id] ? 'cover' : 'contain' }} />
       <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, padding: '5vh 2.4vh 1.6vh', background: 'linear-gradient(transparent, rgba(0,0,0,0.75))', color: '#fff' }}>
         {p.caption && <div style={{ fontSize: '4vh', fontWeight: 800, lineHeight: 1.2, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{p.caption}</div>}
         <div style={{ fontSize: '3.2vh', opacity: 0.9 }}>{p.from ? `From ${p.from}` : 'A photo'}{when ? ` · ${when}` : ''}</div>
+      </div>
+    </div>
+  );
+};
+
+// v1.155.2 — "Tina will be here soon". Pete: "Yes to the Chime and card with photo. Maybe a
+// pop up style that disappears either after she checks it [off] or Tina checks in." The server
+// sends `hub.arriving` from 15 minutes before a confirmed visit until it is checked in; this
+// card covers the board with a doorbell chime (again every 5 minutes, three times at most)
+// until she taps OK. OK is remembered for that visit on this tablet.
+const ARRIVING_CHIME_EVERY_MS = 5 * 60000;
+const ARRIVING_CHIMES = 3;
+const arrivingKey = (id) => 'inplace-hub-arriving-ok-' + id;
+const playDoorbell = () => {
+  try {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx) return;
+    const ctx = new Ctx();
+    if (ctx.state === 'suspended' && ctx.resume) ctx.resume().catch(() => {});
+    [[659.25, 0], [523.25, 0.45]].forEach(([f, off]) => {
+      const t0 = ctx.currentTime + off;
+      const osc = ctx.createOscillator(); const gain = ctx.createGain();
+      osc.type = 'sine'; osc.frequency.setValueAtTime(f, t0);
+      gain.gain.setValueAtTime(0, t0); gain.gain.linearRampToValueAtTime(0.3, t0 + 0.03);
+      gain.gain.exponentialRampToValueAtTime(0.001, t0 + 1.1);
+      osc.connect(gain); gain.connect(ctx.destination); osc.start(t0); osc.stop(t0 + 1.15);
+    });
+    setTimeout(() => { try { ctx.close(); } catch { /* gone */ } }, 2500);
+  } catch { /* no audio — the card is still there */ }
+};
+const HubArriving = ({ arriving }) => {
+  const [ok, setOk] = React.useState(() => { try { return localStorage.getItem(arrivingKey(arriving.sessionId)) === '1'; } catch { return false; } });
+  React.useEffect(() => {
+    if (ok) return undefined;
+    let n = 0;
+    const ring = () => { if (n < ARRIVING_CHIMES) { n += 1; playDoorbell(); } };
+    ring();
+    const iv = setInterval(ring, ARRIVING_CHIME_EVERY_MS);
+    return () => clearInterval(iv);
+  }, [ok]);
+  if (ok) return null;
+  const done = () => { try { localStorage.setItem(arrivingKey(arriving.sessionId), '1'); } catch { /* this visit only */ } setOk(true); };
+  return (
+    <div data-testid="hub-arriving" className="no-text-scale" onClick={done}
+      style={{ ...HUB_THEME, position: 'fixed', inset: 0, zIndex: 900, background: 'rgba(16, 40, 33, 0.82)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+      <div className="hub-new-shimmer" onClick={(e) => e.stopPropagation()}
+        style={{ background: 'var(--bg-surface)', borderRadius: '4vh', padding: '5vh 6vh', display: 'flex', alignItems: 'center', gap: '5vh', maxWidth: '86vw', boxShadow: '0 2vh 6vh rgba(0,0,0,0.4)', border: '4px solid var(--role-color)' }}>
+        <SimpleFace photo={arriving.photo} name={arriving.firstName} size={Math.round(window.innerHeight * 0.32)} ring="var(--role-color)" />
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontSize: '8vh', fontWeight: 800, color: 'var(--text-primary)', lineHeight: 1.1 }}>{arriving.firstName} will be here soon</div>
+          {arriving.time && <div style={{ fontSize: '5vh', color: 'var(--text-secondary)', marginTop: '1.5vh' }}>at {simpleFmtTime(arriving.time)}</div>}
+          <button data-testid="hub-arriving-ok" onClick={done}
+            style={{ marginTop: '4vh', minHeight: '13vh', minWidth: '34vh', padding: '0 5vh', borderRadius: '3vh', border: 'none', background: 'var(--role-color)', color: 'var(--text-on-primary)', fontSize: '6vh', fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit' }}>
+            OK
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -922,11 +987,14 @@ const SimpleViewInner = ({ initial, onPanelChange, startCall }) => {
 
   if (hubOn) {
     return (
+      <>
       <HubBoard hub={s.hub} first={first} now={now} show={show} calls={calls} note={note} s={s} failed={failed}
         readFlash={readFlash} reading={reading} acking={acking} unread={unread}
         awake={Date.now() < wakeUntil} onWake={() => setWakeUntil(Date.now() + 120000)}
         onRead={markRead} onAck={ackText} onText={openText}
         onMessages={() => setPanel('messages')} onCall={startCall} />
+      {s.hub && s.hub.arriving && <HubArriving key={s.hub.arriving.sessionId} arriving={s.hub.arriving} />}
+      </>
     );
   }
 

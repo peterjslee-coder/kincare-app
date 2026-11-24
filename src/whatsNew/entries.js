@@ -31,6 +31,21 @@ const WINDOW_DAYS = 45;
 
 const ENTRIES = [
   {
+    id: "hub-arriving",
+    version: "1.155.2",
+    date: "2026-11-23",
+    audience: ["family"],
+    title: "The Hub says who's on the way",
+    body: "Fifteen minutes before a caregiver's visit, the Hub chimes and shows their photo with \"Jane will be here soon\". It goes away when your loved one taps OK, or when the caregiver checks in.",
+    howTo: [
+      "Nothing to set up: it comes with the InPlace Hub",
+      "The visit needs a caregiver and a start time, and it must be confirmed",
+      "It chimes up to three times, five minutes apart, until OK is tapped",
+    ],
+    examples: ["Jane will be here soon, at 9:00 AM", "Sam will be here soon, at 5:00 PM"],
+    preview: "hubArriving",
+  },
+  {
     id: "hub-tomorrow-calls",
     version: "1.155.1",
     date: "2026-11-23",

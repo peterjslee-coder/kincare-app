@@ -43,7 +43,7 @@ test("the Hub's own Call buttons win over the phone's when the leader picked som
 
 test("Add photo offers a crop frame the shape of the Hub photo space, and sends the crop", () => {
   const add = dash.slice(dash.indexOf("const HUB_PHOTO_ASPECT"), dash.indexOf("const tipCardTotal"));
-  expect(add).toContain("const HUB_PHOTO_ASPECT = 4 / 3;");
+  expect(add).toMatch(/const HUB_PHOTO_ASPECT = 16 \/ 9;/);
   expect(add).toContain("fd.append('crop', JSON.stringify(crop.current))");
   expect(add).not.toMatch(/\bcapture\b/);
 });
@@ -61,4 +61,27 @@ test("an open panel goes home by itself: soon after a text is sent, and after a 
   expect(hub).toMatch(/if \(Date\.now\(\) - lastTouch\.current > limit\) goHome\(\);/);
   expect(hub).toMatch(/setTimeout\(\(\) => \{\s*setPanel\(\(p\) => \(p === 'text' \? null : p\)\)/);
   expect(hub).toContain('data-testid="simple-back-home"');
+});
+
+test("the arrival card chimes, stays until OK, and is remembered per visit", () => {
+  expect(hub).toMatch(/\{s\.hub && s\.hub\.arriving && <HubArriving key=\{s\.hub\.arriving\.sessionId\}/);
+  expect(hub).toContain("const ARRIVING_CHIMES = 3;");
+  expect(hub).toMatch(/localStorage\.setItem\(arrivingKey\(arriving\.sessionId\), '1'\)/);
+  expect(hub).toMatch(/data-testid="hub-arriving" className="no-text-scale"/);
+});
+
+test("v1.155.2: the crop frame and the Hub photo space are the same shape", () => {
+  expect(dash).toMatch(/const HUB_PHOTO_ASPECT = 16 \/ 9;/);
+  expect(hub).toContain("const HUB_PHOTO_SLOT = 16 / 9;");
+  expect(hub).toMatch(/data-testid="hub-photo" style=\{\{[^}]*aspectRatio: '16 \/ 9'/);
+});
+
+test("v1.155.2: a call that rings over the live socket off Messages is parked for Messages to show", () => {
+  const app = code("public/js/app.js");
+  const i = app.indexOf("onSocketEvent('call_incoming'");
+  const block = app.slice(i, i + 2500);
+  expect(block).toMatch(/window\.__pendingCall = \{ roomName: data\.roomName[^}]*at: Date\.now\(\) \}/);
+  expect(block.indexOf("window.__pendingCall =")).toBeLessThan(block.indexOf("setCurrentPage('messages')"));
+  const msgs = code("public/js/components/Messages.js");
+  expect(msgs).toMatch(/if \(!pc\.at \|\| Date\.now\(\) - pc\.at < 30000\)/);
 });

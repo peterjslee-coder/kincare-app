@@ -142,3 +142,29 @@ test("v1.155.1: the Hub's own Call buttons, care team only, with a photo", async
   // The phone's own Call buttons are untouched.
   expect(d.body.simpleScreen.callContacts).toEqual([]);
 });
+
+test("v1.155.2: 'Faith will be here soon' from 15 minutes before until she checks in", async () => {
+  const tz = (await db.prepare("SELECT timezone FROM care_recipients WHERE id = ?").get(recipientId)).timezone || "America/New_York";
+  const now = require("../../src/utils/timezone").getNowInZone(tz);
+  const mins = now.getHours() * 60 + now.getMinutes();
+  if (mins + 30 >= 24 * 60) return; // too close to midnight to place a visit later today
+  const hhmm = (m) => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+  const faith = await h.createUser({ roles: ["caregiver"], firstName: "Faith", lastName: "ITest" });
+  const prof = uuid();
+  await db.prepare("INSERT INTO caregiver_profiles (id, user_id, hourly_rate, created_at) VALUES (?, ?, 25, NOW())").run(prof, faith.user.id);
+  const today = soon(0);
+  const later = uuid(), soonId = uuid();
+  const add = (id, time) => db.prepare(`INSERT INTO care_sessions (id, care_recipient_id, family_user_id, caregiver_id, scheduled_date, scheduled_time, duration_hours, service_type, status, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, 2, 'companionship', 'confirmed', NOW())`).run(id, recipientId, leader.user.id, prof, today, time);
+  await add(later, hhmm(mins + 25)); // not yet: more than 15 minutes away
+  let hub = (await h.request.get("/api/dashboard").set(h.auth(mom.token))).body.simpleScreen.hub;
+  expect(hub.arriving).toBeNull();
+  await add(soonId, hhmm(mins + 10));
+  hub = (await h.request.get("/api/dashboard").set(h.auth(mom.token))).body.simpleScreen.hub;
+  expect(hub.arriving).toMatchObject({ sessionId: soonId, firstName: "Faith", time: hhmm(mins + 10) });
+  expect(hub.arriving).toHaveProperty("photo");
+  await db.prepare("UPDATE care_sessions SET status = 'in_progress' WHERE id = ?").run(soonId);
+  hub = (await h.request.get("/api/dashboard").set(h.auth(mom.token))).body.simpleScreen.hub;
+  expect(hub.arriving).toBeNull();
+  await db.prepare("DELETE FROM care_sessions WHERE id IN (?, ?)").run(later, soonId);
+});

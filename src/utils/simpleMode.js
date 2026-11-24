@@ -72,6 +72,8 @@ const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
 // With thumbnail photo." The Hub's own call buttons, chosen apart from the phone's (a tablet on
 // the counter has no dialer, her phone does). Empty = use the phone's Call buttons.
 const MAX_HUB_CALLS = 2;
+const ARRIVING_LEAD_MIN = 15; // v1.155.2 — "Tina will be here soon" from 15 minutes before...
+const ARRIVING_LATE_MIN = 60; // ...until she checks in, or an hour past the start
 function cleanHub(raw) {
   const out = { ...HUB_DEFAULTS, callUserIds: [] };
   if (raw && typeof raw === "object") {
@@ -275,6 +277,30 @@ async function hubScreenFor(db, recipient, linkedUserId, todayStr, hubCfg) {
     out.here = { firstName: here.who, photo: photoUrl({ id: here.who_id, has_photo: here.has_photo }), until: addHours(here.scheduled_time, here.duration_hours) };
   }
 
+  // v1.155.2 — Pete: "Yes to the Chime and card with photo...a pop up style that disappears
+  // either after she checks it [off] or Tina checks in." A confirmed visit that starts within the
+  // next 15 minutes (or started up to an hour ago and nobody has checked in yet). It goes away by
+  // itself the moment the visit is checked in, because then it is no longer 'confirmed'.
+  out.arriving = null;
+  {
+    const { getNowInZone } = require("./timezone");
+    const now = getNowInZone(recipient.timezone || undefined);
+    const nowMin = now.getHours() * 60 + now.getMinutes();
+    const rows = await db.prepare(`
+      SELECT cs.id, cs.scheduled_time, u.id AS who_id, u.first_name AS who, ${photoSql()}
+      FROM care_sessions cs
+      JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+      JOIN users u ON cp.user_id = u.id
+      WHERE cs.care_recipient_id = ? AND cs.status = 'confirmed' AND cs.scheduled_date = ?
+      ORDER BY cs.scheduled_time ASC
+    `).all(recipient.id, todayStr);
+    const toMin = (t) => { const [h, m] = String(t || "").split(":").map(Number); return (h || 0) * 60 + (m || 0); };
+    const next = rows.find((r) => r.scheduled_time && toMin(r.scheduled_time) - nowMin <= ARRIVING_LEAD_MIN && nowMin - toMin(r.scheduled_time) <= ARRIVING_LATE_MIN);
+    if (next) {
+      out.arriving = { sessionId: next.id, firstName: next.who, photo: photoUrl({ id: next.who_id, has_photo: next.has_photo }), time: next.scheduled_time };
+    }
+  }
+
   // Today plus the next six days when "week" is ticked; today and tomorrow otherwise.
   out.days = await comingUpFor(db, recipient.id, todayStr, hubCfg.week ? 7 : 2, 24);
 
@@ -423,4 +449,4 @@ async function comingUpFor(db, recipientId, todayStr, days = 2, limit = 8) {
     .slice(0, limit);
 }
 
-module.exports = { HUB_DEFAULTS, MAX_HUB_CALLS, cleanHub, addHours, weekdayLabel, nextVisitLabel, relationLabel, MAX_CALLS, MAX_TEXT, MAX_BUTTONS, bigButtonCount, SECTIONS, parseSimpleMode, cleanShow, callCandidates, simpleScreenFor, telDigits };
+module.exports = { HUB_DEFAULTS, MAX_HUB_CALLS, ARRIVING_LEAD_MIN, ARRIVING_LATE_MIN, cleanHub, addHours, weekdayLabel, nextVisitLabel, relationLabel, MAX_CALLS, MAX_TEXT, MAX_BUTTONS, bigButtonCount, SECTIONS, parseSimpleMode, cleanShow, callCandidates, simpleScreenFor, telDigits };
