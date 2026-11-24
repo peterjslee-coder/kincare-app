@@ -769,6 +769,53 @@ function HubStatusLine({ status, name, recipientId }) {
   );
 }
 
+// ─── HubScreen (v1.158.3) — the Hub's own clock is the only clock, and the screen stays lit ───
+// Pete, 11/24: "how do I keep the screen from dimming when it's plugged in?" and "maybe hide the
+// clock on the main screen" (Android's small status-bar clock above the Hub's big one).
+//   • The status bar is hidden while the Hub is up (Capacitor StatusBar; shown again on exit).
+//   • While charging, the Hub holds a screen wake lock, so the tablet never dims or sleeps on
+//     the counter. On battery it lets go, so an unplugged tablet still saves itself.
+// Both do nothing in a browser tab or on a build without the plugin.
+function HubScreen() {
+  React.useEffect(() => {
+    let sb = null;
+    try {
+      const C = window.Capacitor;
+      if (C && C.isNativePlatform && C.isNativePlatform() && C.Plugins && C.Plugins.StatusBar) {
+        sb = C.Plugins.StatusBar;
+        sb.hide().catch(() => {});
+      }
+    } catch { /* no status bar to hide */ }
+    let lock = null; let battery = null; let stopped = false;
+    const want = () => !stopped && document.visibilityState === 'visible' && (!battery || battery.charging);
+    const sync = async () => {
+      try {
+        if (want() && !lock && navigator.wakeLock) {
+          lock = await navigator.wakeLock.request('screen');
+          lock.addEventListener('release', () => { lock = null; });
+        } else if (!want() && lock) {
+          const l = lock; lock = null; await l.release();
+        }
+      } catch { lock = null; /* not allowed right now; try at the next change */ }
+    };
+    (async () => {
+      try { if (navigator.getBattery) { battery = await navigator.getBattery(); battery.addEventListener('chargingchange', sync); } } catch { battery = null; }
+      sync();
+    })();
+    document.addEventListener('visibilitychange', sync);
+    const again = setInterval(sync, 60 * 1000);
+    return () => {
+      stopped = true;
+      document.removeEventListener('visibilitychange', sync);
+      clearInterval(again);
+      try { if (battery) battery.removeEventListener('chargingchange', sync); } catch { /* gone */ }
+      try { if (lock) lock.release(); } catch { /* gone */ }
+      try { if (sb) sb.show().catch(() => {}); } catch { /* gone */ }
+    };
+  }, []);
+  return null;
+}
+
 // ─── HubKiosk (1.3) — keep the tablet on InPlace ───
 // Tells the Android app the family's "Keep the tablet on InPlace" choice each time the Hub loads
 // or the choice changes. The app acts on it only on a tablet set up as a Hub (device owner, one
@@ -1446,6 +1493,7 @@ const SimpleViewInner = ({ initial, onPanelChange, startCall, callBusy }) => {
         onHubShape={(aspect) => { if (data && data.careRecipientId) apiFetch(`/api/care-recipients/${data.careRecipientId}/simple-screen/hub-shape`, { method: 'POST', body: JSON.stringify({ photoAspect: aspect }) }).catch(() => {}); }} />
       {s.hub && s.hub.noticeAwake && !callBusy && data && data.careRecipientId && <HubAwake recipientId={data.careRecipientId} />}
       {s.hub && <HubKiosk on={s.hub.kiosk !== false} />}
+      {s.hub && <HubScreen />}
       {s.hub && data && data.careRecipientId && <HubHeartbeat recipientId={data.careRecipientId} busy={!!callBusy} />}
       {s.hub && <HubPopups hub={s.hub} s={s} note={note} now={now} onRead={markRead} onAck={ackText} onText={openText} />}
       </>

@@ -27,3 +27,13 @@ test("the Hub reloads itself only at a quiet moment, once per version", () => {
   // A family refresh never interrupts a call.
   expect(phone).toMatch(/onSocketEvent\('hub_refresh', \(\) => \{\s*if \(!busyRef\.current\) hubReload\(\); else wantReload\.current = true;/);
 });
+
+test("v1.158.3 — the Hub hides Android's status-bar clock and stays lit only while charging", () => {
+  const { code } = require("./helpers/source");
+  const phone = code("public/js/components/RecipientPhone.js");
+  expect(phone).toMatch(/sb\.hide\(\)/);
+  expect(phone).toMatch(/if \(sb\) sb\.show\(\)/);
+  expect(phone).toMatch(/const want = \(\) => !stopped && document\.visibilityState === 'visible' && \(!battery \|\| battery\.charging\);/);
+  expect(phone).toMatch(/navigator\.wakeLock\.request\('screen'\)/);
+  expect(phone).toMatch(/\{s\.hub && <HubScreen \/>\}/);
+});
