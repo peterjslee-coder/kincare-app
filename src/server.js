@@ -234,7 +234,6 @@ io.on("connection", (socket) => {
   const sockUa = (() => { const u = String(socket.handshake.headers["user-agent"] || ""); return /iPhone|iPad|iOS/i.test(u) ? "ios" : /Android/i.test(u) ? "android" : "desktop"; })();
   socket.data.ua = sockUa;
   try { console.log(`[socket] connect user=${String(userId).slice(0, 8)} ua=${sockUa} transport=${socket.conn.transport.name} n=${existing.size}`); } catch { /* logging only */ }
-  socket.on("disconnect", (why) => { try { console.log(`[socket] disconnect user=${String(userId).slice(0, 8)} ua=${sockUa} why=${why}`); } catch { /* logging only */ } });
 
   // Throttle EVERY inbound event on this socket, whatever it is, before the handler runs.
   // Done with a middleware rather than per-handler so a new socket.on() is covered by default
@@ -324,7 +323,16 @@ io.on("connection", (socket) => {
         console.log(`[call] invite from=${String(userId).slice(0, 8)} to=${String(data.targetUserId).slice(0, 8)} via=app devices=${uas}`);
       } catch { /* logging only */ }
       ack("app", targetSockets.size);
+      // v1.155.4 — Pete: "would love my phone to get a push and a buzz or something to let me
+      // know to go in app bc she's calling." A live socket can be his laptop, or an app he has
+      // just navigated away from inside, so a call now ALSO pushes. Calls are the one exception
+      // to "no push while you are in the app" (97783012): a ringing phone is the whole point.
+      pushCall(false);
     } else {
+      pushCall(true);
+    }
+
+    function pushCall(acks) {
       const kind = data.callType === "video" ? "Video call" : "Call";
       const who = socket.user.displayName || "Someone";
       // Fire and forget, but never silently: a push that fails is the difference between a
@@ -351,12 +359,12 @@ io.on("connection", (socket) => {
             },
           });
           const sent = (result && result.sent) || 0;
-          console.log(`[call] invite from=${String(userId).slice(0, 8)} to=${String(data.targetUserId).slice(0, 8)} via=${sent > 0 ? "push" : "nowhere"} sent=${sent}`);
-          ack(sent > 0 ? "push" : "nowhere", sent);
+          console.log(`[call] invite from=${String(userId).slice(0, 8)} to=${String(data.targetUserId).slice(0, 8)} via=${sent > 0 ? "push" : "nowhere"} sent=${sent}${acks ? "" : " (also in app)"}`);
+          if (acks) ack(sent > 0 ? "push" : "nowhere", sent);
         } catch (err) {
           console.error("call_invite push failed:", err.message);
           captureException(err, { where: "socket: call_invite push", targetUserId: data.targetUserId });
-          ack("nowhere", 0);
+          if (acks) ack("nowhere", 0);
         }
       })();
     }
@@ -467,10 +475,11 @@ io.on("connection", (socket) => {
     if (typeof cb === "function") cb({ ok: true });
   });
 
-  socket.on("disconnect", () => {
+  socket.on("disconnect", (why) => {
     _socketEvents.delete(socket.id);
     _callRate.delete(socket.id);
     viewingConversation.close(socket.id);
+    try { console.log(`[socket] disconnect user=${String(userId).slice(0, 8)} ua=${sockUa} why=${why}`); } catch { /* logging only */ }
     const sockets = connectedUsers.get(userId);
     if (sockets) {
       sockets.delete(socket.id);
@@ -867,7 +876,7 @@ app.use("/api/safety", require("./routes/safety"));
 
 // ─── App version check (lightweight, no auth) ───
 const { cancelPassedPrivateOffers, releaseExpiredExclusiveOffers } = require("./utils/exclusiveOffers");
-const APP_VERSION = "1.155.3";
+const APP_VERSION = "1.155.4";
 app.get("/api/version", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({ version: APP_VERSION, minAppVersion: MIN_APP_VERSION });

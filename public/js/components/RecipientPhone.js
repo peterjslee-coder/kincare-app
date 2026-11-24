@@ -423,7 +423,6 @@ const HubPhoto = ({ photos, now, card, stored, onShape }) => {
 // until she taps OK. OK is remembered for that visit on this tablet.
 const ARRIVING_CHIME_EVERY_MS = 5 * 60000;
 const ARRIVING_CHIMES = 3;
-const arrivingKey = (id) => 'inplace-hub-arriving-ok-' + id;
 const playDoorbell = () => {
   try {
     const Ctx = window.AudioContext || window.webkitAudioContext;
@@ -441,37 +440,110 @@ const playDoorbell = () => {
     setTimeout(() => { try { ctx.close(); } catch { /* gone */ } }, 2500);
   } catch { /* no audio — the card is still there */ }
 };
-const HubArriving = ({ arriving }) => {
-  const [ok, setOk] = React.useState(() => { try { return localStorage.getItem(arrivingKey(arriving.sessionId)) === '1'; } catch { return false; } });
+// v1.155.4 — Pete, on the mockup: "go with the pop ups automatically. they look great." One
+// pop-up at a time, about 75% of the screen, a chime, one big answer. In order of importance:
+//   arrival      "Tina will be here soon"            OK               (until OK or check-in)
+//   message      "Message from Peter" + the words     Got it / Write back
+//   appointment  "In 1 hour · Haircut at Angie's"     OK               (the hour before)
+//   photo        a new photo for her screen, shown big OK
+// Dismissing a pop-up is remembered on this tablet per item; the board keeps showing the item
+// in its usual place. Nothing pops up during her night hours — it waits for the morning, if it
+// still matters then. Photos already there when the Hub loads are not announced (no flood
+// the first time it is set up, or after an update reloads it).
+const popSeen = (k) => { try { return localStorage.getItem('inplace-hub-pop-' + k) === '1'; } catch { return false; } };
+const popMark = (k) => { try { localStorage.setItem('inplace-hub-pop-' + k, '1'); } catch { /* this session only */ } };
+const HubPopup = ({ popKey, chimes, face, name, kicker, head, sub, img, buttons }) => {
   React.useEffect(() => {
-    if (ok) return undefined;
     let n = 0;
-    const ring = () => { if (n < ARRIVING_CHIMES) { n += 1; playDoorbell(); } };
+    const ring = () => { if (n < chimes) { n += 1; playDoorbell(); } };
     ring();
     const iv = setInterval(ring, ARRIVING_CHIME_EVERY_MS);
     return () => clearInterval(iv);
-  }, [ok]);
-  if (ok) return null;
-  const done = () => { try { localStorage.setItem(arrivingKey(arriving.sessionId), '1'); } catch { /* this visit only */ } setOk(true); };
+  }, [popKey]);
+  const btnStyle = (primary) => ({
+    flex: 1, minHeight: '12vh', borderRadius: '3vh', fontSize: '5.4vh', fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit',
+    border: primary ? 'none' : '3px solid var(--border-color)', background: primary ? 'var(--role-color)' : 'var(--bg-card)', color: primary ? 'var(--text-on-primary)' : 'var(--text-primary)',
+  });
   return (
-    <div data-testid="hub-arriving" className="no-text-scale" onClick={done}
-      style={{ ...HUB_THEME, position: 'fixed', inset: 0, zIndex: 900, background: 'rgba(16, 40, 33, 0.82)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
-      <div className="hub-new-shimmer" onClick={(e) => e.stopPropagation()}
-        style={{ background: 'var(--bg-surface)', borderRadius: '4vh', padding: '5vh 6vh', display: 'flex', alignItems: 'center', gap: '5vh', maxWidth: '86vw', boxShadow: '0 2vh 6vh rgba(0,0,0,0.4)', border: '4px solid var(--role-color)' }}>
-        <SimpleFace photo={arriving.photo} name={arriving.firstName} size={Math.round(window.innerHeight * 0.32)} ring="var(--role-color)" />
-        <div style={{ minWidth: 0 }}>
-          <div style={{ fontSize: '8vh', fontWeight: 800, color: 'var(--text-primary)', lineHeight: 1.1 }}>{arriving.firstName} will be here soon</div>
-          {arriving.time && <div style={{ fontSize: '5vh', color: 'var(--text-secondary)', marginTop: '1.5vh' }}>at {simpleFmtTime(arriving.time)}</div>}
-          <button data-testid="hub-arriving-ok" onClick={done}
-            style={{ marginTop: '4vh', minHeight: '13vh', minWidth: '34vh', padding: '0 5vh', borderRadius: '3vh', border: 'none', background: 'var(--role-color)', color: 'var(--text-on-primary)', fontSize: '6vh', fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit' }}>
-            OK
-          </button>
+    <div data-testid="hub-popup" data-kind={popKey.split(':')[0]} className="no-text-scale"
+      style={{ ...HUB_THEME, position: 'fixed', inset: 0, zIndex: 900, background: 'rgba(16, 40, 33, 0.82)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div className="hub-new-shimmer"
+        style={{ width: '78vw', height: '78vh', boxSizing: 'border-box', background: 'var(--bg-surface)', borderRadius: '4vh', padding: '4vh 5vh', display: 'flex', flexDirection: 'column', gap: '3vh', border: '4px solid var(--role-color)' }}>
+        <div style={{ display: 'flex', alignItems: img ? 'stretch' : 'center', gap: '4vh', flex: 1, minHeight: 0 }}>
+          {img
+            ? <img src={img} alt="" style={{ height: '100%', maxWidth: '55%', objectFit: 'contain', borderRadius: '2vh', background: '#000', flex: 'none' }} />
+            : <SimpleFace photo={face} name={name} size={Math.round(window.innerHeight * 0.26)} ring="var(--role-color)" />}
+          <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+            {kicker && <div style={{ fontSize: '4vh', fontWeight: 700, color: 'var(--role-color)' }}>{kicker}</div>}
+            <div style={{ fontSize: '7vh', fontWeight: 800, color: 'var(--text-primary)', lineHeight: 1.15, overflowWrap: 'anywhere', display: '-webkit-box', WebkitLineClamp: 4, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{head}</div>
+            {sub && <div style={{ fontSize: '4.6vh', color: 'var(--text-secondary)', marginTop: '1.2vh' }}>{sub}</div>}
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: '3vh' }}>
+          {buttons.map((b, i) => (
+            <button key={b.label} data-testid={'hub-popup-' + (i ? 'second' : 'ok')} onClick={b.onClick} style={btnStyle(i === 0)}>{b.label}</button>
+          ))}
         </div>
       </div>
     </div>
   );
 };
 
+const HubPopups = ({ hub, s, note, now, onRead, onAck, onText }) => {
+  const [, bump] = React.useState(0);
+  const done = (k) => { popMark(k); bump((n) => n + 1); };
+  // Photos already on the board when it loads are not news (no flood on setup or after an
+  // update). Done before the first draw, so a pop-up never flashes and chimes for one.
+  React.useState(() => { for (const p of (hub.photos || [])) popMark('photo:' + p.kind + p.id); return true; });
+  if (hubIsNight(now, hub.dimFrom, hub.dimTo)) return null;
+
+  const a = hub.arriving;
+  if (a && !popSeen('arrive:' + a.sessionId)) {
+    const k = 'arrive:' + a.sessionId;
+    return <HubPopup key={k} popKey={k} chimes={ARRIVING_CHIMES} face={a.photo} name={a.firstName}
+      kicker="On the way" head={`${a.firstName} will be here soon`} sub={a.time ? `at ${simpleFmtTime(a.time)}` : null}
+      buttons={[{ label: 'OK', onClick: () => done(k) }]} />;
+  }
+  if (note && !popSeen('note:' + note.id)) {
+    const k = 'note:' + note.id;
+    return <HubPopup key={k} popKey={k} chimes={ARRIVING_CHIMES} face={note.fromPhoto} name={note.from}
+      kicker={`From ${note.from}`} head={note.content}
+      buttons={[{ label: 'I read it', onClick: () => { done(k); onRead(note.id); } }, { label: 'Later', onClick: () => done(k) }]} />;
+  }
+  const waiting = s.text && Array.isArray(s.text.waiting) && s.text.waiting.length ? s.text.waiting[s.text.waiting.length - 1] : null;
+  if (waiting && !popSeen('msg:' + waiting.id)) {
+    const k = 'msg:' + waiting.id;
+    return <HubPopup key={k} popKey={k} chimes={ARRIVING_CHIMES} face={waiting.fromPhoto} name={waiting.from}
+      kicker={waiting.isReply ? `${waiting.from} wrote back` : `Message from ${waiting.from}`} head={waiting.content}
+      buttons={[{ label: 'Got it', onClick: () => { done(k); onAck(); } }, { label: 'Write back', onClick: () => { done(k); onText(); } }]} />;
+  }
+  // An appointment or plan today within the next hour.
+  const nowMin = now.getHours() * 60 + now.getMinutes();
+  const appt = (hub.days || []).find((d) => {
+    if (d.kind === 'visit' || d.date !== hub.today || !d.time) return false;
+    const [h, m] = d.time.split(':').map(Number);
+    const left = h * 60 + m - nowMin;
+    return left >= 0 && left <= 60 && !popSeen('appt:' + d.id);
+  });
+  if (appt) {
+    const k = 'appt:' + appt.id;
+    const [h, m] = appt.time.split(':').map(Number);
+    const left = h * 60 + m - nowMin;
+    return <HubPopup key={k} popKey={k} chimes={1} face={null} name={appt.title || 'Today'}
+      kicker={left <= 5 ? 'Now' : left >= 55 ? 'In 1 hour' : `In ${left} minutes`} head={hubLine(appt)} sub={`at ${simpleFmtTime(appt.time)}`}
+      buttons={[{ label: 'OK', onClick: () => done(k) }]} />;
+  }
+  const photo = (hub.showPhotos !== false && hub.photos && hub.photos[0]) || null;
+  if (photo && !popSeen('photo:' + photo.kind + photo.id)) {
+    const k = 'photo:' + photo.kind + photo.id;
+    return <HubPopup key={k} popKey={k} chimes={1} img={photo.url}
+      kicker={photo.from ? `New photo from ${photo.from}` : 'A new photo'} head={photo.caption || 'A new photo for you'}
+      buttons={[{ label: 'OK', onClick: () => done(k) }]} />;
+  }
+  return null;
+};
+
+const HUB_WAKE_MS = 60000;    // v1.155.4 — a tap at night brightens the board this long
 const PANEL_IDLE_MS = 90000;  // v1.155.1 — an open panel goes home after this long untouched
 const SENT_HOME_MS = 3000;    // ...and this soon after a text is sent
 
@@ -493,7 +565,9 @@ const HubBoard = ({ hub, first, now, show, calls, note, s, failed, readFlash, re
         <div style={{ fontSize: '5.6vh', color: '#8f857a' }}>{weekday}, {dateLine}</div>
         <div style={{ fontSize: '24vh', fontWeight: 800, lineHeight: 1, color: '#efe6da' }}>{clockNum} <span style={{ fontSize: '9vh' }}>{clockAp}</span></div>
         <div style={{ fontSize: '6.4vh', fontWeight: 700, color: '#efe6da' }}>Good night{first ? `, ${first}` : ''}.</div>
-        {next && <div style={{ fontSize: '5vh', color: '#b3a898' }}>{simpleFmtDay(next.date)}: {hubLine(next)}{next.time ? ` — ${simpleFmtTime(next.time)}` : ''}</div>}
+        {/* v1.155.4 — Pete: "it says 'Tina comes at 9:00 AM - 9:00 AM'". A visit's line already
+            carries its time; only plans get it added. */}
+        {next && <div style={{ fontSize: '5vh', color: '#b3a898' }}>{simpleFmtDay(next.date)}: {hubLine(next)}{next.time && next.kind !== 'visit' ? ` — ${simpleFmtTime(next.time)}` : ''}</div>}
       </div>
     );
   }
@@ -530,7 +604,7 @@ const HubBoard = ({ hub, first, now, show, calls, note, s, failed, readFlash, re
   const hasButtons = hubCalls.length > 0 || (show.text && s.text) || show.messages;
 
   return (
-    <div className="simple-view hub-board no-text-scale" data-testid="hub-board" style={{ ...HUB_THEME, height: '100vh', background: 'var(--bg-surface)', padding: '3vh 3vw', boxSizing: 'border-box', display: 'grid', gridTemplateColumns: 'minmax(0, 1.15fr) minmax(0, 1fr)', gridTemplateRows: hasButtons ? 'minmax(0, 1fr) auto' : 'minmax(0, 1fr)', gap: '2.6vh 2.2vw', overflow: 'hidden' }}>
+    <div className="simple-view hub-board no-text-scale" data-testid="hub-board" onPointerDown={() => { if (awake && hubIsNight(now, hub.dimFrom, hub.dimTo)) onWake(); }} style={{ ...HUB_THEME, height: '100vh', background: 'var(--bg-surface)', padding: '3vh 3vw', boxSizing: 'border-box', display: 'grid', gridTemplateColumns: 'minmax(0, 1.15fr) minmax(0, 1fr)', gridTemplateRows: hasButtons ? 'minmax(0, 1fr) auto' : 'minmax(0, 1fr)', gap: '2.6vh 2.2vw', overflow: 'hidden' }}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: '2.2vh', minHeight: 0, overflow: 'hidden' }}>
         <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: '2vw' }}>
           <div style={{ minWidth: 0 }}>
@@ -679,6 +753,15 @@ const SimpleViewInner = ({ initial, onPanelChange, startCall }) => {
   // v1.152.0 — InPlace Hub: the same screen on a tablet held sideways on the kitchen counter.
   const [wide, setWide] = useState(hubViewport());
   const [wakeUntil, setWakeUntil] = useState(0); // a tap on the night screen brightens it a while
+  // v1.155.4 — Pete: "it went to daytime mode, but hasn't turned back to night mode. it should
+  // do it auto after a minute or so." Waking now lasts a minute, and a timer redraws the screen
+  // the moment it ends instead of waiting for the next clock tick; any touch while awake starts
+  // the minute again.
+  useEffect(() => {
+    if (!wakeUntil) return undefined;
+    const t = setTimeout(() => setNow(new Date()), Math.max(0, wakeUntil - Date.now()) + 50);
+    return () => clearTimeout(t);
+  }, [wakeUntil]);
   useEffect(() => {
     const onResize = () => setWide(hubViewport());
     window.addEventListener('resize', onResize);
@@ -1007,11 +1090,11 @@ const SimpleViewInner = ({ initial, onPanelChange, startCall }) => {
       <>
       <HubBoard hub={s.hub} first={first} now={now} show={show} calls={calls} note={note} s={s} failed={failed}
         readFlash={readFlash} reading={reading} acking={acking} unread={unread}
-        awake={Date.now() < wakeUntil} onWake={() => setWakeUntil(Date.now() + 120000)}
+        awake={Date.now() < wakeUntil} onWake={() => setWakeUntil(Date.now() + HUB_WAKE_MS)}
         onRead={markRead} onAck={ackText} onText={openText}
         onMessages={() => setPanel('messages')} onCall={startCall}
         onHubShape={(aspect) => { if (data && data.careRecipientId) apiFetch(`/api/care-recipients/${data.careRecipientId}/simple-screen/hub-shape`, { method: 'POST', body: JSON.stringify({ photoAspect: aspect }) }).catch(() => {}); }} />
-      {s.hub && s.hub.arriving && <HubArriving key={s.hub.arriving.sessionId} arriving={s.hub.arriving} />}
+      {s.hub && <HubPopups hub={s.hub} s={s} note={note} now={now} onRead={markRead} onAck={ackText} onText={openText} />}
       </>
     );
   }
