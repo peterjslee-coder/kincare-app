@@ -53,6 +53,12 @@ async function view(db, cr, userId) {
     candidates,
     chosen: (hub.dropInUserIds || []).filter((id) => candidates.length === 0 || candidates.some((c) => c.userId === id)),
     noticeAwake: !!hub.noticeAwake,
+    // 1.3 — may THIS person drop in right now (the same check call_invite makes), and on whom.
+    mayDropIn: await D.mayDropIn(db, cr.id, userId),
+    hubUserId: await (async () => {
+      const { trustedLinkedUserId } = require("../utils/linkedAccount");
+      return trustedLinkedUserId(db, cr);
+    })(),
     // v1.156.1 — the leader asks the person who can sign; she gets a Needs-you card.
     signers: leader ? await D.possibleSigners(db, cr) : [],
     request: await (async () => {

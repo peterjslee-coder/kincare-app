@@ -99,6 +99,10 @@ describe("who may drop in", () => {
     expect(await D().mayDropIn(db, recipientId, sister.user.id)).toBe(true);
     expect(await D().mayDropIn(db, recipientId, leader.user.id)).toBe(false);
     expect(await D().mayDropIn(db, recipientId, tina.user.id)).toBe(false);
+    // 1.3 — the view tells each person whether THEY may drop in, and on which account.
+    const sv = await get(sister);
+    expect(sv.body).toMatchObject({ mayDropIn: true, hubUserId: mom.user.id });
+    expect((await get(leader)).body.mayDropIn).toBe(false);
     const notLeader = await h.request.put(`/api/drop-in/${recipientId}/settings`).set(h.auth(sister.token)).send({ userIds: [sister.user.id] });
     expect(notLeader.status).toBe(403);
   });

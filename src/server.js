@@ -313,6 +313,48 @@ io.on("connection", (socket) => {
     return;
 
     async function ringTarget() {
+    // ─── Drop-in (1.3) — the Hub answers by itself ───
+    //
+    // Pete, 11/24: a drop-in may use her camera and microphone without her answering, under a
+    // consent she or her agent signed (utils/dropIn.js). So it is checked HERE, server-side,
+    // every time: Hub on, consent live, this caller chosen by the leader, and still a family
+    // member of her team. It goes only to her open Hub (no phone ring, no push — a drop-in on
+    // a screen nobody can see is pointless), which chimes, says who is checking in, and answers.
+    // Anything that fails the check rings nowhere: it is never quietly turned into a normal call.
+    if (data.dropIn === true) {
+      let recipientId = null;
+      try {
+        const dropIn = require("./utils/dropIn");
+        const db = await getDb();
+        const { recipientForLinkedUser } = require("./utils/linkedAccount");
+        const cr = await recipientForLinkedUser(db, data.targetUserId);
+        if (cr && await dropIn.mayDropIn(db, cr.id, userId)) recipientId = cr.id;
+        const hubSockets = connectedUsers.get(data.targetUserId);
+        if (!recipientId || !hubSockets || !hubSockets.size) {
+          console.log(`[call] drop-in from=${String(userId).slice(0, 8)} to=${String(data.targetUserId).slice(0, 8)} via=nowhere reason=${recipientId ? "hub-offline" : "not-allowed"}`);
+          return ack("nowhere", 0);
+        }
+        try {
+          require("./utils/callRegistry").startCall({
+            roomName: data.roomName, callerId: userId, callerName: socket.user.displayName || "InPlace",
+            targetUserId: data.targetUserId, callType: "video",
+          });
+        } catch { /* the registry is for native ringing; a drop-in works without it */ }
+        for (const sid of hubSockets) {
+          io.to(sid).emit("call_incoming", {
+            roomName: data.roomName, callType: "video", callerId: userId,
+            callerName: socket.user.displayName || "InPlace", dropIn: true,
+          });
+        }
+        await dropIn.audit(db, recipientId, userId, "drop_in_started", "Dropped in on the InPlace Hub", { roomName: data.roomName });
+        console.log(`[call] drop-in from=${String(userId).slice(0, 8)} to=${String(data.targetUserId).slice(0, 8)} via=app devices=${hubSockets.size}`);
+        return ack("app", hubSockets.size);
+      } catch (e) {
+        captureException(e, { where: "socket: call_invite drop-in" });
+        return ack("nowhere", 0);
+      }
+    }
+
     // ─── calls-native (1.3): ring the PHONE, not just the app ───
     //
     // A device running the 1.3 app has told us it can ring like a phone (utils/callDevices.js).
@@ -959,7 +1001,7 @@ app.use("/api/safety", require("./routes/safety"));
 
 // ─── App version check (lightweight, no auth) ───
 const { cancelPassedPrivateOffers, releaseExpiredExclusiveOffers } = require("./utils/exclusiveOffers");
-const APP_VERSION = "1.156.1";
+const APP_VERSION = "1.157.0";
 app.get("/api/version", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({ version: APP_VERSION, minAppVersion: MIN_APP_VERSION });

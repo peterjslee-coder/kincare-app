@@ -508,6 +508,17 @@ const WN_PREVIEWS = {
       </div>
     </div>
   ),
+  // 1.157.0 — drop-in: the Hub chimes, says who, and opens video by itself
+  hubDropIn: () => (
+    <div style={{ background: '#1d1b19', borderRadius: 12, padding: 6 }}>
+      <div style={{ background: '#1f1a16', borderRadius: 7, padding: '14px 10px', color: '#f3ebe0', textAlign: 'center' }}>
+        <div style={{ width: 38, height: 38, borderRadius: '50%', margin: '0 auto 6px', background: '#e8b04a', color: '#1f1a16', fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>S</div>
+        <div style={{ fontSize: 15, fontWeight: 800 }}>{'\u{1F514}'} Sam is checking in</div>
+        <div style={{ fontSize: 10.5, color: '#cbbfae', marginTop: 3 }}>Video, starting in a moment</div>
+      </div>
+      <div style={{ marginTop: 6, background: 'var(--bg-card)', borderRadius: 7, padding: '5px 8px', fontSize: 10.5, color: 'var(--text-primary)' }}>{'\u2611'} Keep the tablet on InPlace</div>
+    </div>
+  ),
   // v1.156.1 — the agent's Needs-you card, and calls that stop ringing elsewhere
   agentApprove: () => (
     <div style={{ ...wnCard, padding: 10, fontSize: 11.5, color: 'var(--text-primary)' }}>

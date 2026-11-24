@@ -74,8 +74,9 @@ function settle(state) {
       const event = state === "answered" ? "call_accepted" : "call_declined";
       registry.emitToUser(call.callerId, event, { roomName: call.roomName });
       // And the person's OTHER open apps, so a browser tab stops ringing too.
-      registry.emitToUser(call.targetUserId, state === "answered" ? "call_answered_elsewhere" : "call_ended",
-        { roomName: call.roomName });
+      // v1.156.1 shape: { roomName, how } — those apps say "Answered/Declined on your other device".
+      registry.emitToUser(call.targetUserId, "call_answered_elsewhere",
+        { roomName: call.roomName, how: state === "answered" ? "answered" : "declined" });
     }
     // `won` tells the native side whether THIS request moved the call. Two of one person's
     // phones can both tap Answer; both get state "answered", but only the first joins.

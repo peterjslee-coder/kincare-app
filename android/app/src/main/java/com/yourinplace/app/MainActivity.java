@@ -12,7 +12,11 @@ import com.getcapacitor.BridgeActivity;
 public class MainActivity extends BridgeActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        // 1.3 — plugins inside the app module must be registered before the bridge starts.
+        registerPlugin(InPlaceCallsPlugin.class);
+        registerPlugin(InPlaceKioskPlugin.class);
         super.onCreate(savedInstanceState);
+        CallRinger.ensureChannel(this);
 
         // Create notification channel (required for Android 8.0+ / API 26+)
         // Without this, FCM silently drops notifications on modern Android
@@ -55,6 +59,41 @@ public class MainActivity extends BridgeActivity {
         // Runtime permission is requested by the WebView automatically when
         // Kindred's SpeechRecognition.start() is called. No need to request
         // it here in onCreate — doing so interrupts Capacitor's bridge setup.
+    }
+
+    // 1.3 kiosk escape at the tablet: five quick taps in the top-left corner (Kiosk.pause).
+    private int cornerTaps = 0;
+    private long firstCornerTap = 0;
+    private final android.os.Handler kioskHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+
+    @Override
+    public boolean dispatchTouchEvent(android.view.MotionEvent ev) {
+        try {
+            if (ev.getActionMasked() == android.view.MotionEvent.ACTION_DOWN && Kiosk.isLocked(this)) {
+                float corner = 80 * getResources().getDisplayMetrics().density;
+                if (ev.getX() < corner && ev.getY() < corner) {
+                    long now = System.currentTimeMillis();
+                    if (now - firstCornerTap > 4000) { firstCornerTap = now; cornerTaps = 0; }
+                    if (++cornerTaps >= 5) {
+                        cornerTaps = 0;
+                        Kiosk.pause(this);
+                        android.widget.Toast.makeText(this, "Unlocked for 10 minutes", android.widget.Toast.LENGTH_LONG).show();
+                        // Then come back to the front (a device owner may) and lock again.
+                        final android.content.Context app = getApplicationContext();
+                        kioskHandler.postDelayed(() -> Kiosk.bringBack(app), Kiosk.PAUSE_MS + 1000);
+                    }
+                }
+            }
+        } catch (Exception ignored) { }
+        return super.dispatchTouchEvent(ev);
+    }
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        // 1.3 — on a Hub tablet made device owner, keep the screen locked to InPlace (or release
+        // it) to match the family's last choice. Does nothing on any other phone.
+        Kiosk.apply(this);
     }
 
     /**

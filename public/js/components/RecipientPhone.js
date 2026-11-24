@@ -197,6 +197,7 @@ const SimpleFace = ({ photo, name, size = 56, ring }) => {
 // full-screen "Peter is calling" with one big Answer, and Call buttons that ring the person's
 // InPlace app. While she has Messages open, Messages hosts calls instead (`enabled` false), so a
 // call never draws twice.
+const DROP_IN_ANSWER_MS = 5000; // 1.3 — the chime, then the Hub answers a drop-in by itself
 const useSimpleCallHost = (enabled, { answers = true } = {}) => {
   const idle = { active: false, roomName: null, callType: null, remoteParticipantName: null, remoteParticipantPhoto: null, callDirection: null, otherId: null };
   const [callState, setCallState] = useState(idle);
@@ -237,7 +238,7 @@ const useSimpleCallHost = (enabled, { answers = true } = {}) => {
 
   // Ring out loud while the card is up: a call is the one thing allowed to make a noise.
   useEffect(() => {
-    if (!incoming) return undefined;
+    if (!incoming || incoming.dropIn) return undefined;
     let ctx = null; let timer = null; let stopped = false;
     try {
       const Ctx = window.AudioContext || window.webkitAudioContext;
@@ -261,11 +262,14 @@ const useSimpleCallHost = (enabled, { answers = true } = {}) => {
     return () => { stopped = true; if (timer) clearInterval(timer); try { if (ctx && ctx.close) ctx.close(); } catch { /* gone */ } };
   }, [incoming]);
 
-  const startCall = (person, callType) => {
+  // 1.3 — opts.dropIn: a drop-in on a Hub (video; the server checks the signed consent and the
+  // leader's choice, and the Hub answers by itself after a chime).
+  const startCall = (person, callType, opts = {}) => {
     if (!person || !window._socket) return false;
     if (typeof warmVideoSdk === 'function') warmVideoSdk();
     const roomName = 'inplace-simple-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8);
-    window._socket.emit('call_invite', { targetUserId: person.userId, roomName, callType });
+    if (opts.dropIn) callType = 'video';
+    window._socket.emit('call_invite', { targetUserId: person.userId, roomName, callType, ...(opts.dropIn ? { dropIn: true } : {}) });
     setRingStatus(null);
     setCallState({ active: true, roomName, callType, remoteParticipantName: person.firstName, remoteParticipantPhoto: person.photo || null, callDirection: 'outgoing', otherId: person.userId });
     return true;
@@ -280,6 +284,16 @@ const useSimpleCallHost = (enabled, { answers = true } = {}) => {
     if (incoming && window._socket) window._socket.emit('call_decline', { callerId: incoming.callerId, roomName: incoming.roomName });
     setIncoming(null);
   };
+  // 1.3 — a drop-in (the server already checked the signed consent): the doorbell chime, who is
+  // checking in, and the Hub answers by itself a few seconds later. "Not now" still declines.
+  const answerRef = React.useRef(answer);
+  answerRef.current = answer;
+  useEffect(() => {
+    if (!incoming || !incoming.dropIn) return undefined;
+    try { if (typeof playDoorbell === 'function') playDoorbell(); } catch { /* no sound */ }
+    const t = setTimeout(() => answerRef.current(), DROP_IN_ANSWER_MS);
+    return () => clearTimeout(t);
+  }, [incoming && incoming.roomName, incoming && incoming.dropIn]);
   const endCall = () => {
     if (callState.active && callState.otherId && window._socket) {
       window._socket.emit('call_hangup', { targetUserId: callState.otherId, roomName: callState.roomName });
@@ -294,8 +308,8 @@ const useSimpleCallHost = (enabled, { answers = true } = {}) => {
       <div role="dialog" aria-label={`${first} is calling`} data-testid="simple-incoming-call" className="no-text-scale"
         style={{ position: 'fixed', inset: 0, zIndex: 10050, background: '#1f1a16', color: '#f3ebe0', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 'min(4vh, 28px)', padding: 24, textAlign: 'center' }}>
         <SimpleFace photo={incoming.callerPhoto} name={first} size={Math.round(Math.min(window.innerHeight * 0.26, 220))} ring="#e8b04a" />
-        <div style={{ fontSize: 'min(7vh, 48px)', fontWeight: 800 }}>{first} is calling</div>
-        <div style={{ fontSize: 'min(3.6vh, 26px)', color: '#cbbfae' }}>{incoming.callType === 'video' ? 'Video call' : 'Voice call'}</div>
+        <div style={{ fontSize: 'min(7vh, 48px)', fontWeight: 800 }} data-testid={incoming.dropIn ? 'simple-drop-in' : undefined}>{incoming.dropIn ? `${first} is checking in` : `${first} is calling`}</div>
+        <div style={{ fontSize: 'min(3.6vh, 26px)', color: '#cbbfae' }}>{incoming.dropIn ? 'Video, starting in a moment' : incoming.callType === 'video' ? 'Video call' : 'Voice call'}</div>
         <button onClick={answer} data-testid="simple-answer-call"
           style={{ minWidth: 'min(70vw, 520px)', minHeight: 'min(14vh, 110px)', borderRadius: 60, border: 'none', background: '#1b7a3d', color: '#fff', fontSize: 'min(6vh, 42px)', fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit' }}>
           {'📞'} Answer
@@ -618,6 +632,24 @@ const HubWeather = ({ wx, onClose }) => {
     </div>
   );
 };
+
+// ─── HubKiosk (1.3) — keep the tablet on InPlace ───
+// Tells the Android app the family's "Keep the tablet on InPlace" choice each time the Hub loads
+// or the choice changes. The app acts on it only on a tablet set up as a Hub (device owner, one
+// adb command); everywhere else — every phone, every browser, the 1.2 build without the plugin —
+// this does nothing at all.
+function HubKiosk({ on }) {
+  React.useEffect(() => {
+    try {
+      const C = window.Capacitor;
+      if (!C || !C.isNativePlatform || !C.isNativePlatform()) return;
+      if (typeof C.isPluginAvailable === 'function' && !C.isPluginAvailable('InPlaceKiosk')) return;
+      const k = C.Plugins && C.Plugins.InPlaceKiosk;
+      if (k && k.set) k.set({ on: !!on }).catch(() => {});
+    } catch { /* not a Hub tablet */ }
+  }, [on]);
+  return null;
+}
 
 // v1.156.0 — noticing when she is up. Pete: "don't record audio. Speaking enough to be awake,
 // call it 10 seconds, should be noted and with movement or other noise be considered awake."
@@ -1273,6 +1305,7 @@ const SimpleViewInner = ({ initial, onPanelChange, startCall, callBusy }) => {
         onMessages={() => setPanel('messages')} onCall={startCall}
         onHubShape={(aspect) => { if (data && data.careRecipientId) apiFetch(`/api/care-recipients/${data.careRecipientId}/simple-screen/hub-shape`, { method: 'POST', body: JSON.stringify({ photoAspect: aspect }) }).catch(() => {}); }} />
       {s.hub && s.hub.noticeAwake && !callBusy && data && data.careRecipientId && <HubAwake recipientId={data.careRecipientId} />}
+      {s.hub && <HubKiosk on={s.hub.kiosk !== false} />}
       {s.hub && <HubPopups hub={s.hub} s={s} note={note} now={now} onRead={markRead} onAck={ackText} onText={openText} />}
       </>
     );
@@ -1442,7 +1475,7 @@ const SIMPLE_SECTIONS = [
 // v1.156.0 — drop-in and awake noticing, in the Hub settings. Pete: "we just need an
 // acknowledgment that someone with a durable POA or that person has signed up for drop-ins...
 // We just wanna make sure it is recorded as purposeful." Rules: src/utils/dropIn.js.
-const HubDropInSettings = window.HubDropInSettings = ({ recipientId, name: nameProp, signOnly, onDone }) => {
+const HubDropInSettings = window.HubDropInSettings = ({ recipientId, name: nameProp, signOnly, onDone, onDropIn }) => {
   const { showToast } = useToast();
   const [v, setV] = useState(null);
   const [typed, setTyped] = useState('');
@@ -1470,6 +1503,16 @@ const HubDropInSettings = window.HubDropInSettings = ({ recipientId, name: nameP
   return (
     <div data-testid="hub-dropin-settings" style={box}>
       <strong>Drop-in and noticing when {name} is up</strong>
+      {/* 1.3 — drop in now: only when the server says this person may (consent, chosen, Hub on). */}
+      {!signOnly && onDropIn && v.mayDropIn && v.hubUserId && (
+        <div style={{ margin: '8px 0 4px' }}>
+          <button type="button" data-testid="dropin-now" onClick={() => onDropIn(v.hubUserId)}
+            style={{ padding: '8px 14px', borderRadius: 8, border: 'none', background: 'var(--role-color)', color: 'var(--text-on-primary)', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
+            {'\u{1F44B}'} Drop in on {name}
+          </button>
+          <div style={muted}>The Hub chimes, shows that you're checking in, and opens video by itself after a few seconds. The tablet needs InPlace 1.3 for its camera.</div>
+        </div>
+      )}
       {v.consent ? (
         <div style={{ marginTop: 6 }}>
           <div data-testid="dropin-consent-signed" style={{ color: 'var(--color-success)', fontWeight: 600 }}>
@@ -1725,10 +1768,17 @@ const SimpleModeSettings = window.SimpleModeSettings = ({ recipientId, firstName
                     <span style={{ color: 'var(--text-secondary)' }}>to</span>
                     <input type="time" value={hub.dimTo} disabled={saving} onChange={(e) => e.target.value && save({ hub: { dimTo: e.target.value } })} style={{ fontSize: 13, padding: '4px 6px' }} aria-label="Night ends" />
                   </div>
+                  {/* 1.3 — kiosk mode on a tablet set up as a Hub (Kiosk.java). Off lets the family use
+                      the tablet for something else (Wi-Fi, an update) without touching adb. */}
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text-primary)', cursor: 'pointer' }}>
+                    <input type="checkbox" disabled={saving} checked={hub.kiosk !== false} onChange={(e) => save({ hub: { kiosk: e.target.checked } }, e.target.checked ? 'Tablet stays on InPlace' : 'Tablet unlocked')} style={{ width: 16, height: 16, accentColor: 'var(--role-color)' }} data-testid="hub-kiosk-setting" />
+                    <span><strong>Keep the tablet on InPlace</strong> <span style={{ color: 'var(--text-secondary)' }}>— on a tablet set up as a Hub, Home and the app switcher can't leave this screen, and it comes back here after a restart. Turn off to use the tablet for something else, like Wi-Fi settings.</span></span>
+                  </label>
                   <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: 0, lineHeight: 1.5 }}>
-                    To set up the tablet: install InPlace Care from Google Play, sign in as {name}, and turn the tablet sideways. Pin the app (Settings → Security → Pin app) so it stays on this screen.
+                    To set up the tablet: install InPlace Care from Google Play, sign in as {name}, and turn the tablet sideways. Pin the app (Settings → Security → Pin app) so it stays on this screen, or ask InPlace to set it up as a Hub so it stays put by itself.
                   </p>
-                  {typeof HubDropInSettings !== 'undefined' && <HubDropInSettings recipientId={recipientId} name={name} />}
+                  {typeof HubDropInSettings !== 'undefined' && <HubDropInSettings recipientId={recipientId} name={name}
+                    onDropIn={(hubUserId) => { if (!callHost.startCall({ userId: hubUserId, firstName: name, photo: cfg.recipientPhoto || null }, 'video', { dropIn: true })) showToast('Not connected right now. Try again in a moment.', 'error'); }} />}
                 </div>
               )}
             </div>

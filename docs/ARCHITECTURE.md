@@ -210,23 +210,23 @@ Every job runs through `guardedPoller` → `withPollerLock` (`src/models/databas
 
 | Lock | Job | Interval | Declared |
 |---:|---|---|---|
-| 101 | Daily demo data refresh | 24 h | `src/server.js:1199` |
-| 102 | Session notification poller (every 60s) | 1 min | `src/server.js:1292` |
-| 103 | Session Accountability Poller | 1 min | `src/server.js:1575` |
-| 104 | Reimbursement push digest sweeper (v1.98.15) | 30 s | `src/server.js:1592` |
-| 105 | Auto-pay cron: charge overdue sessions | 5 min | `src/server.js:1684` |
-| 106 | Recurring reimbursements: generate due occurrences (v1.74.0) | 1 h | `src/server.js:1791` |
-| 107 | Care Tasks poller (v1.99.0) | 1 min | `src/server.js:1816` |
-| 108 | Care Events poller (v1.100.0) | 1 min | `src/server.js:1832` |
-| 109 | Kindred Reminder Delivery Poller | 1 min | `src/server.js:1606` |
-| 110 | Retention (v1.106.9, poller 110) | 24 h | `src/server.js:1869` |
-| 111 | (see src/server.js:1767) | 1 h | `src/server.js:1767` |
-| 112 | v1.106.13 — poller 112: proposals that nobody answered | 10 min | `src/server.js:1898` |
-| 113 | (see src/server.js:1941) | 1 min | `src/server.js:1941` |
-| 114 | Quiet hours summary (v1.107.3, poller 114) | 5 min | `src/server.js:2012` |
-| 115 | Recurring reimbursements: generate due occurrences (v1.74.0) | 1 h | `src/server.js:1804` |
-| 116 | Visit mileage: charge what is owed once the visit itself is paid (v1.126.1, poller 116) | 5 min | `src/server.js:2029` |
-| 117 | (see src/server.js:1993) | 1 min | `src/server.js:1993` |
+| 101 | Daily demo data refresh | 24 h | `src/server.js:1241` |
+| 102 | Session notification poller (every 60s) | 1 min | `src/server.js:1334` |
+| 103 | Session Accountability Poller | 1 min | `src/server.js:1617` |
+| 104 | Reimbursement push digest sweeper (v1.98.15) | 30 s | `src/server.js:1634` |
+| 105 | Auto-pay cron: charge overdue sessions | 5 min | `src/server.js:1726` |
+| 106 | Recurring reimbursements: generate due occurrences (v1.74.0) | 1 h | `src/server.js:1833` |
+| 107 | Care Tasks poller (v1.99.0) | 1 min | `src/server.js:1858` |
+| 108 | Care Events poller (v1.100.0) | 1 min | `src/server.js:1874` |
+| 109 | Kindred Reminder Delivery Poller | 1 min | `src/server.js:1648` |
+| 110 | Retention (v1.106.9, poller 110) | 24 h | `src/server.js:1911` |
+| 111 | (see src/server.js:1809) | 1 h | `src/server.js:1809` |
+| 112 | v1.106.13 — poller 112: proposals that nobody answered | 10 min | `src/server.js:1940` |
+| 113 | (see src/server.js:1983) | 1 min | `src/server.js:1983` |
+| 114 | Quiet hours summary (v1.107.3, poller 114) | 5 min | `src/server.js:2054` |
+| 115 | Recurring reimbursements: generate due occurrences (v1.74.0) | 1 h | `src/server.js:1846` |
+| 116 | Visit mileage: charge what is owed once the visit itself is paid (v1.126.1, poller 116) | 5 min | `src/server.js:2071` |
+| 117 | (see src/server.js:2035) | 1 min | `src/server.js:2035` |
 
 ---
 
@@ -240,7 +240,7 @@ why this app runs on exactly one Railway replica.
 | `account_approved` | `routes/admin/verification.js` | yes |
 | `activity_update` | `routes/activity.js`, `routes/admin/verification.js` | yes |
 | `call_accepted` | `server.js` | 🔶 **none** |
-| `call_answered_elsewhere` | `server.js` | yes |
+| `call_answered_elsewhere` | `routes/calls.js`, `server.js` | yes |
 | `call_declined` | `server.js` | yes |
 | `call_ended` | `server.js` | yes |
 | `call_incoming` | `server.js` | yes |

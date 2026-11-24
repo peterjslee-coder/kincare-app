@@ -79,7 +79,7 @@ test("only the leader changes it, and bad hours are ignored", async () => {
   const ok = await h.request.put(`/api/care-recipients/${recipientId}/simple-mode`).set(h.auth(leader.token))
     .send({ on: true, callUserIds: [], hub: { on: true, dimFrom: "25:99", dimTo: "06:30", extra: "x" } });
   expect(ok.status).toBe(200);
-  expect(ok.body.hub).toEqual({ on: true, faces: true, week: true, photos: true, dimFrom: "21:00", dimTo: "06:30", callUserIds: [], photoAspect: null, dropInUserIds: [], noticeAwake: false });
+  expect(ok.body.hub).toEqual({ on: true, faces: true, week: true, photos: true, dimFrom: "21:00", dimTo: "06:30", callUserIds: [], photoAspect: null, dropInUserIds: [], noticeAwake: false, kiosk: true });
 });
 
 test("a later Simple-screen save keeps the Hub settings", async () => {

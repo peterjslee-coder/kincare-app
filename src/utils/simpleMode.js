@@ -75,9 +75,11 @@ const MAX_HUB_CALLS = 2;
 const ARRIVING_LEAD_MIN = 15; // v1.155.2 — "Tina will be here soon" from 15 minutes before...
 const ARRIVING_LATE_MIN = 60; // ...until she checks in, or an hour past the start
 function cleanHub(raw) {
-  const out = { ...HUB_DEFAULTS, callUserIds: [], photoAspect: null, dropInUserIds: [], noticeAwake: false };
+  // kiosk (1.3): keep the tablet on InPlace. On unless the leader turns it off; it only ever
+  // does anything on a tablet whose app was made device owner (android Kiosk.java).
+  const out = { ...HUB_DEFAULTS, callUserIds: [], photoAspect: null, dropInUserIds: [], noticeAwake: false, kiosk: true };
   if (raw && typeof raw === "object") {
-    for (const k of ["on", "faces", "week", "photos", "noticeAwake"]) if (typeof raw[k] === "boolean") out[k] = raw[k];
+    for (const k of ["on", "faces", "week", "photos", "noticeAwake", "kiosk"]) if (typeof raw[k] === "boolean") out[k] = raw[k];
     // v1.156.0 — who the leader chose for drop-in (utils/dropIn.js re-checks each one, and
     // the signed consent, every time; being listed here alone allows nothing).
     if (Array.isArray(raw.dropInUserIds)) {
@@ -271,7 +273,7 @@ function relationLabel(label) {
 }
 
 async function hubScreenFor(db, recipient, linkedUserId, todayStr, hubCfg) {
-  const out = { on: true, faces: hubCfg.faces, week: hubCfg.week, showPhotos: hubCfg.photos !== false, photos: [], photoAspect: hubCfg.photoAspect || null, dimFrom: hubCfg.dimFrom, dimTo: hubCfg.dimTo, today: todayStr, here: null, days: [], people: [] };
+  const out = { on: true, faces: hubCfg.faces, week: hubCfg.week, showPhotos: hubCfg.photos !== false, photos: [], photoAspect: hubCfg.photoAspect || null, dimFrom: hubCfg.dimFrom, dimTo: hubCfg.dimTo, kiosk: hubCfg.kiosk !== false, today: todayStr, here: null, days: [], people: [] };
 
   // Who is here right now: a visit in progress today.
   const here = await db.prepare(`
