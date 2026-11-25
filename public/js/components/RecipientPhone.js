@@ -488,12 +488,18 @@ const playDoorbell = () => {
 // the first time it is set up, or after an update reloads it).
 const popSeen = (k) => { try { return localStorage.getItem('inplace-hub-pop-' + k) === '1'; } catch { return false; } };
 const popMark = (k) => { try { localStorage.setItem('inplace-hub-pop-' + k, '1'); } catch { /* this session only */ } };
-const HubPopup = ({ popKey, chimes, face, name, kicker, head, sub, img, buttons }) => {
+// v1.162.1 — Pete, 11/25: a new text or note "should also accompany those with a beep every little
+// while [in] waking hours so that she can get back to seeing the main screen." A message or note
+// chimes again every 10 minutes until she answers it, for as long as it waits. Pop-ups never show
+// in her night hours (HubPopups returns nothing then), so the chiming stops at night and picks up
+// in the morning.
+const MESSAGE_CHIME_EVERY_MS = 10 * 60000;
+const HubPopup = ({ popKey, chimes, chimeEveryMs, face, name, kicker, head, sub, img, buttons }) => {
   React.useEffect(() => {
     let n = 0;
     const ring = () => { if (n < chimes) { n += 1; playDoorbell(); } };
     ring();
-    const iv = setInterval(ring, ARRIVING_CHIME_EVERY_MS);
+    const iv = setInterval(ring, chimeEveryMs || ARRIVING_CHIME_EVERY_MS);
     return () => clearInterval(iv);
   }, [popKey]);
   const btnStyle = (primary) => ({
@@ -545,14 +551,14 @@ const HubPopups = ({ hub, s, note, now, onRead, onAck, onText }) => {
   }
   if (note && !popSeen('note:' + note.id)) {
     const k = 'note:' + note.id;
-    return <HubPopup key={k} popKey={k} chimes={ARRIVING_CHIMES} face={note.fromPhoto} name={note.from}
+    return <HubPopup key={k} popKey={k} chimes={Infinity} chimeEveryMs={MESSAGE_CHIME_EVERY_MS} face={note.fromPhoto} name={note.from}
       kicker={`From ${note.from}`} head={note.content}
       buttons={[{ label: 'I read it', onClick: () => { done(k); onRead(note.id); } }, { label: 'Later', onClick: () => done(k) }]} />;
   }
   const waiting = s.text && Array.isArray(s.text.waiting) && s.text.waiting.length ? s.text.waiting[s.text.waiting.length - 1] : null;
   if (waiting && !popSeen('msg:' + waiting.id)) {
     const k = 'msg:' + waiting.id;
-    return <HubPopup key={k} popKey={k} chimes={ARRIVING_CHIMES} face={waiting.fromPhoto} name={waiting.from}
+    return <HubPopup key={k} popKey={k} chimes={Infinity} chimeEveryMs={MESSAGE_CHIME_EVERY_MS} face={waiting.fromPhoto} name={waiting.from}
       kicker={waitingHead(waiting)} head={waiting.content}
       // v1.161.0 — Pete: "big reminder pop up until acknowledged or replied". Write back no
       // longer dismisses it: it goes when her reply (or Got it) takes the message off the list.

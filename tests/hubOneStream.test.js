@@ -22,6 +22,13 @@ describe("one stream", () => {
   test("Got it names every thread the pop-up came from", () => {
     expect(phone).toMatch(/body: JSON\.stringify\(\{ conversationIds: convs \}\)/);
   });
+  test("v1.162.1 — a message or note chimes every 10 minutes until answered; others keep 3 chimes", () => {
+    expect(phone).toMatch(/const MESSAGE_CHIME_EVERY_MS = 10 \* 60000;/);
+    expect(phone).toMatch(/popKey=\{k\} chimes=\{Infinity\} chimeEveryMs=\{MESSAGE_CHIME_EVERY_MS\} face=\{note\.fromPhoto\}/);
+    expect(phone).toMatch(/popKey=\{k\} chimes=\{Infinity\} chimeEveryMs=\{MESSAGE_CHIME_EVERY_MS\} face=\{waiting\.fromPhoto\}/);
+    expect(phone).toMatch(/popKey=\{k\} chimes=\{ARRIVING_CHIMES\} face=\{a\.photo\}/);
+    expect(phone).toMatch(/if \(hubIsNight\(now, hub\.dimFrom, hub\.dimTo\)\) return null;/);
+  });
   test("the family's Messages pins Betty's Hub", () => {
     const m = code("public/js/components/Messages.js");
     expect(m).toMatch(/if \(!!a\.hubGroup !== !!b\.hubGroup\) return a\.hubGroup \? -1 : 1;/);
