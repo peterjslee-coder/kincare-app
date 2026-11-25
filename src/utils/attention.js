@@ -905,14 +905,17 @@ async function attentionItemsFor(db, userId) {
         detail: null,
         forWhom: null,
         when: r.bg_check_requested_at || null,
-        verb: "Approve",
-        // Checkr refuses an invitation without these, so a card that is missing one has no
-        // one-tap answer: Open goes to the caregiver's record instead.
-        action: missing.length ? null : { method: "POST", path: `/api/checkr/admin/requests/${r.user_id}/approve` },
-        page: "admin",
+        // Checkr refuses an invitation without these, so a card that is missing one cannot be
+        // approved. v1.161.1 — it used to say "Approve ›" anyway and open the admin page, where
+        // sending failed and the card never left (Pete, Tina, 11/25). Its one tap now nudges the
+        // caregiver and puts the card away for 3 days.
+        verb: missing.length ? "Remind" : "Approve",
+        action: missing.length
+          ? { method: "POST", path: `/api/checkr/admin/requests/${r.user_id}/remind` }
+          : { method: "POST", path: `/api/checkr/admin/requests/${r.user_id}/approve` },        page: "admin",
         focus: null, // the admin page has no per-caregiver anchor yet
         note: missing.length
-          ? "Checkr needs these before you can approve it. They've been asked for them in Account \u2192 Background Check."
+          ? "Checkr needs these before you can approve it. Remind asks them to add them in My Account \u2192 Background Check, and puts this away for 3 days."
           : "Approve sends their details to Checkr, which emails the form. inPlace Starter, billed to InPlace.",
         dismiss: { method: "POST", path: "/api/push/attention/snooze", body: { kind: "bgCheckRequest", ref: r.user_id, days: 7 }, label: "Not now" },
       };

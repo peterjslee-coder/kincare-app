@@ -166,5 +166,57 @@ test("missing what Checkr needs → the card says what, and has no one-tap appro
   const item = (await needsYou(admin.user.id)).find((i) => i.id === `bgCheckRequest:${cg.user.id}`);
   expect(item.title).toMatch(/waiting on them for date of birth/);
   expect(item.soft).toBe(true); // their move, not the admin's: not in the badge
-  expect(item.action).toBeNull();
+  // v1.161.1 — it used to have NO action and read "Approve ›", which led to a Send that could
+  // only fail, so the card never left (Pete, 11/25). Its one tap is now a reminder to her.
+  expect(item.verb).toBe("Remind");
+  expect(item.action).toEqual({ method: "POST", path: `/api/checkr/admin/requests/${cg.user.id}/remind` });
+});
+
+// v1.161.1 — Pete, 11/25: "it keeps showing up ... It won't stay cleared out."
+test("Remind nudges her, puts the card away, sends nothing to Checkr, and Approve returns once she adds them", async () => {
+  const cg = await caregiverWithProfile({ dob: null });
+  await db.prepare("UPDATE caregiver_profiles SET background_check_consent = 1 WHERE user_id = ?").run(cg.user.id);
+  const { requestIfReady } = require("../../src/utils/bgCheckRequest");
+  await requestIfReady(db, cg.user.id);
+  const admin = await h.createUser({ isAdmin: true });
+  const other = await h.createUser({ firstName: "Not", lastName: "Admin" });
+  const id = `bgCheckRequest:${cg.user.id}`;
+  expect((await needsYou(admin.user.id)).find((i) => i.id === id)).toBeTruthy();
+
+  expect((await req.post(`/api/checkr/admin/requests/${cg.user.id}/remind`).set(h.auth(other.token))).status).toBe(403);
+
+  const before = calls.length;
+  const r = await req.post(`/api/checkr/admin/requests/${cg.user.id}/remind`).set(h.auth(admin.token));
+  expect(r.status).toBe(200);
+  expect(r.body.missing).toEqual(["date of birth"]);
+  expect(calls.length).toBe(before); // Checkr is never called by a reminder
+  const feed = await db.prepare("SELECT title, message FROM activity_feed WHERE family_user_id = ? AND event_type = 'bg_check_details_needed'").all(cg.user.id);
+  expect(feed).toHaveLength(1);
+  expect(feed[0].message).toMatch(/date of birth/);
+  // The card stays away — this was the bug.
+  expect((await needsYou(admin.user.id)).find((i) => i.id === id)).toBeUndefined();
+
+  // She adds her date of birth; the reminder's snooze ends; the card is a one-tap Approve.
+  await db.prepare("UPDATE caregiver_profiles SET date_of_birth = '1990-03-14' WHERE user_id = ?").run(cg.user.id);
+  await db.prepare("UPDATE nudge_snoozes SET snoozed_until = NOW() - INTERVAL '1 minute' WHERE user_id = ? AND ref = ?").run(admin.user.id, cg.user.id);
+  const item = (await needsYou(admin.user.id)).find((i) => i.id === id);
+  expect(item.verb).toBe("Approve");
+  expect(item.action.path).toBe(`/api/checkr/admin/requests/${cg.user.id}/approve`);
+  // And a reminder when nothing is missing is refused as a real refusal, not read as done.
+  const again = await req.post(`/api/checkr/admin/requests/${cg.user.id}/remind`).set(h.auth(admin.token));
+  expect(again.status).toBe(409);
+  expect(again.body.done).toBe(false);
+});
+
+test("the admin BG list says what is missing and never sends the date itself", async () => {
+  const cg = await caregiverWithProfile({ dob: null });
+  await db.prepare("UPDATE caregiver_profiles SET background_check_consent = 1 WHERE user_id = ?").run(cg.user.id);
+  const admin = await h.createUser({ isAdmin: true });
+  const r = await req.get("/api/checkr/admin/candidates").set(h.auth(admin.token));
+  expect(r.status).toBe(200);
+  const row = r.body.candidates.find((c) => c.user_id === cg.user.id);
+  expect(row.missing).toEqual(["date of birth"]);
+  const ok = r.body.candidates.find((c) => c.missing && c.missing.length === 0);
+  if (ok) expect(ok).not.toHaveProperty("date_of_birth");
+  expect(row).not.toHaveProperty("date_of_birth");
 });

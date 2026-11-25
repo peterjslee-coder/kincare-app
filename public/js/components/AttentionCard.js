@@ -70,6 +70,7 @@ const ATTENTION_PAST = {
   'Got it': 'Marked paid.',
   'Leave unassigned': 'Left unassigned \u2014 anyone on the team can take it.', // v1.138.0
   'Keep as is': 'Kept as they were.', // v1.139.0
+  Remind: 'Reminder sent. This comes back in 3 days if it is still waiting.', // v1.161.1
 };
 
 const ATTENTION_KINDS = {
@@ -292,7 +293,7 @@ const AttentionCard = window.AttentionCard = ({ onNavigate, only }) => {
       } catch { /* a missed announcement costs a stale card until the next visit */ }
       // v1.117.0 — a card that went through is said out loud (no undo: a hold is not taken back
       // from here). Otherwise the row just vanishing reads as "did anything happen?".
-      if ((item.undoable && item.undo) || item.kind === 'holdDeclined') {
+      if ((item.undoable && item.undo) || item.kind === 'holdDeclined' || item.verb === 'Remind') {
         setDone((prev) => ({ ...prev, [item.id]: { item, verbPast: ATTENTION_PAST[item.verb] || 'Done.' } }));
         setTimeout(() => {
           setDone((prev) => { const next = { ...prev }; delete next[item.id]; return next; });
