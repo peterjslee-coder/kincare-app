@@ -18,8 +18,10 @@ function clean(body) {
   const k = b.kiosk && typeof b.kiosk === "object" ? b.kiosk : null;
   const bat = b.battery && typeof b.battery === "object" ? b.battery : null;
   const level = bat && Number.isFinite(Number(bat.level)) ? Math.max(0, Math.min(100, Math.round(Number(bat.level)))) : null;
+  const pc = ["idle", "loading", "ready", "failed"].includes(b.personCheck) ? b.personCheck : null;
   return {
     version,
+    personCheck: pc, // v1.160.0 — the on-tablet person check: is it running?
     kiosk: k ? { deviceOwner: k.deviceOwner === true, locked: k.locked === true } : null,
     battery: level === null ? null : { level, charging: bat.charging === true },
   };

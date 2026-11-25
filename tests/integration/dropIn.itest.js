@@ -154,6 +154,29 @@ describe("noticing when she is up", () => {
     }
   });
 
+  test("v1.160.0 — a person, not a TV: sound and movement alone don't start a stretch", async () => {
+    await db.prepare("DELETE FROM hub_awake WHERE care_recipient_id = ?").run(recipientId);
+    const post = (body) => h.request.post(`/api/drop-in/${recipientId}/awake`).set(h.auth(mom.token)).send(body);
+    // The person check is running and sees nobody: the TV's talking and picture count for nothing.
+    expect((await post({ motion: true, voiceSeconds: 50, person: false })).body.recorded).toBe(false);
+    // A person outside any screen: up.
+    expect((await post({ person: true })).body.recorded).toBe(true);
+    // Right after, movement and talking keep the stretch going without seeing her again.
+    expect((await post({ motion: true, voiceSeconds: 30, person: false })).body.recorded).toBe(true);
+    // A touch always counts.
+    expect((await post({ touches: 1, person: false })).body.recorded).toBe(true);
+    const rows = await db.prepare("SELECT person_minutes, motion_minutes, voice_minutes, touches FROM hub_awake WHERE care_recipient_id = ?").all(recipientId);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ person_minutes: 1, motion_minutes: 1, voice_minutes: 1, touches: 1 });
+    // Five minutes after the last person sighting, sound alone stops counting again.
+    await db.prepare("UPDATE hub_awake SET ended_at = NOW() - INTERVAL '6 minutes' WHERE care_recipient_id = ?").run(recipientId);
+    expect((await post({ voiceSeconds: 40, person: false })).body.recorded).toBe(false);
+    // No person check on the tablet (null): the old rule, so noticing never silently stops.
+    expect((await post({ motion: true })).body.recorded).toBe(true);
+    const t = await require("../../src/utils/awake").timeline(db, recipientId, "America/New_York");
+    expect(t.some((e) => e.kind === "up" && e.person === true)).toBe(true);
+  });
+
   test("withdrawing stops everything at once", async () => {
     const r = await h.request.post(`/api/drop-in/${recipientId}/revoke`).set(h.auth(mom.token)).send({});
     expect(r.status).toBe(200);

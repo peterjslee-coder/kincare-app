@@ -678,7 +678,8 @@ function HubHeartbeat({ recipientId, busy, watching }) {
     const onTouch = () => { lastTouch.current = Date.now(); };
     document.addEventListener('pointerdown', onTouch, true);
     const report = async () => {
-      const body = { version: window.APP_VERSION || null, watching: !!watchingRef.current };
+      const body = { version: window.APP_VERSION || null, watching: !!watchingRef.current,
+        personCheck: window.HubPersonCheck ? window.HubPersonCheck.state() : null }; // v1.160.0
       try {
         const C = window.Capacitor;
         const k = C && C.isNativePlatform && C.isNativePlatform() && C.Plugins && C.Plugins.InPlaceKiosk;
@@ -755,6 +756,9 @@ function HubStatusLine({ status, name, recipientId }) {
     if (status.version) bits.push(`version ${status.version}`);
     if (status.kiosk && status.kiosk.deviceOwner) bits.push(status.kiosk.locked ? 'locked to InPlace' : 'not locked');
     if (status.battery) bits.push(`${status.battery.charging ? 'charging' : 'on battery'} ${status.battery.level}%`);
+    if (status.personCheck === 'ready') bits.push('person check on');
+    else if (status.personCheck === 'failed') bits.push('person check not working');
+    else if (status.personCheck === 'loading') bits.push('person check starting');
   }
   const offline = !status || !status.online;
   const unplugged = status && status.battery && !status.battery.charging;
@@ -848,6 +852,12 @@ const AWAKE_REPORT_MS = 60000;
 const MOTION_PIXEL_DELTA = 28;   // a pixel "changed" if its brightness moved this much
 const MOTION_SHARE = 0.02;       // ...and a frame "moved" if 2% of pixels changed
 const VOICE_OVER_FLOOR = 2.2;    // speech-band loudness this many times the room's quiet level
+// v1.160.0 — Pete, 11/25: it counted the TV all night. Now a person check runs every 15 s on the
+// tablet (public/js/hubPersonCheck.js): a minute counts as "up" on a PERSON seen (not on a
+// screen) or a touch; movement and talking only keep a stretch going while someone was seen in
+// the last few minutes (server, routes/dropIn.js). Movement inside any screen the detector has
+// found — remembered on this tablet, since a TV doesn't move — is ignored.
+const PERSON_CHECK_MS = 15000;
 const HubAwake = ({ recipientId }) => {
   React.useEffect(() => {
     // Touches anywhere on the Hub — the night screen included — count as "she's up".
@@ -858,12 +868,19 @@ const HubAwake = ({ recipientId }) => {
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !recipientId) return undefined;
     let stream = null, ctx = null, analyser = null, tick = null, report = null, stopped = false;
     let prev = null, motion = false, voiceSec = 0, floor = null;
+    let personSeen = false, detectTimer = null, detecting = false;
+    const SCREENS_KEY = 'inplace_hub_screens_' + recipientId;
+    let known = [];
+    try { known = JSON.parse(localStorage.getItem(SCREENS_KEY) || '[]') || []; } catch { known = []; }
+    const inKnownScreen = (nx, ny) => known.some((k) => nx >= k.x && nx <= k.x + k.w && ny >= k.y && ny <= k.y + k.h);
     const canvas = document.createElement('canvas'); canvas.width = 64; canvas.height = 48;
     const g = canvas.getContext('2d', { willReadFrequently: true });
     const video = document.createElement('video'); video.muted = true; video.playsInline = true;
     (async () => {
       try {
-        stream = await navigator.mediaDevices.getUserMedia({ video: { width: 160, height: 120, frameRate: 5 }, audio: { echoCancellation: false, noiseSuppression: false } });
+        // 640×480: enough for the person check to see someone across a kitchen. Motion is still
+        // compared at 64×48.
+        stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480, frameRate: 5 }, audio: { echoCancellation: false, noiseSuppression: false } });
         if (stopped) { stream.getTracks().forEach((t) => t.stop()); return; }
         video.srcObject = stream; await video.play().catch(() => {});
         const Ctx = window.AudioContext || window.webkitAudioContext;
@@ -886,7 +903,10 @@ const HubAwake = ({ recipientId }) => {
           for (let i = 0, j = 0; i < px.length; i += 4, j += 1) lum[j] = (px[i] * 3 + px[i + 1] * 6 + px[i + 2]) / 10;
           if (prev) {
             let changed = 0;
-            for (let j = 0; j < lum.length; j += 1) if (Math.abs(lum[j] - prev[j]) > MOTION_PIXEL_DELTA) changed += 1;
+            for (let j = 0; j < lum.length; j += 1) {
+              if (known.length && inKnownScreen((j % 64) / 64, Math.floor(j / 64) / 48)) continue; // a TV's picture
+              if (Math.abs(lum[j] - prev[j]) > MOTION_PIXEL_DELTA) changed += 1;
+            }
             if (changed / lum.length > MOTION_SHARE) motion = true;
           }
           prev = lum;
@@ -901,17 +921,39 @@ const HubAwake = ({ recipientId }) => {
           if (level > Math.max(6, floor * VOICE_OVER_FLOOR)) voiceSec += AWAKE_TICK_MS / 1000;
         }
       }, AWAKE_TICK_MS);
+      const runCheck = async () => {
+        if (detecting || stopped || !window.HubPersonCheck || !video.videoWidth) return;
+        detecting = true;
+        try {
+          const r = await window.HubPersonCheck.check(video, known);
+          if (r.person) personSeen = true;
+          if (r.screens && r.screens.length) {
+            known = window.HubPersonCheck.rememberScreens(known, r.screens, Date.now());
+            try { localStorage.setItem(SCREENS_KEY, JSON.stringify(known)); } catch { /* storage off */ }
+          }
+        } catch (e) {
+          if (window.HubPersonCheck && window.HubPersonCheck.state() === 'failed') {
+            try { reportClientError(e, { page: 'hub-person-check' }); } catch (_) { /* nothing */ }
+            clearInterval(detectTimer); detectTimer = null; // failed to load: don't retry every 15 s
+          }
+        }
+        detecting = false;
+      };
+      detectTimer = setInterval(runCheck, PERSON_CHECK_MS);
+      setTimeout(runCheck, 3000);
       report = setInterval(() => {
         const touches = touchesRef.current; touchesRef.current = 0;
-        const body = { motion, voiceSeconds: Math.round(voiceSec), touches };
-        motion = false; voiceSec = 0;
-        if (!body.motion && body.voiceSeconds < 10 && !body.touches) return;
+        // person: true/false only when the check is working; null tells the server to fall back.
+        const checking = !!(window.HubPersonCheck && window.HubPersonCheck.state() === 'ready');
+        const body = { motion, voiceSeconds: Math.round(voiceSec), touches, person: checking ? personSeen : null, screens: known.length };
+        motion = false; voiceSec = 0; personSeen = false;
+        if (!body.motion && body.voiceSeconds < 10 && !body.touches && !body.person) return;
         apiFetch(`/api/drop-in/${recipientId}/awake`, { method: 'POST', body: JSON.stringify(body) }).catch(() => {});
       }, AWAKE_REPORT_MS);
     })();
     return () => {
       stopped = true;
-      clearInterval(tick); clearInterval(report);
+      clearInterval(tick); clearInterval(report); clearInterval(detectTimer);
       try { stream && stream.getTracks().forEach((t) => t.stop()); } catch { /* gone */ }
       try { ctx && ctx.close(); } catch { /* gone */ }
       document.removeEventListener('pointerdown', onTouch, true);
@@ -1806,7 +1848,7 @@ const HubDropInSettings = window.HubDropInSettings = ({ recipientId, name: nameP
                     <span style={{ minWidth: 128, fontVariantNumeric: 'tabular-nums', color: 'var(--text-primary)' }}>{e.fromLabel}{'\u2013'}{e.toLabel}</span>
                     <span style={{ color: e.kind === 'up' ? 'var(--role-color)' : 'var(--text-secondary)', fontWeight: e.kind === 'up' ? 700 : 400 }}>
                       {e.kind === 'up'
-                        ? `Up \u00b7 ${[e.motion && 'movement', e.talking && 'talking', e.touches && 'touching the screen'].filter(Boolean).join(', ')}`
+                        ? `Up \u00b7 ${[e.person && 'person seen', e.motion && 'movement', e.talking && 'talking', e.touches && 'touching the screen'].filter(Boolean).join(', ')}${e.person || e.touches ? '' : ' (before the person check)'}`
                         : e.kind === 'quiet' ? 'Quiet (watching, nothing noticed)' : 'Not watching (no report from the Hub)'}
                     </span>
                   </div>
