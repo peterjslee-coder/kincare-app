@@ -335,7 +335,7 @@ const useSimpleCallHost = (enabled, { answers = true } = {}) => {
       </div>
     ) : null;
     const overlay = callState.active && typeof VideoCallOverlay !== 'undefined'
-      ? React.createElement(VideoCallOverlay, { callState, onEndCall: endCall, currentUserId: null, ringStatus })
+      ? React.createElement(VideoCallOverlay, { callState, onEndCall: endCall, currentUserId: null, ringStatus, fillWide: true })
       : null;
     const node = <>{card}{overlay}</>;
     ui = typeof ReactDOM !== 'undefined' && ReactDOM.createPortal ? ReactDOM.createPortal(node, document.body) : node;
@@ -525,6 +525,9 @@ const HubPopup = ({ popKey, chimes, face, name, kicker, head, sub, img, buttons 
   );
 };
 
+// v1.161.0 — one stream (Pete, 11/25): a message sent to her privately says so, plainly.
+const waitingHead = (w) => (w.private ? `Just to you, from ${w.from}` : w.isReply ? `${w.from} wrote back` : `Message from ${w.from}`);
+
 const HubPopups = ({ hub, s, note, now, onRead, onAck, onText }) => {
   const [, bump] = React.useState(0);
   const done = (k) => { popMark(k); bump((n) => n + 1); };
@@ -550,8 +553,10 @@ const HubPopups = ({ hub, s, note, now, onRead, onAck, onText }) => {
   if (waiting && !popSeen('msg:' + waiting.id)) {
     const k = 'msg:' + waiting.id;
     return <HubPopup key={k} popKey={k} chimes={ARRIVING_CHIMES} face={waiting.fromPhoto} name={waiting.from}
-      kicker={waiting.isReply ? `${waiting.from} wrote back` : `Message from ${waiting.from}`} head={waiting.content}
-      buttons={[{ label: 'Got it', onClick: () => { done(k); onAck(); } }, { label: 'Write back', onClick: () => { done(k); onText(); } }]} />;
+      kicker={waitingHead(waiting)} head={waiting.content}
+      // v1.161.0 — Pete: "big reminder pop up until acknowledged or replied". Write back no
+      // longer dismisses it: it goes when her reply (or Got it) takes the message off the list.
+      buttons={[{ label: 'Got it', onClick: () => { done(k); onAck(); } }, { label: 'Write back', onClick: () => onText(waiting) }]} />;
   }
   // An appointment or plan today within the next hour.
   const nowMin = now.getHours() * 60 + now.getMinutes();
@@ -1124,12 +1129,12 @@ const HubBoard = ({ hub, first, now, show, calls, note, s, failed, readFlash, re
           <div key={'msg-' + (waiting.id || waiting.createdAt || waiting.content)} className="hub-new-shimmer" data-testid="hub-waiting" style={{ ...card, borderColor: 'var(--role-color)', borderWidth: 3 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '1.8vh', marginBottom: '1vh' }}>
               <SimpleFace photo={waiting.fromPhoto} name={waiting.from} size={Math.round(window.innerHeight * 0.08)} />
-              <div style={{ fontSize: '3.4vh', color: 'var(--text-secondary)' }}>{waiting.isReply ? `${waiting.from} wrote back` : `Message from ${waiting.from}`}</div>
+              <div style={{ fontSize: '3.4vh', color: 'var(--text-secondary)' }}>{waitingHead(waiting)}</div>
             </div>
             <div style={{ fontSize: '4.6vh', fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1.25, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{waiting.content}</div>
             <div style={{ display: 'flex', gap: '1.8vh', marginTop: '1.8vh' }}>
               <button onClick={onAck} disabled={acking} style={{ ...btn('var(--role-color)', 'var(--text-on-primary)'), minHeight: '10vh', fontSize: '4.4vh' }}>Got it</button>
-              <button onClick={onText} style={{ ...btn('var(--bg-card)', 'var(--text-primary)'), border: '2px solid var(--border-color)', minHeight: '10vh', fontSize: '4.4vh' }}>Write back</button>
+              <button onClick={() => onText(waiting)} style={{ ...btn('var(--bg-card)', 'var(--text-primary)'), border: '2px solid var(--border-color)', minHeight: '10vh', fontSize: '4.4vh' }}>Write back</button>
             </div>
           </div>
         )}
@@ -1187,6 +1192,7 @@ const SimpleViewInner = ({ initial, onPanelChange, startCall, callBusy }) => {
   const [failed, setFailed] = useState(false);
   const [now, setNow] = useState(new Date());
   const [panel, setPanel] = useState(null); // null | 'messages' | 'tell'
+  const [replyTo, setReplyTo] = useState(null); // v1.161.0 — a private message being answered
   const [unread, setUnread] = useState(0);
   const [tellText, setTellText] = useState('');
   const [sending, setSending] = useState(false);
@@ -1262,7 +1268,8 @@ const SimpleViewInner = ({ initial, onPanelChange, startCall, callBusy }) => {
     if (!data?.careRecipientId || acking) return;
     setAcking(true);
     try {
-      const res = await apiFetch(`/api/care-recipients/${data.careRecipientId}/simple-screen/text-ack`, { method: 'POST' });
+      const convs = Array.from(new Set((data.simpleScreen?.text?.waiting || []).map((w) => w.conversationId).filter(Boolean)));
+      const res = await apiFetch(`/api/care-recipients/${data.careRecipientId}/simple-screen/text-ack`, { method: 'POST', body: JSON.stringify({ conversationIds: convs }) });
       if (res?.ok) {
         const from = data.simpleScreen?.text?.waiting?.[0]?.from;
         setData((prev) => prev && prev.simpleScreen && prev.simpleScreen.text
@@ -1357,9 +1364,14 @@ const SimpleViewInner = ({ initial, onPanelChange, startCall, callBusy }) => {
 
   // Opening the thread is reading it: the ordinary conversation read marks it read for her
   // (and skips it while an admin is viewing as her).
-  const openText = () => {
+  // v1.161.0 — Write back answers the way it came: a private message is answered privately.
+  // Text my family (no target, or a group message) goes to the group.
+  const openText = (w) => {
+    const target = w && w.private && w.conversationId ? w : null;
+    setReplyTo(target);
     setSentMsg(''); setTellText(''); setPanel('text');
-    if (s.text?.conversationId) apiFetch(`/api/messages/conversations/${s.text.conversationId}`).catch(() => {});
+    const conv = target ? target.conversationId : s.text?.conversationId;
+    if (conv) apiFetch(`/api/messages/conversations/${conv}`).catch(() => {});
   };
 
   // ── Messages: the ordinary Messages screen, under a big way home ──
@@ -1376,7 +1388,12 @@ const SimpleViewInner = ({ initial, onPanelChange, startCall, callBusy }) => {
 
   // ── v1.130.2 — the Text button: her last message and the replies to it, big ──
   if (panel === 'text' && show.text && s.text) {
-    const t = s.text;
+    const g = s.text;
+    // v1.161.0 — answering a private message: just that person, and only their message shown.
+    const t = replyTo
+      ? { conversationId: replyTo.conversationId, to: [{ userId: replyTo.conversationId, firstName: replyTo.from, photo: replyTo.fromPhoto }], mine: null,
+          replies: [{ id: replyTo.id, content: replyTo.content, createdAt: replyTo.createdAt, from: replyTo.from, fromPhoto: replyTo.fromPhoto }] }
+      : g;
     const names = simpleNames(t.to);
     const sendText = async (body) => {
       const c = String(body || '').trim();
@@ -1385,6 +1402,11 @@ const SimpleViewInner = ({ initial, onPanelChange, startCall, callBusy }) => {
       try {
         const res = await apiFetch(`/api/messages/conversations/${t.conversationId}`, { method: 'POST', body: JSON.stringify({ content: c }) });
         if (res?.ok) {
+          // A reply is an answer: the private message comes off her screen too (the group's
+          // reply is acknowledged by the server already).
+          if (replyTo && data?.careRecipientId) {
+            apiFetch(`/api/care-recipients/${data.careRecipientId}/simple-screen/text-ack`, { method: 'POST', body: JSON.stringify({ conversationIds: [replyTo.conversationId] }) }).catch(() => {});
+          }
           setTellText(''); setSentMsg(`Sent to ${names}`);
           // Home in a few seconds, with the confirmation carried onto the home screen.
           setTimeout(() => {
@@ -1408,7 +1430,7 @@ const SimpleViewInner = ({ initial, onPanelChange, startCall, callBusy }) => {
         {backBar}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '6px 0 14px' }}>
           <SimpleFaces people={t.to} size={52} />
-          <div style={{ fontSize: 26, fontWeight: 800, color: 'var(--text-primary)', lineHeight: 1.2 }}>Text {names}</div>
+          <div style={{ fontSize: 26, fontWeight: 800, color: 'var(--text-primary)', lineHeight: 1.2 }}>{replyTo ? `Write back to ${names}` : `Text ${names}`}{replyTo && <div style={{ fontSize: 18, fontWeight: 600, color: 'var(--text-secondary)' }}>Just to {names}</div>}</div>
         </div>
 
         {(t.mine || t.replies.length > 0) && (
@@ -1598,7 +1620,7 @@ const SimpleViewInner = ({ initial, onPanelChange, startCall, callBusy }) => {
             <div key={w.id} style={{ marginTop: i ? 16 : 0 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
                 <SimpleFace photo={w.fromPhoto} name={w.from} size={56} />
-                <div style={{ ...label, margin: 0 }}>{w.isReply ? `${w.from} wrote back` : `Message from ${w.from}`}</div>
+                <div style={{ ...label, margin: 0 }}>{waitingHead(w)}</div>
               </div>
               <div style={{ fontSize: 28, fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1.3, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{w.content}</div>
             </div>
@@ -1607,7 +1629,7 @@ const SimpleViewInner = ({ initial, onPanelChange, startCall, callBusy }) => {
             style={{ ...bigBtn('var(--role-color)', 'var(--text-on-primary)'), marginTop: 18, marginBottom: 10, opacity: acking ? 0.6 : 1 }}>
             {acking ? 'One moment…' : 'Got it'}
           </button>
-          <button onClick={openText}
+          <button onClick={() => openText(s.text.waiting[s.text.waiting.length - 1])}
             style={{ ...bigBtn('var(--bg-card)', 'var(--text-primary)'), border: '2px solid var(--border-color)', minHeight: 72, fontSize: 26, marginBottom: 0 }}>
             Write back
           </button>
@@ -1615,7 +1637,7 @@ const SimpleViewInner = ({ initial, onPanelChange, startCall, callBusy }) => {
       )}
 
       {show.text && s.text && (
-        <button onClick={openText} style={{ ...bigBtn('var(--role-color)', 'var(--text-on-primary)'), justifyContent: 'flex-start', padding: '10px 18px' }} aria-label={`Text ${simpleNames(s.text.to)}`}>
+        <button onClick={() => openText(null)} style={{ ...bigBtn('var(--role-color)', 'var(--text-on-primary)'), justifyContent: 'flex-start', padding: '10px 18px' }} aria-label={`Text ${simpleNames(s.text.to)}`}>
           <SimpleFaces people={s.text.to} size={60} ring="#fff" />
           <span style={{ flex: 1, textAlign: 'center', fontSize: 28 }}><span aria-hidden="true">{'💬'}</span> Text {s.text.to.length > 2 ? 'my family' : simpleNames(s.text.to)}</span>
         </button>

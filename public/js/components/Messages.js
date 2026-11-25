@@ -2426,12 +2426,14 @@ const Messages = window.Messages = () => {
 
         {/* Regular conversations — filter out iPAi to avoid duplicate */}
         {conversations.filter(c => !archivedIds.includes(c.id) && c.name !== 'iPAi' && c.otherName !== 'iPAi Assistant' && c.otherName !== 'iPAi' && !c.members?.some(m => m.email === 'ipai@yourinplace.com')).length > 0 ? conversations.filter(c => !archivedIds.includes(c.id) && c.name !== 'iPAi' && c.otherName !== 'iPAi Assistant' && c.otherName !== 'iPAi' && !c.members?.some(m => m.email === 'ipai@yourinplace.com')).sort((a, b) => {
+          // v1.161.0 — "Betty's Hub" (her Text group) is pinned on top (Pete, 11/25).
+          if (!!a.hubGroup !== !!b.hubGroup) return a.hubGroup ? -1 : 1;
           const aTime = a.lastMessageAt ? new Date(a.lastMessageAt).getTime() : 0;
           const bTime = b.lastMessageAt ? new Date(b.lastMessageAt).getTime() : 0;
           return bTime - aTime;
         }).map(c => {
           const isGroup = isGroupConv(c);
-          const typeIcon = c.type === 'care_team' ? '👥' : c.type === 'group' ? '💬' : null;
+          const typeIcon = c.hubGroup ? '📱' : c.type === 'care_team' ? '👥' : c.type === 'group' ? '💬' : null;
           const isSwiping = swipingId === c.id;
           return (
             <div key={c.id} data-tour="conversation-row" style={{ position: 'relative', overflow: 'hidden' }}>

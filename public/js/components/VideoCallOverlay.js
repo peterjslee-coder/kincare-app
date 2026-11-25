@@ -22,10 +22,25 @@ function leaveRoom(r) {
   try { r.disconnect(); } catch { /* already left */ }
 }
 
-const VideoCallOverlay = window.VideoCallOverlay = ({ callState, onEndCall, currentUserId, ringStatus }) => {
+const VideoCallOverlay = window.VideoCallOverlay = ({ callState, onEndCall, currentUserId, ringStatus, fillWide }) => {
   const [status, setStatus] = useState('connecting'); // connecting | ringing | connected | ended
   const [room, setRoom] = useState(null);
   const [isMuted, setIsMuted] = useState(false);
+  // v1.161.0 — Pete, 11/25: on Betty's Hub his (portrait) video sat in thick black bars. On a
+  // wide screen (fillWide: her own screens) the picture now fills, held toward the top so heads
+  // stay in; one tap shows the whole picture. And a caller holding the phone upright while the
+  // other screen is wide gets a hint to turn it sideways.
+  const [wholePicture, setWholePicture] = useState(false);
+  const [localPortrait, setLocalPortrait] = useState(false);
+  const [remoteWide, setRemoteWide] = useState(false);
+  const fillNow = () => !!fillWide && typeof window !== 'undefined' && window.innerWidth > window.innerHeight;
+  const wholePictureRef = useRef(false);
+  wholePictureRef.current = wholePicture;
+  useEffect(() => {
+    const box = remoteVideoRef.current;
+    if (!box) return;
+    box.querySelectorAll('video').forEach((v) => { v.style.objectFit = fillNow() && !wholePicture ? 'cover' : 'contain'; });
+  }, [wholePicture, fillWide]);
   const [isCameraOff, setIsCameraOff] = useState(callState?.callType === 'voice');
   const [remoteConnected, setRemoteConnected] = useState(false);
   const [callDuration, setCallDuration] = useState(0);
@@ -506,7 +521,15 @@ const VideoCallOverlay = window.VideoCallOverlay = ({ callState, onEndCall, curr
       // Prevent zoomed-in cropping — fit entire frame in view
       videoEl.style.width = '100%';
       videoEl.style.height = '100%';
-      videoEl.style.objectFit = type === 'local' ? 'cover' : 'contain';
+      videoEl.style.objectFit = type === 'local' ? 'cover' : (fillNow() && !wholePictureRef.current ? 'cover' : 'contain');
+      if (type === 'remote') videoEl.style.objectPosition = 'center 20%';
+      const measure = () => {
+        if (!videoEl.videoWidth || !videoEl.videoHeight) return;
+        if (type === 'local') setLocalPortrait(videoEl.videoHeight > videoEl.videoWidth);
+        else setRemoteWide(videoEl.videoWidth > videoEl.videoHeight);
+      };
+      videoEl.addEventListener('loadedmetadata', measure);
+      videoEl.addEventListener('resize', measure);
       ref.current.appendChild(videoEl);
     }
     if (type === 'remote' && track.kind === 'audio') {
@@ -689,6 +712,8 @@ const VideoCallOverlay = window.VideoCallOverlay = ({ callState, onEndCall, curr
     // Remote video (full screen background for video calls)
     isVideo && React.createElement('div', {
       ref: remoteVideoRef,
+      'data-testid': 'call-remote-video',
+      onClick: fillWide ? () => setWholePicture((w) => !w) : undefined,
       style: {
         position: 'absolute',
         top: 0, left: 0, right: 0, bottom: 0,
@@ -699,6 +724,20 @@ const VideoCallOverlay = window.VideoCallOverlay = ({ callState, onEndCall, curr
         backgroundColor: '#000',
       }
     }),
+
+    // v1.161.0 — on Betty's screens: what a tap does.
+    isVideo && fillWide && status === 'connected' && React.createElement('div', {
+      'data-testid': 'call-fill-toggle',
+      onClick: () => setWholePicture((w) => !w),
+      style: { position: 'absolute', left: 14, bottom: 120, zIndex: 3, background: 'rgba(0,0,0,0.5)', color: '#fff', borderRadius: 10, padding: '6px 12px', fontSize: 16, cursor: 'pointer' },
+    }, wholePicture ? 'Tap for a bigger picture' : 'Tap to see the whole picture'),
+
+    // v1.161.0 — the caller holds the phone upright while the other screen is wide: suggest
+    // turning it (Pete: "a reminder (not on hub) to rotate phone if not already").
+    isVideo && !fillWide && status === 'connected' && localPortrait && remoteWide && React.createElement('div', {
+      'data-testid': 'call-rotate-hint',
+      style: { position: 'absolute', top: 'calc(env(safe-area-inset-top, 0px) + 64px)', left: '50%', transform: 'translateX(-50%)', zIndex: 3, background: 'rgba(0,0,0,0.6)', color: '#fff', borderRadius: 12, padding: '8px 14px', fontSize: 14, textAlign: 'center', maxWidth: '86%' },
+    }, '\u{1F4F1}\u21BB Turn your phone sideways for a bigger picture on their screen'),
 
     // Local video preview (small picture-in-picture for video calls)
     isVideo && React.createElement('div', {

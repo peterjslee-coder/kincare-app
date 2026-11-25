@@ -102,4 +102,37 @@ async function postIntoTextGroup(db, app, { convId, senderId, senderName, conten
   return msgId;
 }
 
-module.exports = { textGroupForConversation, textGroupPushBody, acknowledgeTextGroup, postIntoTextGroup };
+// ─── v1.161.0 — "Betty's Hub" ───
+
+/** The group's name: "<First>'s Hub" (Pete, 11/25). */
+function hubGroupName(firstName) {
+  const n = String(firstName || "").trim();
+  return n ? `${n}${/s$/i.test(n) ? "'" : "'s"} Hub` : "Hub";
+}
+
+/** Which of these conversation ids are someone's Text group (to pin them in Messages). */
+async function hubGroupIds(db, convIds) {
+  const want = new Set((convIds || []).filter((id) => typeof id === "string"));
+  const out = new Set();
+  if (!want.size) return out;
+  const { parseSimpleMode } = require("./simpleMode");
+  const rows = await db.prepare(
+    "SELECT simple_mode FROM care_recipients WHERE simple_mode LIKE '%textConversationId%'"
+  ).all();
+  for (const r of rows) {
+    const id = parseSimpleMode(r.simple_mode).textConversationId;
+    if (id && want.has(id)) out.add(id);
+  }
+  return out;
+}
+
+/** Keep the group's name right; cheap and idempotent, called when her screen is built. */
+async function ensureHubGroupName(db, convId, firstName) {
+  if (!convId) return;
+  const name = hubGroupName(firstName);
+  await db.prepare(
+    "UPDATE conversations SET name = ? WHERE id = ? AND type = 'group' AND (name IS NULL OR name <> ?)"
+  ).run(name, convId, name);
+}
+
+module.exports = { textGroupForConversation, textGroupPushBody, acknowledgeTextGroup, postIntoTextGroup, hubGroupName, hubGroupIds, ensureHubGroupName };

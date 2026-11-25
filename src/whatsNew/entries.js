@@ -31,6 +31,35 @@ const WINDOW_DAYS = 45;
 
 const ENTRIES = [
   {
+    id: "hub-one-stream",
+    version: "1.161.0",
+    date: "2026-11-25",
+    audience: ["family"],
+    title: "Their messages in one place, and the Hub group gets a name",
+    body: "Messages sent privately to the person you care for now show on their Hub and phone too, marked \"Just to you\", and stay up until they tap Got it or write back. Their Text group is now called by their name, like \"Mom's Hub\", and sits pinned at the top of your Messages.",
+    howTo: [
+      "Send a message the usual way, in the group or privately",
+      "It waits on their screen until they answer",
+      "Write back goes the way it came: privately, or to everyone",
+    ],
+    examples: ["Just to you, from Sam", "Mom's Hub"],
+    preview: "hubOneStream",
+  },
+  {
+    id: "hub-video-fill",
+    version: "1.161.0",
+    date: "2026-11-25",
+    audience: ["family"],
+    title: "Bigger video on the Hub",
+    body: "When you video call the Hub, your picture now fills the screen instead of sitting in black bars, and a tap shows the whole picture. If you hold your phone upright, the call reminds you to turn it sideways for an even better picture.",
+    howTo: [
+      "Video call as usual",
+      "Turn your phone sideways when the reminder shows",
+    ],
+    examples: ["Turn your phone sideways for a bigger picture"],
+    preview: "hubVideoFill",
+  },
+  {
     id: "hub-person-check",
     version: "1.160.0",
     date: "2026-11-25",

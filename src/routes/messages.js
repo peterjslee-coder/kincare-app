@@ -310,6 +310,14 @@ router.get("/conversations", async (req, res) => {
     return res.json({ conversations: filtered, messagingLimited: true });
   }
 
+  // v1.161.0 — Pete, 11/25: "a separate group text feature called 'Betty's Hub' to
+  // differentiate from one on one texts." A person's Text group is flagged so Messages pins it
+  // on top with the tablet icon; its name is set where her screen is built (simpleMode).
+  try {
+    const hubIds = await require("../utils/textGroup").hubGroupIds(db, conversations.map((c) => c.id));
+    if (hubIds.size) conversations = conversations.map((c) => (hubIds.has(c.id) ? { ...c, hubGroup: true } : c));
+  } catch { /* the list still works without the pin */ }
+
   res.json({ conversations });
 });
 

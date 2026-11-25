@@ -1002,17 +1002,30 @@ router.post("/:id/simple-screen/text-ack", async (req, res) => {
     const mode = require("../utils/simpleMode").parseSimpleMode(cr.simple_mode);
     if (!mode.on || !mode.show.text || !mode.textConversationId) return res.status(403).json({ error: "This isn't turned on" });
     if (req.user.impersonatedBy) return res.json({ recorded: false, acknowledged: [] });
-    const convId = mode.textConversationId;
-    const acked = await require("../utils/textGroup").acknowledgeTextGroup(db, convId, req.user.id);
-    const emitToUser = req.app.get("emitToUser");
-    if (acked.length && emitToUser) {
-      const me = await db.prepare("SELECT first_name FROM users WHERE id = ?").get(req.user.id);
-      const others = await db.prepare(
-        "SELECT user_id FROM conversation_members WHERE conversation_id = ? AND user_id != ?"
-      ).all(convId, req.user.id);
-      for (const m of others) emitToUser(m.user_id, "message_acknowledged", { conversationId: convId, messageIds: acked, byName: (me && me.first_name) || cr.first_name });
+    // v1.161.0 — "Got it" (or her reply) covers what the pop-up showed: the group, plus any of
+    // her private threads it named. Only threads she is a member of.
+    const asked = Array.isArray(req.body && req.body.conversationIds) ? req.body.conversationIds.filter((x) => typeof x === "string").slice(0, 6) : [];
+    const convIds = [mode.textConversationId];
+    for (const id of asked) {
+      if (convIds.includes(id)) continue;
+      const member = await db.prepare("SELECT 1 FROM conversation_members WHERE conversation_id = ? AND user_id = ?").get(id, req.user.id);
+      if (member) convIds.push(id);
     }
-    res.json({ acknowledged: acked });
+    const { acknowledgeTextGroup } = require("../utils/textGroup");
+    const emitToUser = req.app.get("emitToUser");
+    const me = await db.prepare("SELECT first_name FROM users WHERE id = ?").get(req.user.id);
+    let all = [];
+    for (const convId of convIds) {
+      const acked = await acknowledgeTextGroup(db, convId, req.user.id);
+      all = all.concat(acked);
+      if (acked.length && emitToUser) {
+        const others = await db.prepare(
+          "SELECT user_id FROM conversation_members WHERE conversation_id = ? AND user_id != ?"
+        ).all(convId, req.user.id);
+        for (const m of others) emitToUser(m.user_id, "message_acknowledged", { conversationId: convId, messageIds: acked, byName: (me && me.first_name) || cr.first_name });
+      }
+    }
+    res.json({ acknowledged: all });
   } catch (err) {
     captureException(err, { where: "careRecipients: text ack" });
     res.status(500).json({ error: "Couldn't record that" });

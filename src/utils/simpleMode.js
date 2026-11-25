@@ -215,7 +215,7 @@ async function simpleScreenFor(db, recipient, linkedUserId, todayStr) {
   }
 
   let text = null;
-  if (show.text && mode.textConversationId) text = await textScreenFor(db, mode, linkedUserId);
+  if (show.text && mode.textConversationId) text = await textScreenFor(db, mode, linkedUserId, recipient.called_by || recipient.first_name);
 
   // v1.152.0 — the Hub's extra pieces only travel when the Hub is on.
   let hub = null;
@@ -400,8 +400,9 @@ async function hubScreenFor(db, recipient, linkedUserId, todayStr, hubCfg) {
 // The family sees the whole thread in their Messages. The person sees only their own last
 // message and the replies to it — or, if someone in the group wrote first, the newest of that.
 // It is one ordinary group conversation, so nothing here is a second copy of a message.
-async function textScreenFor(db, mode, linkedUserId) {
+async function textScreenFor(db, mode, linkedUserId, firstName) {
   const convId = mode.textConversationId;
+  try { await require("./textGroup").ensureHubGroupName(db, convId, firstName); } catch { /* name is cosmetic */ }
   const member = await db.prepare(
     "SELECT last_read_at FROM conversation_members WHERE conversation_id = ? AND user_id = ?"
   ).get(convId, linkedUserId);
@@ -439,15 +440,41 @@ async function textScreenFor(db, mode, linkedUserId) {
     ORDER BY created_at DESC LIMIT 3
   `).all(convId, linkedUserId);
   const mineAt = mine ? new Date(mine.created_at).getTime() : 0;
-  const waiting = waitingRows.reverse().map((r) => {
+  const groupWaiting = waitingRows.map((r) => {
     const who = byId.get(r.sender_id);
     return {
-      id: r.id, content: r.content, createdAt: r.created_at,
+      id: r.id, content: r.content, createdAt: r.created_at, conversationId: convId, private: false,
       from: who ? who.firstName : "Family", fromPhoto: who ? who.photo : null,
       // "Peter wrote back" only when it answers something she sent; otherwise "Message from Peter"
       isReply: !!mine && new Date(r.created_at).getTime() > mineAt,
     };
   });
+
+  // v1.161.0 — Pete, 11/25: "any of her messages need to show up on the hub and on her phone ...
+  // one stream ... no tapping. big reminder pop up until acknowledged or replied." Messages
+  // sent to her privately (a one-on-one thread) join the same pop-up, marked private. Only ones
+  // she hasn't read anywhere yet and from the last 3 days, so turning this on doesn't flood her
+  // screen with old threads.
+  const privateRows = await db.prepare(`
+    SELECT m.id, m.sender_id, m.content, m.created_at, m.conversation_id,
+           u.first_name, ${photoSql()}
+    FROM conversation_members cm
+    JOIN conversations c ON c.id = cm.conversation_id
+    JOIN messages m ON m.conversation_id = c.id
+    JOIN users u ON u.id = m.sender_id
+    WHERE cm.user_id = ? AND c.id <> ? AND c.type = 'direct' AND c.name IS NULL
+      AND m.sender_id <> ? AND m.acknowledged_at IS NULL AND COALESCE(m.is_deleted, 0) = 0
+      AND m.created_at > COALESCE(cm.last_read_at, '1970-01-01')
+      AND m.created_at > NOW() - INTERVAL '3 days'
+    ORDER BY m.created_at DESC LIMIT 3
+  `).all(linkedUserId, convId, linkedUserId);
+  const privateWaiting = privateRows.map((r) => ({
+    id: r.id, content: r.content, createdAt: r.created_at, conversationId: r.conversation_id, private: true,
+    from: r.first_name || "Someone", fromPhoto: photoUrl(r), isReply: false,
+  }));
+  const waiting = groupWaiting.concat(privateWaiting)
+    .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))
+    .slice(0, 3).reverse();
 
   return {
     conversationId: convId,

@@ -508,6 +508,26 @@ const WN_PREVIEWS = {
       </div>
     </div>
   ),
+  // v1.161.0 — one stream: a private message on her screen, and the pinned group
+  hubOneStream: () => (
+    <div style={{ ...wnCard, padding: 10, fontSize: 11, color: 'var(--text-primary)' }}>
+      <div style={{ background: '#2a2622', color: '#f3ebe0', borderRadius: 8, padding: '7px 9px', marginBottom: 6 }}>
+        <div style={{ fontSize: 10, color: '#FAC775' }}>Just to you, from Sam</div>
+        <div style={{ fontWeight: 700, fontSize: 12.5 }}>Doctor moved to Thursday, I'll drive.</div>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 7px', borderRadius: 6, border: '1px solid var(--border-color)' }}>
+        <span>{'\u{1F4F1}'}</span><strong>Mom's Hub</strong><span style={{ color: 'var(--text-secondary)', marginLeft: 'auto' }}>pinned</span>
+      </div>
+    </div>
+  ),
+  // v1.161.0 — the caller's picture fills her tablet
+  hubVideoFill: () => (
+    <div style={{ background: '#000', borderRadius: 10, aspectRatio: '16 / 10', position: 'relative', overflow: 'hidden', display: 'flex', flexDirection: 'column', alignItems: 'center', paddingTop: '6%' }}>
+      <div style={{ width: '22%', aspectRatio: '1', borderRadius: '50%', background: '#d3d1c7' }} />
+      <div style={{ width: '42%', height: '40%', background: '#888780', borderRadius: '40% 40% 0 0', marginTop: '2%' }} />
+      <div style={{ position: 'absolute', left: 6, bottom: 6, background: 'rgba(0,0,0,0.5)', color: '#fff', borderRadius: 6, padding: '2px 6px', fontSize: 10 }}>Tap to see the whole picture</div>
+    </div>
+  ),
   // v1.160.0 — the person check: why a stretch counted
   hubPersonCheck: () => (
     <div style={{ ...wnCard, padding: 10, fontSize: 11, color: 'var(--text-primary)' }}>
