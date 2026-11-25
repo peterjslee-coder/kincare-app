@@ -521,6 +521,16 @@ const WN_PREVIEWS = {
     </div>
   ),
   // v1.161.0 — the caller's picture fills her tablet
+  // v1.163.0 — quiet hours, and calling twice to ring through
+  quietRingThrough: () => (
+    <div style={{ ...wnCard, padding: 10, fontSize: 11, color: 'var(--text-primary)', background: '#1f1a16' }}>
+      <div style={{ color: '#f3ebe0', fontWeight: 800, fontSize: 13, textAlign: 'center' }}>{'\u{1F319}'} Mom</div>
+      <div style={{ color: '#cbbfae', textAlign: 'center', margin: '6px 0' }}>Quiet hours, so this didn't ring. Call again within a minute to ring through.</div>
+      <div style={{ display: 'flex', justifyContent: 'center', gap: 8 }}>
+        <span style={{ background: '#b3261e', color: '#fff', borderRadius: 14, padding: '4px 10px', fontWeight: 700 }}>Hang up</span>
+      </div>
+    </div>
+  ),
   // v1.162.0 — Accessibility: Drop in on top, then the nights
   a11yNights: () => (
     <div style={{ ...wnCard, padding: 10, fontSize: 11, color: 'var(--text-primary)' }}>

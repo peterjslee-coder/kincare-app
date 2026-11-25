@@ -46,6 +46,21 @@ const ENTRIES = [
     preview: "hubOneStream",
   },
   {
+    id: "quiet-hours-ring-through",
+    version: "1.163.0",
+    date: "2026-11-25",
+    audience: ["family"],
+    title: "Night calls wait, unless you call twice",
+    body: "During your loved one's night hours on the Hub, a call doesn't ring, and you're told so. If it can't wait, call again within a minute and the second call rings through.",
+    howTo: [
+      "Call as usual; at night you'll see that it didn't ring",
+      "Hang up and call again within a minute to ring through",
+      "Night hours are set under the Hub in Accessibility Options",
+    ],
+    examples: ["Mom's quiet hours, so this didn't ring. Call again within a minute to ring through."],
+    preview: "quietRingThrough",
+  },
+  {
     id: "a11y-nights-and-drop-in",
     version: "1.162.0",
     date: "2026-11-25",

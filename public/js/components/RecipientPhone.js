@@ -2312,6 +2312,10 @@ const SimpleModeSettings = window.SimpleModeSettings = ({ recipientId, firstName
                     <span style={{ color: 'var(--text-secondary)' }}>to</span>
                     <input type="time" value={hub.dimTo} disabled={saving} onChange={(e) => e.target.value && save({ hub: { dimTo: e.target.value } })} style={{ fontSize: 13, padding: '4px 6px' }} aria-label="Night ends" />
                   </div>
+                  {/* v1.163.0 — night hours are her quiet hours for calls too (utils/callQuiet.js). */}
+                  <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: -4 }} data-testid="hub-quiet-calls">
+                    Calls to {name} don't ring at night. To reach {name === 'them' ? 'them' : name} anyway, call twice within a minute and the second call rings through.
+                  </div>
                   {/* v1.158.0 — the Hub's live status, and a way to refresh it from here. */}
                   <HubStatusLine status={cfg.hubStatus} name={name} recipientId={recipientId} />
                   {/* 1.3 — kiosk mode on a tablet set up as a Hub (Kiosk.java). Off lets the family use
