@@ -40,7 +40,7 @@ const CAPACITY_LABEL = {
 };
 
 async function recipient(db, id) {
-  return db.prepare("SELECT id, first_name, family_user_id, linked_user_id, simple_mode FROM care_recipients WHERE id = ?").get(id);
+  return db.prepare("SELECT id, first_name, family_user_id, linked_user_id, simple_mode, timezone FROM care_recipients WHERE id = ?").get(id);
 }
 
 /** In what capacity may this user sign for her? 'self' | 'financial_poa' | 'healthcare_agent' | null

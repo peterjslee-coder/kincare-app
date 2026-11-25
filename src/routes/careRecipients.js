@@ -891,6 +891,11 @@ router.post("/:id/simple-screen/hub-status", async (req, res) => {
     if (!ok) return res.status(403).json({ error: "Not allowed" });
     if (req.user.impersonatedBy) return res.json({ recorded: false });
     require("../utils/hubStatus").record(cr.id, req.body);
+    // v1.159.0 — remember that it was watching, so a quiet night reads as asleep, not unknown.
+    // Only under the signed consent with noticing on (the same gate as the awake reports).
+    if (req.body && req.body.watching === true && await require("../utils/dropIn").mayNotice(db, cr.id)) {
+      await require("../utils/awake").recordWatching(db, cr.id);
+    }
     res.json({ recorded: true });
   } catch (err) {
     captureException(err, { where: "careRecipients: hub-status" });

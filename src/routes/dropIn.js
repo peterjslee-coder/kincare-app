@@ -59,6 +59,10 @@ async function view(db, cr, userId) {
       const r = await db.prepare("SELECT started_at, ended_at, motion_minutes, voice_minutes, touches FROM hub_awake WHERE care_recipient_id = ? ORDER BY ended_at DESC LIMIT 1").get(cr.id);
       return r ? { startedAt: r.started_at, endedAt: r.ended_at, motion: r.motion_minutes > 0, talking: r.voice_minutes > 0, touches: r.touches > 0 } : null;
     })() : null,
+    // v1.159.0 — the last 24 hours, oldest first: up / quiet (watching, nothing noticed) /
+    // not watching. Leader only, like lastNoticed. Times are care-location times.
+    nightStory: leader && hub.noticeAwake ? await require("../utils/awake").nightStory(db, cr.id, cr.first_name, cr.timezone || "America/New_York") : null,
+    last24: leader && hub.noticeAwake ? await require("../utils/awake").timeline(db, cr.id, cr.timezone || "America/New_York") : null,
     // 1.3 — may THIS person drop in right now (the same check call_invite makes), and on whom.
     mayDropIn: await D.mayDropIn(db, cr.id, userId),
     hubUserId: await (async () => {

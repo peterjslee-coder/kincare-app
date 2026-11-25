@@ -3900,6 +3900,23 @@ async function initializeDatabase() {
         `CREATE INDEX IF NOT EXISTS idx_drop_in_requests_of ON drop_in_requests(requested_of) WHERE answered_at IS NULL`,
       ],
     },
+    {
+      // v1.159.0 — Pete, 11/25: "I need a better way of knowing when it stopped detecting her,
+      // like when she went to sleep and when it started detecting her again." hub_awake only
+      // has the minutes she was noticed; a quiet gap could be sleep OR a Hub that wasn't
+      // watching (a call, a reload, Wi-Fi down). These spans are when it WAS watching, joined
+      // from its 2-minute reports, so the timeline can tell the two apart.
+      id: "102_hub_watch",
+      statements: [
+        `CREATE TABLE IF NOT EXISTS hub_watch (
+          id TEXT PRIMARY KEY,
+          care_recipient_id TEXT NOT NULL,
+          started_at TIMESTAMPTZ NOT NULL,
+          ended_at TIMESTAMPTZ NOT NULL
+        )`,
+        `CREATE INDEX IF NOT EXISTS idx_hub_watch_cr ON hub_watch(care_recipient_id, ended_at DESC)`,
+      ],
+    },
   ];
   for (const m of MIGRATIONS_V2) {
     if (applied.has(m.id)) continue;

@@ -666,9 +666,11 @@ function hubReload() {
   } catch { /* fall through */ }
   window.location.reload();
 }
-function HubHeartbeat({ recipientId, busy }) {
+function HubHeartbeat({ recipientId, busy, watching }) {
   const busyRef = React.useRef(busy);
   busyRef.current = busy;
+  const watchingRef = React.useRef(watching);
+  watchingRef.current = watching; // v1.159.0 — noticing is running right now (on, and no call)
   const wantReload = React.useRef(false);
   const lastTouch = React.useRef(Date.now());
   React.useEffect(() => {
@@ -676,7 +678,7 @@ function HubHeartbeat({ recipientId, busy }) {
     const onTouch = () => { lastTouch.current = Date.now(); };
     document.addEventListener('pointerdown', onTouch, true);
     const report = async () => {
-      const body = { version: window.APP_VERSION || null };
+      const body = { version: window.APP_VERSION || null, watching: !!watchingRef.current };
       try {
         const C = window.Capacitor;
         const k = C && C.isNativePlatform && C.isNativePlatform() && C.Plugins && C.Plugins.InPlaceKiosk;
@@ -1494,7 +1496,7 @@ const SimpleViewInner = ({ initial, onPanelChange, startCall, callBusy }) => {
       {s.hub && s.hub.noticeAwake && !callBusy && data && data.careRecipientId && <HubAwake recipientId={data.careRecipientId} />}
       {s.hub && <HubKiosk on={s.hub.kiosk !== false} />}
       {s.hub && <HubScreen />}
-      {s.hub && data && data.careRecipientId && <HubHeartbeat recipientId={data.careRecipientId} busy={!!callBusy} />}
+      {s.hub && data && data.careRecipientId && <HubHeartbeat recipientId={data.careRecipientId} busy={!!callBusy} watching={!!(s.hub.noticeAwake && !callBusy)} />}
       {s.hub && <HubPopups hub={s.hub} s={s} note={note} now={now} onRead={markRead} onAck={ackText} onText={openText} />}
       </>
     );
@@ -1779,6 +1781,12 @@ const HubDropInSettings = window.HubDropInSettings = ({ recipientId, name: nameP
               style={{ width: 16, height: 16, accentColor: 'var(--role-color)' }} />
             <span><strong>Notice when {name} is up</strong> <span style={{ color: 'var(--text-secondary)' }}>— movement, about 10 seconds of talking, or a touch. Only the times are kept; nothing is recorded. Last night goes into {name}'s care notes each morning, and the caregiver sees it at check-in.</span></span>
           </label>
+          {/* v1.159.0 — Pete, 11/25: last night in one sentence. */}
+          {v.noticeAwake && v.nightStory && (
+            <div data-testid="dropin-night-story" style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', padding: '8px 10px', borderRadius: 8, background: 'var(--bg-card)', borderLeft: '3px solid var(--role-color)' }}>
+              {'\u{1F319}'} {v.nightStory}
+            </div>
+          )}
           {/* v1.158.2 — proof it is working: the last time it noticed her up. */}
           {v.noticeAwake && (
             <p style={{ ...muted, color: 'var(--text-secondary)' }} data-testid="dropin-last-noticed">
@@ -1787,6 +1795,24 @@ const HubDropInSettings = window.HubDropInSettings = ({ recipientId, name: nameP
                   {' \u00b7 '}{[v.lastNoticed.motion && 'movement', v.lastNoticed.talking && 'talking', v.lastNoticed.touches && 'touching the screen'].filter(Boolean).join(', ')}</>
                 : <>Nothing noticed yet. Within a minute or two of someone moving in front of the tablet, it shows here.</>}
             </p>
+          )}
+          {/* v1.159.0 — Pete, 11/25: when did she go to sleep, when did it notice her again. */}
+          {v.noticeAwake && Array.isArray(v.last24) && v.last24.length > 0 && (
+            <details data-testid="dropin-last24" style={{ fontSize: 12.5, color: 'var(--text-secondary)' }}>
+              <summary style={{ cursor: 'pointer', color: 'var(--text-primary)', fontWeight: 600 }}>The last 24 hours</summary>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 3, marginTop: 6 }}>
+                {v.last24.map((e, i) => (
+                  <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'baseline' }}>
+                    <span style={{ minWidth: 128, fontVariantNumeric: 'tabular-nums', color: 'var(--text-primary)' }}>{e.fromLabel}{'\u2013'}{e.toLabel}</span>
+                    <span style={{ color: e.kind === 'up' ? 'var(--role-color)' : 'var(--text-secondary)', fontWeight: e.kind === 'up' ? 700 : 400 }}>
+                      {e.kind === 'up'
+                        ? `Up \u00b7 ${[e.motion && 'movement', e.talking && 'talking', e.touches && 'touching the screen'].filter(Boolean).join(', ')}`
+                        : e.kind === 'quiet' ? 'Quiet (watching, nothing noticed)' : 'Not watching (no report from the Hub)'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </details>
           )}
           <p style={muted}>The tablet needs InPlace 1.3 (with camera access) for drop-in and noticing. While it's watching, Android shows a small green dot in the tablet's top corner.</p>
         </div>
