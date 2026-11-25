@@ -10,6 +10,18 @@
  *
  * Uses Twilio Video SDK loaded from self-hosted /vendor/ (window.Twilio.Video).
  */
+// v1.160.1 — leaving a room must also stop the microphone and camera Twilio is holding.
+// Pete, 11/25: after a voice call that connected and ended fine, his iPhone kept the red mic dot
+// and played the dictation tones going in and out of the app. On iOS, Twilio restarts the
+// local audio track when the app is backgrounded (a WebKit workaround) — the new track is
+// Twilio's, not one we acquired, and room.disconnect() does not stop local tracks. So every
+// exit stops every local track first.
+function leaveRoom(r) {
+  if (!r) return;
+  try { r.localParticipant.tracks.forEach((pub) => { try { if (pub.track) pub.track.stop(); } catch { /* gone */ } }); } catch { /* no participant */ }
+  try { r.disconnect(); } catch { /* already left */ }
+}
+
 const VideoCallOverlay = window.VideoCallOverlay = ({ callState, onEndCall, currentUserId, ringStatus }) => {
   const [status, setStatus] = useState('connecting'); // connecting | ringing | connected | ended
   const [room, setRoom] = useState(null);
@@ -233,7 +245,7 @@ const VideoCallOverlay = window.VideoCallOverlay = ({ callState, onEndCall, curr
             // microphone live, after the call screen was gone (Pete's red dot, 11/24).
             const pending = Video.connect(token, connectOptions);
             let gaveUp = false;
-            pending.then((r) => { if (gaveUp || cancelled) { try { r.disconnect(); } catch { /* gone */ } } }, () => {});
+            pending.then((r) => { if (gaveUp || cancelled) leaveRoom(r); }, () => {});
             try {
               twilioRoom = await Promise.race([
                 pending,
@@ -284,7 +296,7 @@ const VideoCallOverlay = window.VideoCallOverlay = ({ callState, onEndCall, curr
         }
 
         if (cancelled) {
-          twilioRoom.disconnect();
+          leaveRoom(twilioRoom);
           return;
         }
 
@@ -363,6 +375,8 @@ const VideoCallOverlay = window.VideoCallOverlay = ({ callState, onEndCall, curr
           setStatus('ended');
           stopTimer();
           releaseWakeLock();
+          // The other side hung up or the network dropped us: let go of the mic and camera too.
+          try { twilioRoom.localParticipant.tracks.forEach((pub) => { try { if (pub.track) pub.track.stop(); } catch { /* gone */ } }); } catch { /* none */ }
           // v1.154.1 — Twilio's room log showed Pete's iPhone joining and leaving 3 seconds
           // later with no error anywhere. A disconnect WITH an error is Twilio dropping us,
           // not someone hanging up: say so on screen and report the code.
@@ -451,7 +465,7 @@ const VideoCallOverlay = window.VideoCallOverlay = ({ callState, onEndCall, curr
       if (remoteGraceTimer.current) { clearTimeout(remoteGraceTimer.current); remoteGraceTimer.current = null; }
       if (emptyRoomTimer.current) { clearTimeout(emptyRoomTimer.current); emptyRoomTimer.current = null; }
       if (roomRef.current) {
-        roomRef.current.disconnect();
+        leaveRoom(roomRef.current);
         roomRef.current = null;
       }
       // Unmounting is also a way to end a call — the microphone must go off here too, not
@@ -588,7 +602,7 @@ const VideoCallOverlay = window.VideoCallOverlay = ({ callState, onEndCall, curr
     clearRemoteGrace();
     releaseWakeLock();
     if (roomRef.current) {
-      roomRef.current.disconnect();
+      leaveRoom(roomRef.current);
       roomRef.current = null;
     }
     stopAcquiredTracks();
