@@ -184,3 +184,54 @@ describe("her Tell-the-family alert lands in the group too", () => {
     expect(q.messageConversationId).toBeNull();
   });
 });
+
+describe("v1.161.0 — one stream: 'Betty's Hub', and private messages on her screen too", () => {
+  beforeAll(async () => {
+    // The block above turned her Text button off; turn it back on for these.
+    const put = await h.request.put(`/api/care-recipients/${recipientId}/simple-mode`).set(h.auth(leader.token))
+      .send({ on: true, callUserIds: [], show: { text: true, tellFamily: true }, textUserIds: [leader.user.id, sister.user.id] });
+    expect(put.status).toBe(200);
+    convId = put.body.textConversationId;
+  });
+  const send = (who, conv, content) => h.request.post(`/api/messages/conversations/${conv}`).set(h.auth(who.token)).send({ content });
+
+  test("the Text group is named after her and pinned for the family", async () => {
+    await dash(); // her screen being built names the group
+    const row = await db.prepare("SELECT name FROM conversations WHERE id = ?").get(convId);
+    expect(row.name).toBe("Betty's Hub");
+    const list = await h.request.get("/api/messages/conversations").set(h.auth(leader.token));
+    const hub = list.body.conversations.find((c) => c.id === convId);
+    expect(hub).toMatchObject({ hubGroup: true });
+  });
+
+  test("a private message waits on her screen, says so, and only Got it with that thread clears it", async () => {
+    // Sara opens a one-on-one with Betty (outside the group).
+    const open = await h.request.post("/api/messages/conversations").set(h.auth(sister.token)).send({ type: "direct", memberIds: [mom.user.id] });
+    expect([200, 201]).toContain(open.status);
+    const direct = open.body.conversationId;
+    expect((await send(sister, direct, "Doctor moved to Thursday, I'll drive")).status).toBeLessThan(300);
+    let t = (await dash()).body.simpleScreen.text;
+    const w = t.waiting.find((x) => x.content === "Doctor moved to Thursday, I'll drive");
+    expect(w).toMatchObject({ from: "Sara", private: true, conversationId: direct });
+    // The group-only Got it (old page, no ids) leaves the private one waiting.
+    await h.request.post(`/api/care-recipients/${recipientId}/simple-screen/text-ack`).set(h.auth(mom.token)).send({});
+    t = (await dash()).body.simpleScreen.text;
+    expect(t.waiting.some((x) => x.private)).toBe(true);
+    // Naming the thread clears it; a thread she isn't in is ignored.
+    const other = await h.request.post("/api/messages/conversations").set(h.auth(sister.token)).send({ type: "direct", memberIds: [leader.user.id] });
+    const ack = await h.request.post(`/api/care-recipients/${recipientId}/simple-screen/text-ack`).set(h.auth(mom.token))
+      .send({ conversationIds: [direct, other.body.conversationId] });
+    expect(ack.status).toBe(200);
+    expect((await dash()).body.simpleScreen.text.waiting).toEqual([]);
+    const outsider = await db.prepare("SELECT COUNT(*)::int AS n FROM messages WHERE conversation_id = ? AND acknowledged_at IS NOT NULL").get(other.body.conversationId);
+    expect(outsider.n).toBe(0);
+  });
+
+  test("a private message she already read on her phone doesn't pop up on the Hub", async () => {
+    const open = await h.request.post("/api/messages/conversations").set(h.auth(viewer.token)).send({ type: "direct", memberIds: [mom.user.id] });
+    const direct = open.body.conversationId;
+    await send(viewer, direct, "Saw you at church!");
+    await h.request.get(`/api/messages/conversations/${direct}`).set(h.auth(mom.token)); // she reads it
+    expect((await dash()).body.simpleScreen.text.waiting.some((x) => x.content === "Saw you at church!")).toBe(false);
+  });
+});
