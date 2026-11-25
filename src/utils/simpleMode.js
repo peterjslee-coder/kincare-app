@@ -400,6 +400,14 @@ async function hubScreenFor(db, recipient, linkedUserId, todayStr, hubCfg) {
 // The family sees the whole thread in their Messages. The person sees only their own last
 // message and the replies to it — or, if someone in the group wrote first, the newest of that.
 // It is one ordinary group conversation, so nothing here is a second copy of a message.
+// v1.162.1 — Pete, 11/25, photo of the Hub after he called: "If I call mom, I don't need her to
+// see some screen that blocks the fact that I just called her." A finished call leaves a line in
+// the thread ("📹 Video call · 24s · 1:18 PM", posted by Messages.js endCall). That's a record,
+// not a message: it never waits on her screen. Both icon forms the client writes are matched.
+const CALL_RECORD_PREFIXES = ["\u{1F4F9} Video call \u00B7", "\u{1F4DE} Audio call \u00B7"];
+const NOT_A_CALL_RECORD = (col) => CALL_RECORD_PREFIXES.map((p) => `AND ${col} NOT LIKE '${p}%'`).join(" ");
+const isCallRecord = (text) => CALL_RECORD_PREFIXES.some((p) => String(text || "").startsWith(p));
+
 async function textScreenFor(db, mode, linkedUserId, firstName) {
   const convId = mode.textConversationId;
   try { await require("./textGroup").ensureHubGroupName(db, convId, firstName); } catch { /* name is cosmetic */ }
@@ -437,6 +445,7 @@ async function textScreenFor(db, mode, linkedUserId, firstName) {
   const waitingRows = await db.prepare(`
     SELECT id, sender_id, content, created_at FROM messages
     WHERE conversation_id = ? AND sender_id != ? AND acknowledged_at IS NULL AND COALESCE(is_deleted, 0) = 0
+      ${NOT_A_CALL_RECORD("content")}
     ORDER BY created_at DESC LIMIT 3
   `).all(convId, linkedUserId);
   const mineAt = mine ? new Date(mine.created_at).getTime() : 0;
@@ -466,6 +475,7 @@ async function textScreenFor(db, mode, linkedUserId, firstName) {
       AND m.sender_id <> ? AND m.acknowledged_at IS NULL AND COALESCE(m.is_deleted, 0) = 0
       AND m.created_at > COALESCE(cm.last_read_at, '1970-01-01')
       AND m.created_at > NOW() - INTERVAL '3 days'
+      ${NOT_A_CALL_RECORD("m.content")}
     ORDER BY m.created_at DESC LIMIT 3
   `).all(linkedUserId, convId, linkedUserId);
   const privateWaiting = privateRows.map((r) => ({
@@ -523,4 +533,5 @@ async function comingUpFor(db, recipientId, todayStr, days = 2, limit = 8) {
     .slice(0, limit);
 }
 
-module.exports = { HUB_DEFAULTS, MAX_HUB_CALLS, ARRIVING_LEAD_MIN, ARRIVING_LATE_MIN, cleanHub, addHours, weekdayLabel, nextVisitLabel, relationLabel, MAX_CALLS, MAX_TEXT, MAX_BUTTONS, bigButtonCount, SECTIONS, parseSimpleMode, cleanShow, callCandidates, simpleScreenFor, telDigits };
+module.exports = {
+  isCallRecord, HUB_DEFAULTS, MAX_HUB_CALLS, ARRIVING_LEAD_MIN, ARRIVING_LATE_MIN, cleanHub, addHours, weekdayLabel, nextVisitLabel, relationLabel, MAX_CALLS, MAX_TEXT, MAX_BUTTONS, bigButtonCount, SECTIONS, parseSimpleMode, cleanShow, callCandidates, simpleScreenFor, telDigits };

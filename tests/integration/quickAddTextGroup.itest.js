@@ -227,6 +227,21 @@ describe("v1.161.0 — one stream: 'Betty's Hub', and private messages on her sc
     expect(outsider.n).toBe(0);
   });
 
+  // v1.162.1 — Pete, 11/25: "If I call mom, I don't need her to see some screen that blocks the
+  // fact that I just called her."
+  test("a finished call's line in the thread never waits on her screen; a real message still does", async () => {
+    const open = await h.request.post("/api/messages/conversations").set(h.auth(leader.token)).send({ type: "direct", memberIds: [mom.user.id] });
+    const direct = open.body.conversationId;
+    await send(leader, direct, "\u{1F4F9} Video call \u00B7 24s \u00B7 1:18 PM");
+    await send(leader, convId, "\u{1F4DE} Audio call \u00B7 5s \u00B7 8:06 AM");
+    let w = (await dash()).body.simpleScreen.text.waiting;
+    expect(w.some((x) => /call \u00B7/.test(x.content))).toBe(false);
+    await send(leader, direct, "Call me back when you can");
+    w = (await dash()).body.simpleScreen.text.waiting;
+    expect(w.some((x) => x.content === "Call me back when you can" && x.private)).toBe(true);
+    await h.request.post(`/api/care-recipients/${recipientId}/simple-screen/text-ack`).set(h.auth(mom.token)).send({ conversationIds: [direct] });
+  });
+
   test("a private message she already read on her phone doesn't pop up on the Hub", async () => {
     const open = await h.request.post("/api/messages/conversations").set(h.auth(viewer.token)).send({ type: "direct", memberIds: [mom.user.id] });
     const direct = open.body.conversationId;
