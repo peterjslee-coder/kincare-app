@@ -355,6 +355,29 @@ io.on("connection", (socket) => {
       }
     }
 
+    // ─── v1.163.0 — her quiet hours, and calling through them (utils/callQuiet.js) ───
+    // Pete, 11/25: "if I call during quiet hours twice within a minute, it rings through." The
+    // first call in her quiet hours rings nowhere and the caller is told why and how to get
+    // through; a second call from the same person within a minute rings everything, the push
+    // included (it skips the quiet-hours hold).
+    let throughQuiet = false;
+    try {
+      const cq = require("./utils/callQuiet");
+      const q = await cq.quietFor(await getDb(), data.targetUserId);
+      if (q.quiet) {
+        if (cq.ringThrough(userId, data.targetUserId) === "hold") {
+          console.log(`[call] invite from=${String(userId).slice(0, 8)} to=${String(data.targetUserId).slice(0, 8)} via=quiet until=${q.until}`);
+          socket.emit("call_ring_status", { roomName: data.roomName, via: "quiet", devices: 0, until: q.until || null });
+          return;
+        }
+        throughQuiet = true;
+        console.log(`[call] ring-through from=${String(userId).slice(0, 8)} to=${String(data.targetUserId).slice(0, 8)} (second call within a minute in quiet hours)`);
+      }
+    } catch (e) {
+      // A broken quiet-hours check rings as before: it must never swallow a call.
+      captureException(e, { where: "socket: call_invite quiet hours" });
+    }
+
     // ─── calls-native (1.3): ring the PHONE, not just the app ───
     //
     // A device running the 1.3 app has told us it can ring like a phone (utils/callDevices.js).
@@ -451,7 +474,7 @@ io.on("connection", (socket) => {
               callerId: userId,
               callerName: who,
             },
-          }, undefined, { skipEndpoints, skipKinds });
+          }, undefined, { skipEndpoints, skipKinds, bypassQuietHours: throughQuiet });
           const sent = (result && result.sent) || 0;
           console.log(`[call] invite from=${String(userId).slice(0, 8)} to=${String(data.targetUserId).slice(0, 8)} via=${nativeRang > 0 ? "phone" : sent > 0 ? "push" : "nowhere"} sent=${sent} native=${nativeRang}${acks ? "" : " (also in app)"}`);
           if (acks) ack(nativeRang > 0 ? "phone" : sent > 0 ? "push" : "nowhere", sent + nativeRang);
@@ -1001,7 +1024,7 @@ app.use("/api/safety", require("./routes/safety"));
 
 // ─── App version check (lightweight, no auth) ───
 const { cancelPassedPrivateOffers, releaseExpiredExclusiveOffers } = require("./utils/exclusiveOffers");
-const APP_VERSION = "1.162.1";
+const APP_VERSION = "1.163.0";
 app.get("/api/version", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({ version: APP_VERSION, minAppVersion: MIN_APP_VERSION });

@@ -214,7 +214,7 @@ describe("the 1.2 store build cannot tell any of this exists", () => {
   test("a failed native ring can never cost the ordinary ring", () => {
     const invite = server.slice(server.indexOf('socket.on("call_invite"'), server.indexOf('socket.on("call_accept"'));
     expect(invite).toMatch(/catch \(e\) \{\s*\/\/ Native ringing failing must never cost the call/);
-    expect(invite).toMatch(/\{ skipEndpoints(, skipKinds)? \}/);
+    expect(invite).toMatch(/\{ skipEndpoints(, skipKinds)?(, bypassQuietHours: throughQuiet)? \}/);
   });
 
   test("the banner is hidden only when this phone really is ringing natively", () => {

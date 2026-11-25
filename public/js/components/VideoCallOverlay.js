@@ -695,6 +695,8 @@ const VideoCallOverlay = window.VideoCallOverlay = ({ callState, onEndCall, curr
     : ringStatus === 'app' ? `${who} has InPlace open — it's ringing on their screen.`
     : ringStatus === 'push' ? `${who} isn't in the app. We've sent a notification to their phone.`
     : ringStatus === 'nowhere' ? `${who} has no device set up for notifications. They'll see a missed call in InPlace.`
+    // v1.163.0 — Pete: "if I call during quiet hours twice within a minute, it rings through."
+    : ringStatus === 'quiet' ? `It's ${who === 'They' ? 'their' : who + "'s"} quiet hours, so this didn't ring. Hang up and call again within a minute to ring through.`
     : null;
 
   return React.createElement('div', {

@@ -627,7 +627,9 @@ async function sendPushToUser(userId, payload, eventType, opts = {}) {
     // Checked here, after the in-app row, so Activity still shows it when she looks.
     try {
       const { shouldHold, recordHeld } = require("../utils/quietHours");
-      if (shouldHold(targetUser?.notification_prefs, eventType, payload)) {
+      // v1.163.0 — a call rung through her quiet hours (a second call within a minute,
+      // utils/callQuiet.js) is the one push the caller has asked to break them.
+      if (!(opts && opts.bypassQuietHours) && shouldHold(targetUser?.notification_prefs, eventType, payload)) {
         await recordHeld(db, userId, inAppId);
         return { sent: 0, failed: 0, removed: 0, reason: "quiet_hours" };
       }
