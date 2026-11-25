@@ -388,7 +388,9 @@ describe("a call fits on the phone it is ringing on", () => {
   test("a connect that never answers gives up and says so", () => {
     // Twilio's connect has no deadline of its own. Without one, a hung call is a full-screen
     // black overlay reading "Connecting..." forever — which is the other half of "froze".
-    expect(overlay).toMatch(/Promise\.race\(\[\s*\n\s*Video\.connect\(token, connectOptions\)/);
+    // v1.158.5 — the attempt is held as `pending` so a lost race can be cancelled/disconnected.
+    expect(overlay).toMatch(/const pending = Video\.connect\(token, connectOptions\);/);
+    expect(overlay).toMatch(/Promise\.race\(\[\s*\n\s*pending,/);
     expect(overlay).toMatch(/Couldn't connect the call\. Check your signal and try again\./);
   });
 
@@ -475,7 +477,7 @@ describe("a call is on top of the app, and says why when it fails", () => {
     // lit after a call has ended is the worst bug a care app could ship.
     expect(overlay).toMatch(/function stopAcquiredTracks\(\)/);
     const ends = overlay.match(/acquiredTracksRef\.current = \[\];/g) || [];
-    expect(ends.length).toBe(3); // end call, unmount, and a connect that failed
+    expect(ends.length).toBe(4); // end call, unmount, a connect that failed, and one hung up mid-connect (v1.158.5)
   });
 });
 

@@ -107,6 +107,9 @@ describe("Hub kiosk", () => {
   test("there are ways out: the family's switch, and five taps in the corner at the tablet", () => {
     expect(kiosk).toMatch(/if \(wanted\(ctx\) && !paused\(ctx\)\) enter\(activity\); else exit\(activity\);/);
     expect(main).toMatch(/if \(\+\+cornerTaps >= 5\)[\s\S]*?Kiosk\.pause\(this\)/);
+    // Five taps again locks at once; the family's switch cancels a corner-tap unlock.
+    expect(main).toMatch(/if \(Kiosk\.paused\(this\)\) \{\s*Kiosk\.resume\(this\);/);
+    expect(kiosk).toMatch(/putBoolean\(KEY_ON, on\)\.putLong\(KEY_PAUSED_UNTIL, 0\)/);
     expect(main).toMatch(/Kiosk\.apply\(this\)/);
     expect(kioskPlugin).toMatch(/@CapacitorPlugin\(name = "InPlaceKiosk"\)/);
     expect(phone).toMatch(/isPluginAvailable\('InPlaceKiosk'\)/);

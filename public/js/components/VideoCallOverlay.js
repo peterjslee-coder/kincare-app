@@ -169,6 +169,10 @@ const VideoCallOverlay = window.VideoCallOverlay = ({ callState, onEndCall, curr
               : false,
           });
           mediaTracks = stream.getTracks();
+          // v1.158.5 — hung up (or the screen closed) while iOS was still handing over the
+          // microphone: let go of it now. Pete, 11/24: after a call that never connected, his
+          // iPhone kept the red microphone dot and played the dictation tones on every switch.
+          if (cancelled) { mediaTracks.forEach((t) => { try { t.stop(); } catch { /* gone */ } }); return; }
           acquiredTracksRef.current = mediaTracks;
         } catch (mediaErr) {
           const name = mediaErr && mediaErr.name;
@@ -224,14 +228,26 @@ const VideoCallOverlay = window.VideoCallOverlay = ({ callState, onEndCall, curr
         let lastErr = null;
         for (let attempt = 1; attempt <= 3 && !cancelled; attempt++) {
           try {
-            twilioRoom = await Promise.race([
-              Video.connect(token, connectOptions),
-              new Promise((_, reject) => setTimeout(() => {
-                const e = new Error("Couldn't connect the call. Check your signal and try again.");
-                e.code = 'TIMEOUT';
-                reject(e);
-              }, attempt === 3 ? 30000 : 12000)),
-            ]);
+            // v1.158.5 — the attempt we gave up on must not join later on its own. A connect
+            // that lost the race used to finish in the background and sit in the room with the
+            // microphone live, after the call screen was gone (Pete's red dot, 11/24).
+            const pending = Video.connect(token, connectOptions);
+            let gaveUp = false;
+            pending.then((r) => { if (gaveUp || cancelled) { try { r.disconnect(); } catch { /* gone */ } } }, () => {});
+            try {
+              twilioRoom = await Promise.race([
+                pending,
+                new Promise((_, reject) => setTimeout(() => {
+                  const e = new Error("Couldn't connect the call. Check your signal and try again.");
+                  e.code = 'TIMEOUT';
+                  reject(e);
+                }, attempt === 3 ? 30000 : 12000)),
+              ]);
+            } catch (raceErr) {
+              gaveUp = true;
+              try { if (typeof pending.cancel === 'function') pending.cancel(); } catch { /* already settled */ }
+              throw raceErr;
+            }
             break;
           } catch (e) {
             lastErr = e;
@@ -387,6 +403,12 @@ const VideoCallOverlay = window.VideoCallOverlay = ({ callState, onEndCall, curr
         }
 
       } catch (err) {
+        // v1.158.5 — whatever happened, a call that isn't happening holds no microphone, even
+        // when it was hung up mid-connect (the cancelled path used to skip this).
+        if (cancelled) {
+          (acquiredTracksRef.current || []).forEach((t) => { try { if (t && t.readyState !== 'ended') t.stop(); } catch { /* gone */ } });
+          acquiredTracksRef.current = [];
+        }
         if (!cancelled) {
           console.error('[VideoCall] Connection error:', err);
           // v1.153.2 — Pete, 11/23: calls from his iPhone app to Betty's tablet failed on the
