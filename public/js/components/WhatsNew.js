@@ -508,6 +508,16 @@ const WN_PREVIEWS = {
       </div>
     </div>
   ),
+  // v1.160.0 — the person check: why a stretch counted
+  hubPersonCheck: () => (
+    <div style={{ ...wnCard, padding: 10, fontSize: 11, color: 'var(--text-primary)' }}>
+      <div style={{ fontWeight: 800, marginBottom: 6 }}>{'\u{1F319}'} Mom was awake until about 11 PM.</div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '3px 8px' }}>
+        <span>9:02{'\u2013'}10:58 PM</span><span style={{ color: 'var(--role-color)', fontWeight: 700 }}>Up {'\u00b7'} person seen, talking</span>
+        <span>10:58 PM{'\u2013'}6:50 AM</span><span style={{ color: 'var(--text-secondary)' }}>Quiet (TV on, nobody there)</span>
+      </div>
+    </div>
+  ),
   // v1.158.0 — the Hub's status line and Refresh
   hubStatus: () => (
     <div style={{ ...wnCard, padding: 10, fontSize: 11, color: 'var(--text-primary)' }}>

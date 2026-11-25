@@ -6,9 +6,11 @@ beforeEach(() => hs._reset());
 
 test("keeps only what the status line shows, in range", () => {
   expect(hs.clean({ version: "1.158.0", kiosk: { deviceOwner: true, locked: "yes" }, battery: { level: 140, charging: 1 }, extra: 1 }))
-    .toEqual({ version: "1.158.0", kiosk: { deviceOwner: true, locked: false }, battery: { level: 100, charging: false } });
+    .toEqual({ version: "1.158.0", personCheck: null, kiosk: { deviceOwner: true, locked: false }, battery: { level: 100, charging: false } });
   expect(hs.clean({ version: "<b>1</b>" }).version).toBeNull();
-  expect(hs.clean(null)).toEqual({ version: null, kiosk: null, battery: null });
+  expect(hs.clean(null)).toEqual({ version: null, personCheck: null, kiosk: null, battery: null });
+  expect(hs.clean({ personCheck: "ready" }).personCheck).toBe("ready");
+  expect(hs.clean({ personCheck: "<x>" }).personCheck).toBeNull();
 });
 
 test("online while reports arrive; offline after two missed ones", () => {

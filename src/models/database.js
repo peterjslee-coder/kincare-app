@@ -3917,6 +3917,15 @@ async function initializeDatabase() {
         `CREATE INDEX IF NOT EXISTS idx_hub_watch_cr ON hub_watch(care_recipient_id, ended_at DESC)`,
       ],
     },
+    {
+      // v1.160.0 — Pete, 11/25: the TV kept Betty "up" all night. The Hub now checks for a
+      // person on the tablet (public/js/hubPersonCheck.js); the minutes a person was seen are
+      // counted so a stretch can say why it counted ("person seen").
+      id: "103_hub_awake_person",
+      statements: [
+        `ALTER TABLE hub_awake ADD COLUMN IF NOT EXISTS person_minutes INTEGER NOT NULL DEFAULT 0`,
+      ],
+    },
   ];
   for (const m of MIGRATIONS_V2) {
     if (applied.has(m.id)) continue;

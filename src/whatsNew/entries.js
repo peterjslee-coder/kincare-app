@@ -31,6 +31,21 @@ const WINDOW_DAYS = 45;
 
 const ENTRIES = [
   {
+    id: "hub-person-check",
+    version: "1.160.0",
+    date: "2026-11-25",
+    audience: ["family"],
+    title: "The Hub looks for a person, not just noise",
+    body: "Noticing when someone is up now checks for a person in the room, on the tablet itself, so a TV's sound or picture no longer counts. Nothing from the camera is saved or sent; only whether someone was up, and when.",
+    howTo: [
+      "Care Team, then Accessibility Options, then InPlace Hub",
+      "Read last night's line under Drop-in",
+      "Open The last 24 hours to see why each stretch counted",
+    ],
+    examples: ["Up · person seen, talking", "Mom was awake until about 11 PM"],
+    preview: "hubPersonCheck",
+  },
+  {
     id: "hub-status-refresh",
     version: "1.158.0",
     date: "2026-11-24",

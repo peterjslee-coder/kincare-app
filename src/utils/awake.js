@@ -120,7 +120,7 @@ async function recordWatching(db, recipientId) {
  */
 async function timeline(db, recipientId, tz, hours = 24, now = new Date()) {
   const since = new Date(now.getTime() - hours * 3600000);
-  const ups = await db.prepare(`SELECT started_at, ended_at, motion_minutes, voice_minutes, touches FROM hub_awake
+  const ups = await db.prepare(`SELECT started_at, ended_at, motion_minutes, voice_minutes, touches, person_minutes FROM hub_awake
     WHERE care_recipient_id = ? AND ended_at > ? ORDER BY started_at`).all(recipientId, since.toISOString());
   const watches = await db.prepare(`SELECT started_at, ended_at FROM hub_watch
     WHERE care_recipient_id = ? AND ended_at > ? ORDER BY started_at`).all(recipientId, since.toISOString());
@@ -132,7 +132,7 @@ async function timeline(db, recipientId, tz, hours = 24, now = new Date()) {
   };
   // Walk the watched stretches; inside each, split into "up" and "quiet". Between them: not watching.
   let cursor = since;
-  const upList = ups.map((u) => ({ from: clip(u.started_at), to: clip(u.ended_at), motion: u.motion_minutes > 0, talking: u.voice_minutes > 0, touches: u.touches > 0 }));
+  const upList = ups.map((u) => ({ from: clip(u.started_at), to: clip(u.ended_at), person: (u.person_minutes || 0) > 0, motion: u.motion_minutes > 0, talking: u.voice_minutes > 0, touches: u.touches > 0 }));
   for (const w of watches) {
     const wf = clip(w.started_at); const wt = clip(w.ended_at);
     if (wf > cursor) push("notWatching", cursor, wf);
@@ -142,7 +142,7 @@ async function timeline(db, recipientId, tz, hours = 24, now = new Date()) {
       const uf = u.from < c ? c : u.from;
       const ut = u.to > wt ? wt : u.to;
       if (uf > c) push("quiet", c, uf);
-      push("up", uf, ut, { motion: u.motion, talking: u.talking, touches: u.touches });
+      push("up", uf, ut, { person: u.person, motion: u.motion, talking: u.talking, touches: u.touches });
       c = ut;
     }
     if (wt > c) push("quiet", c, wt);
@@ -152,7 +152,7 @@ async function timeline(db, recipientId, tz, hours = 24, now = new Date()) {
   for (const u of upList) {
     const covered = out.some((e) => e.kind === "up" && new Date(e.from) <= u.from && new Date(e.to) >= u.to);
     if (!covered && !watches.some((w) => clip(w.started_at) <= u.from && clip(w.ended_at) >= u.to)) {
-      push("up", u.from, u.to, { motion: u.motion, talking: u.talking, touches: u.touches });
+      push("up", u.from, u.to, { person: u.person, motion: u.motion, talking: u.talking, touches: u.touches });
     }
   }
   if (now > cursor && watches.length) push("notWatching", cursor, now);

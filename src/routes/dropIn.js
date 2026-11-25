@@ -231,6 +231,7 @@ router.put("/:recipientId/settings", async (req, res) => {
 // Minutes within AWAKE_JOIN_MIN of each other join one period.
 const AWAKE_JOIN_MIN = 10;
 const VOICE_AWAKE_SECONDS = 10;
+const PERSON_RECENT_MIN = 5; // v1.160.0 — movement/talking count only this soon after a person was seen
 router.post("/:recipientId/awake", async (req, res) => {
   try {
     const db = await getDb();
@@ -241,16 +242,24 @@ router.post("/:recipientId/awake", async (req, res) => {
     const motion = req.body?.motion === true;
     const voice = Math.max(0, Math.min(60, Number(req.body?.voiceSeconds) || 0));
     const touches = Math.max(0, Math.min(200, Math.floor(Number(req.body?.touches) || 0)));
-    const awake = motion || voice >= VOICE_AWAKE_SECONDS || touches > 0;
-    if (!awake) return res.json({ recorded: false });
+    const talking = voice >= VOICE_AWAKE_SECONDS;
+    // v1.160.0 — Pete, 11/25: the TV kept her "up" all night. person is true/false when the
+    // tablet's person check is running, null when it isn't (old page, or the model failed).
+    const person = req.body?.person === true ? true : req.body?.person === false ? false : null;
     const last = await db.prepare("SELECT * FROM hub_awake WHERE care_recipient_id = ? ORDER BY ended_at DESC LIMIT 1").get(a.cr.id);
     const joins = last && (Date.now() - new Date(last.ended_at).getTime()) <= AWAKE_JOIN_MIN * 60000;
+    // A person seen within the last few minutes: the stretch she is in.
+    const personRecently = !!(last && (last.person_minutes || 0) > 0 && (Date.now() - new Date(last.ended_at).getTime()) <= PERSON_RECENT_MIN * 60000);
+    const awake = person === null
+      ? (motion || talking || touches > 0)                         // no person check: the old rule
+      : (person || touches > 0 || ((motion || talking) && personRecently)); // a person, not a TV
+    if (!awake) return res.json({ recorded: false });
     if (joins) {
-      await db.prepare(`UPDATE hub_awake SET ended_at = NOW(), motion_minutes = motion_minutes + ?, voice_minutes = voice_minutes + ?, touches = touches + ? WHERE id = ?`)
-        .run(motion ? 1 : 0, voice >= VOICE_AWAKE_SECONDS ? 1 : 0, touches, last.id);
+      await db.prepare(`UPDATE hub_awake SET ended_at = NOW(), motion_minutes = motion_minutes + ?, voice_minutes = voice_minutes + ?, touches = touches + ?, person_minutes = person_minutes + ? WHERE id = ?`)
+        .run(motion ? 1 : 0, talking ? 1 : 0, touches, person ? 1 : 0, last.id);
     } else {
-      await db.prepare(`INSERT INTO hub_awake (id, care_recipient_id, started_at, ended_at, motion_minutes, voice_minutes, touches) VALUES (?, ?, NOW() - INTERVAL '1 minute', NOW(), ?, ?, ?)`)
-        .run(uuid(), a.cr.id, motion ? 1 : 0, voice >= VOICE_AWAKE_SECONDS ? 1 : 0, touches);
+      await db.prepare(`INSERT INTO hub_awake (id, care_recipient_id, started_at, ended_at, motion_minutes, voice_minutes, touches, person_minutes) VALUES (?, ?, NOW() - INTERVAL '1 minute', NOW(), ?, ?, ?, ?)`)
+        .run(uuid(), a.cr.id, motion ? 1 : 0, talking ? 1 : 0, touches, person ? 1 : 0);
     }
     res.json({ recorded: true });
   } catch (err) {
@@ -262,3 +271,4 @@ router.post("/:recipientId/awake", async (req, res) => {
 module.exports = router;
 module.exports.AWAKE_JOIN_MIN = AWAKE_JOIN_MIN;
 module.exports.VOICE_AWAKE_SECONDS = VOICE_AWAKE_SECONDS;
+module.exports.PERSON_RECENT_MIN = PERSON_RECENT_MIN;
