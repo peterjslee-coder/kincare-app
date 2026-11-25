@@ -6670,7 +6670,32 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                       background check". Billed to InPlace's Checkr account. Re-sends a form that is
                       out and unanswered; never re-runs a check that has a result. */}
                   {(effectiveStatus === 'not_sent' || effectiveStatus === 'requested' || effectiveStatus === 'vouched' || effectiveStatus === 'invitation_sent'
-                    || effectiveStatus === 'invitation_expired' || effectiveStatus === 'invitation_canceled' || effectiveStatus === 'canceled') && !c.is_background_checked && (
+                    || effectiveStatus === 'invitation_expired' || effectiveStatus === 'invitation_canceled' || effectiveStatus === 'canceled') && !c.is_background_checked
+                    && Array.isArray(c.missing) && c.missing.length > 0 && !c.checkr_candidate_id && (
+                    /* v1.161.1 — Pete, 11/25 (Tina): Send failed on missing details and the
+                       Needs-you card never cleared. Say what it is waiting on, and offer the
+                       reminder instead of a Send that cannot work. */
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxWidth: 200 }}>
+                      <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
+                        Waiting on {c.first_name || 'them'} for {c.missing.join(', ')}. Checkr needs these before the form can go out.
+                      </div>
+                      <button onClick={async () => {
+                        try {
+                          const r = await apiFetch(`/api/checkr/admin/requests/${c.user_id}/remind`, { method: 'POST' });
+                          const d = await r.json().catch(() => ({}));
+                          if (r.ok) showToast(`Reminded ${c.first_name || 'them'} to add ${c.missing.join(' and ')}`, 'success');
+                          else showToast(d.error || 'Could not send the reminder', 'error');
+                          try { window.dispatchEvent(new Event('inplace:attention-stale')); } catch {}
+                          loadBgChecks();
+                        } catch { showToast('Could not reach the server', 'error'); }
+                      }} style={{ padding: '5px 12px', background: 'var(--bg-surface)', color: 'var(--role-color)', border: '2px solid var(--role-color)', borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
+                        {'\uD83D\uDD14'} Remind {c.first_name || 'them'}
+                      </button>
+                    </div>
+                  )}
+                  {(effectiveStatus === 'not_sent' || effectiveStatus === 'requested' || effectiveStatus === 'vouched' || effectiveStatus === 'invitation_sent'
+                    || effectiveStatus === 'invitation_expired' || effectiveStatus === 'invitation_canceled' || effectiveStatus === 'canceled') && !c.is_background_checked
+                    && !(Array.isArray(c.missing) && c.missing.length > 0 && !c.checkr_candidate_id) && (
                     <button onClick={async () => {
                       const again = effectiveStatus === 'invitation_sent';
                       if (!confirm(`${again ? 'Re-send' : 'Send'} the Checkr background check form to ${c.first_name} at ${c.email}?\n\nCheckr emails the form. InPlace's Checkr account is billed (inPlace Starter) once the report completes.`)) return;

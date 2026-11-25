@@ -1367,7 +1367,7 @@ router.get("/admin/candidates", authenticate, async (req, res) => {
   try {
     const candidates = await db.prepare(`
       SELECT
-        cp.user_id, cp.legal_first_name, cp.legal_last_name,
+        cp.user_id, cp.legal_first_name, cp.legal_last_name, cp.date_of_birth,
         cp.checkr_status, cp.checkr_candidate_id, cp.checkr_invitation_id, cp.checkr_report_id,
         cp.is_background_checked, cp.background_check_paid, cp.background_check_consent,
         cp.onboarding_complete, cp.checkr_eta,
@@ -1429,6 +1429,11 @@ router.get("/admin/candidates", authenticate, async (req, res) => {
       c.manually_set_no_report = !!c.is_background_checked && !c.checkr_report_id;
       c.evidence = evidence.get(c.user_id);
       c.phase = phaseFor(c.checkr_status, !!c.is_background_checked);
+      // v1.161.1 — what Checkr still needs before a form can go out, so the page says
+      // "waiting on her" instead of offering a Send that can only fail. The date itself
+      // never leaves the server.
+      c.missing = require("../utils/bgCheckRequest").readiness(c, c).missing;
+      delete c.date_of_birth;
     }
 
     res.json({ candidates });
@@ -1486,6 +1491,65 @@ router.post("/admin/requests/:userId/approve", authenticate, async (req, res) =>
   // The card reads `error` on a failure; say what Checkr said.
   if (out.code !== 200 && out.body.detail) out.body.error = `${out.body.error} (${out.body.detail})`;
   return res.status(out.code).json(out.body);
+});
+
+// ─── POST /api/checkr/admin/requests/:userId/remind — v1.161.1 ───
+//
+// Pete, 11/25: "it keeps showing up as 'Tina's requesting a BG check'. It won't stay cleared
+// out." Tina had asked, but her legal name and date of birth were not on file, and Checkr
+// refuses a candidate without them. The card's only button was "Approve ›", which opened the
+// admin page, whose "Send Checkr form" then failed on the missing details. Nothing an admin
+// could press moved it. The card now does the one useful thing: it nudges the caregiver to add
+// them, and puts itself away for 3 days. It comes back if she still hasn't, and turns into a
+// one-tap Approve once she has.
+router.post("/admin/requests/:userId/remind", authenticate, async (req, res) => {
+  const db = await getDb();
+  const admin = await db.prepare("SELECT is_admin, email FROM users WHERE id = ?").get(req.user.id);
+  if (!admin?.is_admin) return res.status(403).json({ error: "Admin only" });
+  const target = await db.prepare(
+    "SELECT id, first_name, email, phone, COALESCE(is_demo, 0) AS is_demo FROM users WHERE id = ?"
+  ).get(req.params.userId);
+  if (!target) return res.status(404).json({ error: "User not found" });
+  const profile = await db.prepare(
+    "SELECT legal_first_name, legal_middle_name, legal_last_name, date_of_birth, zip FROM caregiver_profiles WHERE user_id = ?"
+  ).get(target.id);
+  if (!profile) return res.status(404).json({ error: "Caregiver profile not found" });
+  const { readiness } = require("../utils/bgCheckRequest");
+  const { missing } = readiness(profile, target);
+  // Everything is on file: the card should be an Approve, not a reminder. A real refusal.
+  if (!missing.length) return res.status(409).json({ done: false, error: "Nothing is missing any more. Approve it instead." });
+
+  if (!target.is_demo) {
+    try {
+      // No details in the push itself: lock screens (v1.105.39).
+      const { sendPushToUser } = require("../utils/push");
+      await sendPushToUser(db, target.id,
+        "Background check",
+        "InPlace needs a couple of details before your background check can start. Open InPlace to add them.",
+        { type: "bg_check_details_needed", page: "account", tab: "payments" }
+      ).catch(() => {});
+      await db.prepare(
+        "INSERT INTO activity_feed (id, family_user_id, event_type, title, message, metadata) VALUES (?, ?, ?, ?, ?, ?)"
+      ).run(require("uuid").v4(), target.id, "bg_check_details_needed",
+        "Your background check needs a couple of details",
+        `Add your ${missing.join(" and ")} in My Account → Background Check, and InPlace can send Checkr's form.`,
+        JSON.stringify({ missing }));
+    } catch (e) {
+      console.error("[checkr] remind failed:", e.message);
+      return res.status(500).json({ error: "Could not send the reminder." });
+    }
+  }
+  await db.prepare(`
+    INSERT INTO nudge_snoozes (id, user_id, kind, ref, snoozed_until)
+    VALUES (?, ?, 'bgCheckRequest', ?, NOW() + INTERVAL '3 days')
+    ON CONFLICT (user_id, kind, ref) DO UPDATE SET snoozed_until = EXCLUDED.snoozed_until
+  `).run(require("uuid").v4(), req.user.id, target.id);
+  writeAuditLog({
+    userId: req.user.id, userEmail: admin.email, userRole: "admin",
+    action: "bg_check_details_reminded", endpoint: "/api/checkr/admin/requests/:userId/remind", method: "POST",
+    details: { targetUserId: target.id, missing }, severity: "info",
+  });
+  return res.json({ success: true, missing, firstName: target.first_name || null });
 });
 
 // ─── POST /api/checkr/admin/send-invitation/:userId — Admin: email her the Checkr form ───
