@@ -177,6 +177,58 @@ describe("noticing when she is up", () => {
     expect(t.some((e) => e.kind === "up" && e.person === true)).toBe(true);
   });
 
+  // v1.162.0 — Pete, 11/25: "Shows 7, keeps others if expanded." Every night is kept.
+  test("nights: 7 at a time, newest first, older ones on request, nothing deleted", async () => {
+    const tz = "America/New_York";
+    await db.prepare("UPDATE care_recipients SET timezone = ? WHERE id = ?").run(tz, recipientId);
+    await db.prepare("DELETE FROM hub_awake WHERE care_recipient_id = ?").run(recipientId);
+    await db.prepare("DELETE FROM hub_watch WHERE care_recipient_id = ?").run(recipientId);
+    const { zonedDateTimeToInstant } = require("../../src/utils/timezone");
+    const { addDaysToDateString } = require("../../src/utils/careEventUtils");
+    const at = (day, hm) => zonedDateTimeToInstant(day, hm, tz).toISOString();
+    // Ten nights, evenings 2026-11-10 .. 2026-11-19. Watching 6 PM-9 AM; up 9-11 PM and 3-4 AM.
+    for (let i = 0; i < 10; i++) {
+      const eve = addDaysToDateString("2026-11-10", i), morn = addDaysToDateString(eve, 1);
+      await db.prepare("INSERT INTO hub_watch (id, care_recipient_id, started_at, ended_at) VALUES (?, ?, ?, ?)").run(uuid(), recipientId, at(eve, "18:00"), at(morn, "09:00"));
+      await db.prepare("INSERT INTO hub_awake (id, care_recipient_id, started_at, ended_at, motion_minutes, voice_minutes, touches, person_minutes) VALUES (?, ?, ?, ?, 10, 0, 0, 10)").run(uuid(), recipientId, at(eve, "21:00"), at(eve, "23:00"));
+      await db.prepare("INSERT INTO hub_awake (id, care_recipient_id, started_at, ended_at, motion_minutes, voice_minutes, touches, person_minutes) VALUES (?, ?, ?, ?, 10, 0, 0, 10)").run(uuid(), recipientId, at(morn, "03:00"), at(morn, "04:00"));
+    }
+    const { nights } = require("../../src/utils/awake");
+    const now = new Date(at("2026-11-20", "12:00"));
+    const first = await nights(db, recipientId, "Betty", tz, { now });
+    expect(first.nights).toHaveLength(7);
+    expect(first.nights[0].day).toBe("2026-11-19");
+    expect(first.nights[0].label).toBe("Thu 11/19");
+    expect(first.nights[6].day).toBe("2026-11-13");
+    expect(first.more).toBe(true);
+    const n = first.nights[0];
+    expect(n.up).toEqual([[180, 300, true], [540, 600, true]]); // minutes after 6 PM
+    expect(n.notWatching).toEqual([]);
+    expect(n.upMinutes).toBe(180);
+    expect(n.story).toMatch(/^Betty was awake until about 11 PM, then up again from about 3 AM to 4 AM\.$/);
+    expect(n.entries.map((e) => e.kind)).toEqual(["quiet", "up", "quiet", "up", "quiet"]);
+
+    const older = await nights(db, recipientId, "Betty", tz, { now, beforeDay: first.nights[6].day });
+    expect(older.nights.map((x) => x.day)).toEqual(["2026-11-12", "2026-11-11", "2026-11-10"]);
+    expect(older.more).toBe(false);
+
+    // A night with no reports at all is "not watching", never "quiet".
+    await db.prepare("DELETE FROM hub_watch WHERE care_recipient_id = ? AND started_at >= ? AND started_at < ?").run(recipientId, at("2026-11-15", "17:00"), at("2026-11-16", "10:00"));
+    await db.prepare("DELETE FROM hub_awake WHERE care_recipient_id = ? AND started_at >= ? AND started_at < ?").run(recipientId, at("2026-11-15", "17:00"), at("2026-11-16", "10:00"));
+    const gap = (await nights(db, recipientId, "Betty", tz, { now })).nights.find((x) => x.day === "2026-11-15");
+    expect(gap.notWatching).toEqual([[0, 900]]);
+    expect(gap.up).toEqual([]);
+    expect(gap.story).toMatch(/wasn't watching/);
+
+    // The route: the leader only.
+    const ok = await h.request.get(`/api/drop-in/${recipientId}/nights?count=3`).set(h.auth(leader.token));
+    expect(ok.status).toBe(200);
+    expect(Array.isArray(ok.body.nights)).toBe(true);
+    expect((await h.request.get(`/api/drop-in/${recipientId}/nights`).set(h.auth(sister.token))).status).toBe(403);
+    expect((await h.request.get(`/api/drop-in/${recipientId}/nights`).set(h.auth(tina.token))).status).toBe(404);
+    expect((await h.request.get(`/api/drop-in/${recipientId}/nights`).set(h.auth(stranger.token))).status).toBe(404);
+  });
+
   test("withdrawing stops everything at once", async () => {
     const r = await h.request.post(`/api/drop-in/${recipientId}/revoke`).set(h.auth(mom.token)).send({});
     expect(r.status).toBe(200);

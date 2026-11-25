@@ -46,6 +46,21 @@ const ENTRIES = [
     preview: "hubOneStream",
   },
   {
+    id: "a11y-nights-and-drop-in",
+    version: "1.162.0",
+    date: "2026-11-25",
+    audience: ["family"],
+    title: "Drop in and every night, at the top",
+    body: "Accessibility Options now opens with Drop in, Video call, Voice call and Leave a note, then a bar for each of the last 7 nights showing when your loved one was up. Every night is kept, and the phone and Hub settings fold into two rows you open only to change something.",
+    howTo: [
+      "Care Team, then Accessibility Options",
+      "Tap a night's bar for its hour-by-hour list",
+      "Tap Earlier nights to look further back",
+    ],
+    examples: ["Mom was awake until about 11 PM, then up again from about 3:45 AM to 5:15 AM"],
+    preview: "a11yNights",
+  },
+  {
     id: "hub-video-fill",
     version: "1.161.0",
     date: "2026-11-25",

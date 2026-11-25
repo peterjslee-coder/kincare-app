@@ -90,6 +90,25 @@ router.get("/:recipientId", async (req, res) => {
   }
 });
 
+// GET /:recipientId/nights?before=YYYY-MM-DD&count=7 — v1.162.0, the night-by-night record.
+// Leader only, like last24. Shown whether or not noticing is on today: nights already recorded
+// under consent stay readable (Pete, 11/25: "keep all the info stored to track over time").
+router.get("/:recipientId/nights", async (req, res) => {
+  try {
+    const db = await getDb();
+    const a = await access(db, req);
+    if (a.status !== 200) return res.status(a.status).json({ error: "Not found" });
+    if (!(await D.isLeader(db, a.cr, req.user.id))) return res.status(403).json({ error: "Only the team leader can see this" });
+    const before = /^\d{4}-\d{2}-\d{2}$/.test(String(req.query.before || "")) ? String(req.query.before) : null;
+    const count = Math.min(Math.max(parseInt(req.query.count, 10) || 7, 1), 31);
+    const out = await require("../utils/awake").nights(db, a.cr.id, a.cr.first_name, a.cr.timezone || "America/New_York", { count, beforeDay: before });
+    res.json(out);
+  } catch (err) {
+    captureException(err, { where: "dropIn: nights" });
+    res.status(500).json({ error: "Couldn't load the nights" });
+  }
+});
+
 // POST /:recipientId/consent { signerName, agree: true, wordingVersion }
 router.post("/:recipientId/consent", async (req, res) => {
   try {

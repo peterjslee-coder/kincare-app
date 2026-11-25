@@ -1032,11 +1032,10 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack, onNavigate
                 <OwnLoginSetup recipientId={team.care_recipient_id} firstName={team.recipient_first_name}
                   onDone={fetchTeam} />
               )}
-              {/* v1.130.0 — their phone: the simple screen, its call buttons, a note for them */}
-              {team.recipient_linked_user_id && typeof SimpleModeSettings !== 'undefined' && (
-                <SimpleModeSettings recipientId={team.care_recipient_id} firstName={team.recipient_first_name} />
-              )}
-
+              {/* v1.162.0 — Pete, 11/25: two branches under Accessibility, "Phone, and Hub(s)".
+                  Her text size and reminders belong to her phone, so they go inside that branch. */}
+              {(() => {
+                const phoneExtras = (<>
               {/* Display Settings for Care Recipient */}
               {team.recipient_linked_user_id && (() => {
                 const recipPrefs = (() => { try { return team.recipient_accessibility_prefs ? JSON.parse(team.recipient_accessibility_prefs) : {}; } catch { return {}; } })();
@@ -1214,6 +1213,11 @@ const CareTeamManage = window.CareTeamManage = ({ careTeamId, onBack, onNavigate
                   {savingNotif ? 'Saving...' : 'Save Settings'}
                 </button>
               </div>
+                </>);
+                return team.recipient_linked_user_id && typeof SimpleModeSettings !== 'undefined'
+                  ? <SimpleModeSettings recipientId={team.care_recipient_id} firstName={team.recipient_first_name} phoneExtras={phoneExtras} />
+                  : phoneExtras;
+              })()}
 
             </div>
           )}

@@ -521,6 +521,20 @@ const WN_PREVIEWS = {
     </div>
   ),
   // v1.161.0 — the caller's picture fills her tablet
+  // v1.162.0 — Accessibility: Drop in on top, then the nights
+  a11yNights: () => (
+    <div style={{ ...wnCard, padding: 10, fontSize: 11, color: 'var(--text-primary)' }}>
+      <div style={{ background: 'var(--role-color)', color: 'var(--text-on-primary)', borderRadius: 8, textAlign: 'center', padding: '6px 0', fontWeight: 800, marginBottom: 8 }}>{'\u{1F44B}'} Drop in on Mom</div>
+      {[['Tue', [[0, 33], [65, 75]]], ['Mon', [[0, 31], [67, 73], [85, 100]]], ['Sun', [[0, 35], [84, 100]]]].map(([d, ups]) => (
+        <div key={d} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+          <span style={{ width: 24, color: 'var(--text-secondary)' }}>{d}</span>
+          <span style={{ position: 'relative', flex: 1, height: 9, borderRadius: 3, background: 'var(--bg-surface)', border: '1px solid var(--border-color)', overflow: 'hidden' }}>
+            {ups.map(([a, b], i) => <span key={i} style={{ position: 'absolute', top: 0, bottom: 0, left: a + '%', width: (b - a) + '%', background: '#1b7a3d' }} />)}
+          </span>
+        </div>
+      ))}
+    </div>
+  ),
   hubVideoFill: () => (
     <div style={{ background: '#000', borderRadius: 10, aspectRatio: '16 / 10', position: 'relative', overflow: 'hidden', display: 'flex', flexDirection: 'column', alignItems: 'center', paddingTop: '6%' }}>
       <div style={{ width: '22%', aspectRatio: '1', borderRadius: '50%', background: '#d3d1c7' }} />

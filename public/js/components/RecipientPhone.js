@@ -1730,7 +1730,7 @@ const SIMPLE_SECTIONS = [
 // v1.156.0 — drop-in and awake noticing, in the Hub settings. Pete: "we just need an
 // acknowledgment that someone with a durable POA or that person has signed up for drop-ins...
 // We just wanna make sure it is recorded as purposeful." Rules: src/utils/dropIn.js.
-const HubDropInSettings = window.HubDropInSettings = ({ recipientId, name: nameProp, signOnly, onDone, onDropIn }) => {
+const HubDropInSettings = window.HubDropInSettings = ({ recipientId, name: nameProp, signOnly, onDone, onDropIn, historyElsewhere }) => {
   const { showToast } = useToast();
   const [v, setV] = useState(null);
   const [typed, setTyped] = useState('');
@@ -1846,13 +1846,13 @@ const HubDropInSettings = window.HubDropInSettings = ({ recipientId, name: nameP
             <span><strong>Notice when {name} is up</strong> <span style={{ color: 'var(--text-secondary)' }}>— movement, about 10 seconds of talking, or a touch. Only the times are kept; nothing is recorded. Last night goes into {name}'s care notes each morning, and the caregiver sees it at check-in.</span></span>
           </label>
           {/* v1.159.0 — Pete, 11/25: last night in one sentence. */}
-          {v.noticeAwake && v.nightStory && (
+          {!historyElsewhere && v.noticeAwake && v.nightStory && (
             <div data-testid="dropin-night-story" style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', padding: '8px 10px', borderRadius: 8, background: 'var(--bg-card)', borderLeft: '3px solid var(--role-color)' }}>
               {'\u{1F319}'} {v.nightStory}
             </div>
           )}
           {/* v1.158.2 — proof it is working: the last time it noticed her up. */}
-          {v.noticeAwake && (
+          {!historyElsewhere && v.noticeAwake && (
             <p style={{ ...muted, color: 'var(--text-secondary)' }} data-testid="dropin-last-noticed">
               {v.lastNoticed
                 ? <>Last noticed {name} up: {new Date(v.lastNoticed.startedAt).toLocaleString('en-US', { weekday: 'short', hour: 'numeric', minute: '2-digit' })}{'\u2013'}{new Date(v.lastNoticed.endedAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
@@ -1861,7 +1861,7 @@ const HubDropInSettings = window.HubDropInSettings = ({ recipientId, name: nameP
             </p>
           )}
           {/* v1.159.0 — Pete, 11/25: when did she go to sleep, when did it notice her again. */}
-          {v.noticeAwake && Array.isArray(v.last24) && v.last24.length > 0 && (
+          {!historyElsewhere && v.noticeAwake && Array.isArray(v.last24) && v.last24.length > 0 && (
             <details data-testid="dropin-last24" style={{ fontSize: 12.5, color: 'var(--text-secondary)' }}>
               <summary style={{ cursor: 'pointer', color: 'var(--text-primary)', fontWeight: 600 }}>The last 24 hours</summary>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 3, marginTop: 6 }}>
@@ -1885,7 +1885,160 @@ const HubDropInSettings = window.HubDropInSettings = ({ recipientId, name: nameP
   );
 };
 
-const SimpleModeSettings = window.SimpleModeSettings = ({ recipientId, firstName }) => {
+// ─── v1.162.0 — Accessibility, reorganised (Pete, 11/25) ───
+// Top: "<Name> right now" (Drop in, Video, Voice, Leave a note) and Nights. Below: two folds,
+// "<Name>'s phone" and "<Name>'s Hub", each with a one-line summary of what's set.
+const simpleHm = (hm) => {
+  const [h, m] = String(hm || '').split(':').map(Number);
+  if (!Number.isFinite(h)) return '';
+  return `${h % 12 === 0 ? 12 : h % 12}${m ? ':' + String(m).padStart(2, '0') : ''} ${h >= 12 ? 'PM' : 'AM'}`;
+};
+
+const A11yBranch = ({ stickyKey, icon, title, summary, testid, children }) => {
+  const sticky = typeof useStickySection === 'function' ? useStickySection(stickyKey, false) : null;
+  const [local, setLocal] = useState(false);
+  const open = sticky ? sticky[0] : local;
+  const setOpen = sticky ? sticky[1] : setLocal;
+  return (
+    <div data-testid={testid} style={{ border: '1px solid var(--border-color)', borderRadius: 12, marginTop: 10, background: 'var(--bg-card)' }}>
+      <button type="button" onClick={() => setOpen(!open)} aria-expanded={open}
+        style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit' }}>
+        <span aria-hidden="true" style={{ fontSize: 20 }}>{icon}</span>
+        <span style={{ flex: 1, minWidth: 0 }}>
+          <span style={{ display: 'block', fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>{title}</span>
+          {summary && <span style={{ display: 'block', fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>{summary}</span>}
+        </span>
+        <span aria-hidden="true" style={{ color: 'var(--text-muted)', transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}>{'▾'}</span>
+      </button>
+      {open && <div style={{ padding: '4px 14px 14px' }}>{children}</div>}
+    </div>
+  );
+};
+
+const HubNowCard = ({ recipientId, name, cfg, hub, callHost, noteOn, noteUI }) => {
+  const { showToast } = useToast();
+  const [v, setV] = useState(null);
+  const [noteOpen, setNoteOpen] = useState(false);
+  useEffect(() => {
+    let live = true;
+    (async () => { try { const r = await apiFetch(`/api/drop-in/${recipientId}`); if (r && r.ok && live) setV(await r.json()); } catch { /* no drop-in row */ } })();
+    return () => { live = false; };
+  }, [recipientId]);
+  const ring = (type, opts) => {
+    const to = opts && opts.dropIn ? v.hubUserId : cfg.recipientUserId;
+    if (!callHost.startCall({ userId: to, firstName: name, photo: cfg.recipientPhoto || null }, type, opts)) showToast('Not connected right now. Try again in a moment.', 'error');
+  };
+  const hs = cfg.hubStatus;
+  const bits = [];
+  if (hub && hub.on && hs) bits.push(hs.online ? 'Hub online' : 'Hub offline');
+  if (v && v.lastNoticed) bits.push(`last noticed up ${new Date(v.lastNoticed.endedAt).toLocaleString('en-US', { weekday: 'short', hour: 'numeric', minute: '2-digit' })}`);
+  const canDrop = !!(v && v.mayDropIn && v.hubUserId);
+  const why = !hub || !hub.on ? null
+    : !v ? null
+    : !v.consent ? `Drop-in needs ${name}'s signed consent. Set it up under ${name}'s Hub below.`
+    : !v.hubOn ? null
+    : `You're not on the drop-in list. Add yourself under ${name}'s Hub below.`;
+  const btn = { flex: 1, minWidth: 0, padding: '10px 8px', borderRadius: 10, border: '1px solid var(--role-color)', background: 'var(--bg-card)', color: 'var(--role-color)', fontWeight: 700, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' };
+  return (
+    <div data-testid="a11y-now" style={{ border: '1px solid var(--border-color)', borderRadius: 12, padding: 14, background: 'var(--bg-card)' }}>
+      <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>{name} right now</div>
+      {bits.length > 0 && <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>{bits.join(' · ')}</div>}
+      {hub && hub.on && (canDrop ? (
+        <button type="button" data-testid="dropin-now" onClick={() => ring('video', { dropIn: true })}
+          style={{ width: '100%', minHeight: 52, marginTop: 12, borderRadius: 10, border: 'none', background: 'var(--role-color)', color: 'var(--text-on-primary)', fontWeight: 800, fontSize: 16, cursor: 'pointer', fontFamily: 'inherit' }}>
+          {'\u{1F44B}'} Drop in on {name}
+        </button>
+      ) : why && <div style={{ fontSize: 12.5, color: 'var(--text-secondary)', marginTop: 10, padding: '8px 10px', borderRadius: 8, background: 'var(--bg-surface)' }}>{why}</div>)}
+      <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+        <button type="button" data-testid="call-recipient-video" style={btn} onClick={() => ring('video')}>{'\u{1F3A5}'} Video call</button>
+        <button type="button" data-testid="call-recipient-voice" style={btn} onClick={() => ring('voice')}>{'\u{1F4DE}'} Voice call</button>
+        {noteOn && <button type="button" data-testid="a11y-note" style={{ ...btn, ...(noteOpen ? { background: 'var(--role-color)', color: 'var(--text-on-primary)' } : {}) }} onClick={() => setNoteOpen(!noteOpen)}>{'\u{1F4DD}'} Leave a note</button>}
+      </div>
+      {noteOn && noteOpen && <div style={{ marginTop: 10 }}>{noteUI}</div>}
+    </div>
+  );
+};
+
+const HubNights = ({ recipientId, name }) => {
+  const [data, setData] = useState(null);
+  const [more, setMore] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [openDay, setOpenDay] = useState(null);
+  const fetchPage = async (before) => {
+    const r = await apiFetch(`/api/drop-in/${recipientId}/nights${before ? '?before=' + before : ''}`);
+    return r && r.ok ? r.json() : null;
+  };
+  useEffect(() => { let live = true; fetchPage(null).then((d) => { if (live && d) { setData(d); setMore(d.more); } }).catch(() => {}); return () => { live = false; }; }, [recipientId]);
+  if (!data || !data.nights.length) return null;
+  const total = data.nightMinutes || 900;
+  const loadMore = async () => {
+    setBusy(true);
+    try {
+      const d = await fetchPage(data.nights[data.nights.length - 1].day);
+      if (d) { setData({ ...data, nights: [...data.nights, ...d.nights] }); setMore(d.more); }
+    } catch { /* keep what's shown */ }
+    setBusy(false);
+  };
+  const pct = (m) => `${Math.max(0, Math.min(100, (m / total) * 100))}%`;
+  const ticks = ['6p', '9p', '12a', '3a', '6a', '9a'];
+  const latest = data.nights[0];
+  return (
+    <div data-testid="a11y-nights" style={{ border: '1px solid var(--border-color)', borderRadius: 12, padding: 14, background: 'var(--bg-card)', marginTop: 10 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+        <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>Nights</div>
+        <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>6 PM {'→'} 9 AM</div>
+      </div>
+      <div data-testid="dropin-night-story" style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', margin: '8px 0 12px', padding: '8px 10px', borderRadius: 8, background: 'var(--bg-surface)', lineHeight: 1.45 }}>
+        {'\u{1F319}'} {latest.inProgress ? 'Tonight so far: ' : ''}{latest.story}
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {data.nights.map((n) => (
+          <div key={n.day}>
+            <button type="button" onClick={() => setOpenDay(openDay === n.day ? null : n.day)} data-testid={'night-' + n.day} aria-expanded={openDay === n.day}
+              style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: 'inherit' }}>
+              <span style={{ width: 58, flexShrink: 0, fontSize: 12, color: 'var(--text-secondary)', textAlign: 'left' }}>{n.label}</span>
+              <span style={{ position: 'relative', flex: 1, height: 16, borderRadius: 4, background: 'var(--bg-surface)', overflow: 'hidden', border: '1px solid var(--border-color)' }}>
+                {n.notWatching.map(([a, b], i) => <span key={'w' + i} style={{ position: 'absolute', top: 0, bottom: 0, left: pct(a), width: pct(b - a), background: 'repeating-linear-gradient(45deg, var(--border-color) 0 2px, transparent 2px 5px)' }} />)}
+                {n.up.map(([a, b], i) => <span key={'u' + i} style={{ position: 'absolute', top: 0, bottom: 0, left: pct(a), width: pct(Math.max(b - a, 4)), background: '#1b7a3d', borderRadius: 2 }} />)}
+              </span>
+            </button>
+            {openDay === n.day && (
+              <div style={{ margin: '6px 0 6px 68px', fontSize: 12.5, color: 'var(--text-secondary)' }}>
+                <div style={{ color: 'var(--text-primary)', marginBottom: 4 }}>{n.story}</div>
+                {n.entries.map((e, i) => (
+                  <div key={i} style={{ display: 'flex', gap: 8 }}>
+                    <span style={{ minWidth: 128, fontVariantNumeric: 'tabular-nums', color: 'var(--text-primary)' }}>{e.fromLabel}{'–'}{e.toLabel}</span>
+                    <span style={{ color: e.kind === 'up' ? '#1b7a3d' : 'var(--text-secondary)', fontWeight: e.kind === 'up' ? 700 : 400 }}>
+                      {e.kind === 'up' ? `Up · ${[e.person && 'person seen', e.motion && 'movement', e.talking && 'talking', e.touches && 'touching the screen'].filter(Boolean).join(', ') || 'noticed'}`
+                        : e.kind === 'quiet' ? 'Quiet (watching, nothing noticed)' : 'Not watching'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--text-muted)', margin: '4px 0 0 68px' }}>
+        {ticks.map((t) => <span key={t}>{t}</span>)}
+      </div>
+      <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', fontSize: 11.5, color: 'var(--text-secondary)', marginTop: 8 }}>
+        <span><span style={{ display: 'inline-block', width: 10, height: 10, background: '#1b7a3d', borderRadius: 2, verticalAlign: -1 }} /> Up</span>
+        <span><span style={{ display: 'inline-block', width: 10, height: 10, background: 'var(--bg-surface)', border: '1px solid var(--border-color)', borderRadius: 2, verticalAlign: -1 }} /> Quiet</span>
+        <span><span style={{ display: 'inline-block', width: 10, height: 10, background: 'repeating-linear-gradient(45deg, var(--text-muted) 0 2px, transparent 2px 5px)', borderRadius: 2, verticalAlign: -1 }} /> Hub not watching</span>
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 10 }}>
+        <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Tap a night for its hour-by-hour list. Every night is kept.</span>
+        {more && <button type="button" onClick={loadMore} disabled={busy} data-testid="nights-more"
+          style={{ background: 'none', border: 'none', color: 'var(--accent-color)', fontWeight: 700, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
+          {busy ? 'Loading…' : 'Earlier nights'}
+        </button>}
+      </div>
+    </div>
+  );
+};
+
+const SimpleModeSettings = window.SimpleModeSettings = ({ recipientId, firstName, phoneExtras }) => {
   const { showToast } = useToast();
   const [cfg, setCfg] = useState(null);
   const [on, setOn] = useState(false);
@@ -1967,9 +2120,53 @@ const SimpleModeSettings = window.SimpleModeSettings = ({ recipientId, firstName
 
   const box = { marginBottom: 20, paddingBottom: 20, borderBottom: '1px solid var(--border-light, #f0f0f0)' };
   const sub = { fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', margin: '4px 0 6px' };
+  const branchSummaryPhone = on
+    ? `Simple screen on \u00b7 ${buttonsUsed} big button${buttonsUsed === 1 ? '' : 's'}${show.text && textPicked.length ? ' \u00b7 texts go to ' + textPicked.length : ''}`
+    : 'Simple screen off';
+  const hs = cfg.hubStatus;
+  const branchSummaryHub = !hub ? null : hub.on
+    ? `On${hs ? (hs.online ? ' \u00b7 online' : ' \u00b7 offline') : ''} \u00b7 dark ${simpleHm(hub.dimFrom)}\u2013${simpleHm(hub.dimTo)}${hub.kiosk !== false ? ' \u00b7 stays on InPlace' : ''}`
+    : 'Off';
+  // v1.162.0 — Pete, 11/25: "be able to drop in on betty from the accessibility page at the top,
+  // and to get a report of movement and awake times from previous nights. Collapse areas that
+  // probably get set once." Then: "two branches clearly stated under accessibility: Phone, and
+  // Hub(s)" and "leave a note is great there".
   return (
-    <div style={box}>
-      <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--role-color)', marginBottom: 6 }}>{name}'s phone</div>
+    <div style={box} data-testid="a11y-two-branches">
+      {cfg.recipientUserId && (
+        <HubNowCard recipientId={recipientId} name={name} cfg={cfg} hub={hub} callHost={callHost}
+          noteOn={on && !!show.notesFromFamily} noteUI={on && show.notesFromFamily ? (<>
+              <div style={sub}>Leave {name} a note</div>
+              <textarea value={noteText} maxLength={500} rows={3} onChange={(e) => setNoteText(e.target.value)}
+                placeholder="I'll be there at 10. Stay in the house."
+                style={{ width: '100%', padding: '10px 12px', border: '1px solid #d0d0d0', borderRadius: 8, fontSize: 15, fontFamily: 'inherit', boxSizing: 'border-box', resize: 'vertical' }} />
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginTop: 6 }}>
+                <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Shows big on {name}'s screen, and the phone gets a "tap to read" notice.</span>
+                <button onClick={sendNote} disabled={sending || !noteText.trim()} style={{ padding: '8px 16px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: 'pointer', opacity: (sending || !noteText.trim()) ? 0.6 : 1, whiteSpace: 'nowrap' }}>
+                  {sending ? 'Sending…' : 'Send'}
+                </button>
+              </div>
+              {lastNote && (
+                <div style={{ marginTop: 10, padding: '8px 10px', borderRadius: 8, background: 'var(--bg-surface)', fontSize: 13, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'space-between' }}>
+                  <span>
+                    {lastNote.readAt ? `${name} read: ` : `On ${name}'s screen now: `}<span style={{ color: 'var(--text-primary)' }}>"{lastNote.content}"</span>
+                    <br /><span style={{ fontSize: 12 }}>{noteStatusLine(lastNote, name)}</span>
+                    {!lastNote.readAt && <><br /><span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Sending a new note replaces this one.</span></>}
+                  </span>
+                  {!lastNote.readAt && (
+                    <button onClick={() => save({ clearNote: true }, `Cleared from ${name}'s screen`)} disabled={saving}
+                      style={{ padding: '6px 12px', background: 'var(--bg-card)', color: 'var(--text-primary)', border: '1px solid #d0d0d0', borderRadius: 8, fontWeight: 600, fontSize: 12, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                      Clear
+                    </button>
+                  )}
+                </div>
+              )}
+          </>) : null} />
+      )}
+      {callHost.ui}
+      {hub && hub.on && <HubNights recipientId={recipientId} name={name} />}
+
+      <A11yBranch stickyKey={`a11y.phone.${recipientId}`} icon={'\u{1F4F1}'} title={`${name}'s phone`} summary={branchSummaryPhone} testid="a11y-branch-phone">
       <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 14, color: 'var(--text-primary)', cursor: 'pointer', marginBottom: 6 }}>
         <input type="checkbox" checked={on} disabled={saving} onChange={(e) => save({ on: e.target.checked })} style={{ width: 20, height: 20, accentColor: 'var(--role-color)' }} />
         <span><strong>Simple screen</strong>: one screen, very large text. {name} sees only what you tick below. No menus, no money.</span>
@@ -1978,8 +2175,8 @@ const SimpleModeSettings = window.SimpleModeSettings = ({ recipientId, firstName
         Only the team leader can change this. Works inside iPhone Assistive Access.
       </p>
 
-      {on && (
-        <>
+        {on && (
+          <>
           <div style={sub}>What {name} can see <span style={{ fontWeight: 400, color: 'var(--text-muted)' }}>· up to {cfg.maxButtons || 3} big buttons (each call button, Text, Tell the family, Messages): {buttonsUsed} used</span></div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14 }}>
             {SIMPLE_SECTIONS.map(([key, title, desc]) => (
@@ -1997,22 +2194,64 @@ const SimpleModeSettings = window.SimpleModeSettings = ({ recipientId, firstName
               : <>{name} hasn't opened the simple screen yet.</>}
           </div>
 
-          {/* v1.153.0 — call their screen (Simple screen or Hub) in InPlace */}
-          {cfg.recipientUserId && (
-            <div style={{ display: 'flex', gap: 8, margin: '0 0 14px', flexWrap: 'wrap' }}>
-              {[['voice', '📞 Voice call'], ['video', '🎥 Video call']].map(([t, l]) => (
-                <button key={t} data-testid={`call-recipient-${t}`}
-                  onClick={() => { if (!callHost.startCall({ userId: cfg.recipientUserId, firstName: name, photo: cfg.recipientPhoto || null }, t)) showToast('Not connected right now. Try again in a moment.', 'error'); }}
-                  style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid var(--role-color)', background: 'var(--bg-card)', color: 'var(--role-color)', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
-                  {l} {name}
-                </button>
-              ))}
-            </div>
+          {show.text && (
+            <>
+              <div style={sub}>Who the Text button goes to (one group)</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 6 }}>
+                {cfg.candidates.map((c) => (
+                  <label key={c.userId} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text-primary)', cursor: 'pointer' }}>
+                    <input type="checkbox" disabled={saving} checked={textPicked.includes(c.userId)}
+                      onChange={() => {
+                        const next = textPicked.includes(c.userId) ? textPicked.filter((x) => x !== c.userId) : [...textPicked, c.userId];
+                        if (next.length > (cfg.maxText || 6)) { showToast(`Pick up to ${cfg.maxText || 6} people`, 'error'); return; }
+                        setTextPicked(next);
+                        save({ textUserIds: next });
+                      }}
+                      style={{ width: 16, height: 16, accentColor: 'var(--role-color)' }} />
+                    {c.firstName} {c.lastName}
+                  </label>
+                ))}
+              </div>
+              <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '0 0 14px', lineHeight: 1.5 }}>
+                {textPicked.length
+                  ? `The group "${name}'s texts" is in Messages for everyone picked.`
+                  : `Pick at least one person, and the Text button appears on ${name}'s screen.`}
+              </p>
+            </>
           )}
-          {callHost.ui}
 
+          {show.calls && (
+            <>
+              <div style={sub}>Who the call buttons ring (up to {cfg.maxCalls})</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 14 }}>
+                {cfg.candidates.map((c) => (
+                  <label key={c.userId} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text-primary)', cursor: 'pointer' }}>
+                    <input type="checkbox" disabled={saving} checked={picked.includes(c.userId)} onChange={() => togglePerson(c.userId)} style={{ width: 16, height: 16, accentColor: 'var(--role-color)' }} />
+                    {c.firstName} {c.lastName}
+                  </label>
+                ))}
+              </div>
+              {/* v1.153.0 — in-app calls: voice or video */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 14, fontSize: 13, color: 'var(--text-primary)', margin: '-6px 0 14px' }}>
+                <span style={{ color: 'var(--text-secondary)' }}>Calls start as</span>
+                {[['voice', 'Voice'], ['video', 'Video']].map(([v, l]) => (
+                  <label key={v} style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+                    <input type="radio" name={`calltype-${recipientId}`} disabled={saving} checked={(callType || 'voice') === v} onChange={() => save({ callType: v })} style={{ accentColor: 'var(--role-color)' }} />
+                    {l}
+                  </label>
+                ))}
+              </div>
+            </>
+          )}
+
+          </>
+        )}
+        {phoneExtras}
+      </A11yBranch>
+
+      {hub && (
+        <A11yBranch stickyKey={`a11y.hub.${recipientId}`} icon={'\u{1F5A5}\uFE0F'} title={`${name}'s Hub`} summary={branchSummaryHub} testid="a11y-branch-hub">
           {/* v1.152.0 — InPlace Hub: the same screen on a tablet on the kitchen counter */}
-          {hub && (
             <div data-testid="hub-settings" style={{ margin: '0 0 16px', padding: '12px 14px', borderRadius: 10, border: '1px solid var(--border-color)', background: 'var(--bg-surface)' }}>
               <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 13, color: 'var(--text-primary)', cursor: 'pointer' }}>
                 <input type="checkbox" disabled={saving} checked={!!hub.on} onChange={(e) => save({ hub: { on: e.target.checked } }, e.target.checked ? 'Hub on' : 'Hub off')}
@@ -2075,96 +2314,16 @@ const SimpleModeSettings = window.SimpleModeSettings = ({ recipientId, firstName
                     <input type="checkbox" disabled={saving} checked={hub.kiosk !== false} onChange={(e) => save({ hub: { kiosk: e.target.checked } }, e.target.checked ? 'Tablet stays on InPlace' : 'Tablet unlocked')} style={{ width: 16, height: 16, accentColor: 'var(--role-color)' }} data-testid="hub-kiosk-setting" />
                     <span><strong>Keep the tablet on InPlace</strong> <span style={{ color: 'var(--text-secondary)' }}>— on a tablet set up as a Hub, Home and the app switcher can't leave this screen, and it comes back here after a restart. Turn off to use the tablet for something else, like Wi-Fi settings.</span></span>
                   </label>
-                  <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: 0, lineHeight: 1.5 }}>
+                  <details style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5 }}>
+                    <summary style={{ cursor: 'pointer', color: 'var(--text-secondary)', fontWeight: 600 }}>Setting up a tablet</summary>
                     To set up the tablet: install InPlace Care from Google Play, sign in as {name}, and turn the tablet sideways. Pin the app (Settings → Security → Pin app) so it stays on this screen, or ask InPlace to set it up as a Hub so it stays put by itself.
-                  </p>
-                  {typeof HubDropInSettings !== 'undefined' && <HubDropInSettings recipientId={recipientId} name={name}
-                    onDropIn={(hubUserId) => { if (!callHost.startCall({ userId: hubUserId, firstName: name, photo: cfg.recipientPhoto || null }, 'video', { dropIn: true })) showToast('Not connected right now. Try again in a moment.', 'error'); }} />}
+                  </details>
+                  {/* v1.162.0 — the Drop in button and the nights moved to the top of Accessibility. */}
+                  {typeof HubDropInSettings !== 'undefined' && <HubDropInSettings recipientId={recipientId} name={name} historyElsewhere />}
                 </div>
               )}
             </div>
-          )}
-
-          {show.text && (
-            <>
-              <div style={sub}>Who the Text button goes to (one group)</div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 6 }}>
-                {cfg.candidates.map((c) => (
-                  <label key={c.userId} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text-primary)', cursor: 'pointer' }}>
-                    <input type="checkbox" disabled={saving} checked={textPicked.includes(c.userId)}
-                      onChange={() => {
-                        const next = textPicked.includes(c.userId) ? textPicked.filter((x) => x !== c.userId) : [...textPicked, c.userId];
-                        if (next.length > (cfg.maxText || 6)) { showToast(`Pick up to ${cfg.maxText || 6} people`, 'error'); return; }
-                        setTextPicked(next);
-                        save({ textUserIds: next });
-                      }}
-                      style={{ width: 16, height: 16, accentColor: 'var(--role-color)' }} />
-                    {c.firstName} {c.lastName}
-                  </label>
-                ))}
-              </div>
-              <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '0 0 14px', lineHeight: 1.5 }}>
-                {textPicked.length
-                  ? `The group "${name}'s texts" is in Messages for everyone picked.`
-                  : `Pick at least one person, and the Text button appears on ${name}'s screen.`}
-              </p>
-            </>
-          )}
-
-          {show.calls && (
-            <>
-              <div style={sub}>Who the call buttons ring (up to {cfg.maxCalls})</div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 14 }}>
-                {cfg.candidates.map((c) => (
-                  <label key={c.userId} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text-primary)', cursor: 'pointer' }}>
-                    <input type="checkbox" disabled={saving} checked={picked.includes(c.userId)} onChange={() => togglePerson(c.userId)} style={{ width: 16, height: 16, accentColor: 'var(--role-color)' }} />
-                    {c.firstName} {c.lastName}
-                  </label>
-                ))}
-              </div>
-              {/* v1.153.0 — in-app calls: voice or video */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 14, fontSize: 13, color: 'var(--text-primary)', margin: '-6px 0 14px' }}>
-                <span style={{ color: 'var(--text-secondary)' }}>Calls start as</span>
-                {[['voice', 'Voice'], ['video', 'Video']].map(([v, l]) => (
-                  <label key={v} style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
-                    <input type="radio" name={`calltype-${recipientId}`} disabled={saving} checked={(callType || 'voice') === v} onChange={() => save({ callType: v })} style={{ accentColor: 'var(--role-color)' }} />
-                    {l}
-                  </label>
-                ))}
-              </div>
-            </>
-          )}
-
-          {show.notesFromFamily && (
-            <>
-              <div style={sub}>Leave {name} a note</div>
-              <textarea value={noteText} maxLength={500} rows={3} onChange={(e) => setNoteText(e.target.value)}
-                placeholder="I'll be there at 10. Stay in the house."
-                style={{ width: '100%', padding: '10px 12px', border: '1px solid #d0d0d0', borderRadius: 8, fontSize: 15, fontFamily: 'inherit', boxSizing: 'border-box', resize: 'vertical' }} />
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginTop: 6 }}>
-                <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Shows big on {name}'s screen, and the phone gets a "tap to read" notice.</span>
-                <button onClick={sendNote} disabled={sending || !noteText.trim()} style={{ padding: '8px 16px', background: 'var(--role-color)', color: 'var(--text-on-primary)', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: 'pointer', opacity: (sending || !noteText.trim()) ? 0.6 : 1, whiteSpace: 'nowrap' }}>
-                  {sending ? 'Sending…' : 'Send'}
-                </button>
-              </div>
-              {lastNote && (
-                <div style={{ marginTop: 10, padding: '8px 10px', borderRadius: 8, background: 'var(--bg-surface)', fontSize: 13, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'space-between' }}>
-                  <span>
-                    {lastNote.readAt ? `${name} read: ` : `On ${name}'s screen now: `}<span style={{ color: 'var(--text-primary)' }}>"{lastNote.content}"</span>
-                    <br /><span style={{ fontSize: 12 }}>{noteStatusLine(lastNote, name)}</span>
-                    {!lastNote.readAt && <><br /><span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Sending a new note replaces this one.</span></>}
-                  </span>
-                  {!lastNote.readAt && (
-                    <button onClick={() => save({ clearNote: true }, `Cleared from ${name}'s screen`)} disabled={saving}
-                      style={{ padding: '6px 12px', background: 'var(--bg-card)', color: 'var(--text-primary)', border: '1px solid #d0d0d0', borderRadius: 8, fontWeight: 600, fontSize: 12, cursor: 'pointer', whiteSpace: 'nowrap' }}>
-                      Clear
-                    </button>
-                  )}
-                </div>
-              )}
-            </>
-          )}
-        </>
+        </A11yBranch>
       )}
     </div>
   );

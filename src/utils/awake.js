@@ -119,11 +119,15 @@ async function recordWatching(db, recipientId) {
  * Labels are care-location times (CLAUDE.md timezone principle).
  */
 async function timeline(db, recipientId, tz, hours = 24, now = new Date()) {
-  const since = new Date(now.getTime() - hours * 3600000);
+  return timelineBetween(db, recipientId, tz, new Date(now.getTime() - hours * 3600000), now);
+}
+
+/** The same list for any window [since, now) — v1.162.0 uses it for each past night. */
+async function timelineBetween(db, recipientId, tz, since, now) {
   const ups = await db.prepare(`SELECT started_at, ended_at, motion_minutes, voice_minutes, touches, person_minutes FROM hub_awake
-    WHERE care_recipient_id = ? AND ended_at > ? ORDER BY started_at`).all(recipientId, since.toISOString());
+    WHERE care_recipient_id = ? AND ended_at > ? AND started_at < ? ORDER BY started_at`).all(recipientId, since.toISOString(), now.toISOString());
   const watches = await db.prepare(`SELECT started_at, ended_at FROM hub_watch
-    WHERE care_recipient_id = ? AND ended_at > ? ORDER BY started_at`).all(recipientId, since.toISOString());
+    WHERE care_recipient_id = ? AND ended_at > ? AND started_at < ? ORDER BY started_at`).all(recipientId, since.toISOString(), now.toISOString());
   const clip = (d) => new Date(Math.max(since.getTime(), Math.min(now.getTime(), new Date(d).getTime())));
   const out = [];
   const push = (kind, from, to, extra = {}) => {
@@ -171,24 +175,30 @@ async function nightStory(db, recipientId, firstName, tz, now = new Date()) {
   const today = getTodayStringInZone(tz);
   const [hh] = localTimeStringInZone(now, tz).split(":").map(Number);
   const startDay = hh < 18 ? addDaysToDateString(today, -1) : today;
+  return storyFor(db, recipientId, firstName, tz, startDay, now, null);
+}
+
+/** The sentence for the night that starts at 6 PM on startDay. `until` closes a past night. */
+async function storyFor(db, recipientId, firstName, tz, startDay, now, until) {
   const start = zonedDateTimeToInstant(startDay, "18:00", tz);
   const rows = await db.prepare(`SELECT started_at, ended_at FROM hub_awake
-    WHERE care_recipient_id = ? AND ended_at > ? ORDER BY started_at`).all(recipientId, start.toISOString());
+    WHERE care_recipient_id = ? AND ended_at > ? AND started_at < ? ORDER BY started_at`)
+    .all(recipientId, start.toISOString(), (until || now).toISOString());
   const ps = [];
   for (const r of rows) {
     const from = new Date(Math.max(new Date(r.started_at).getTime(), start.getTime()));
-    const to = new Date(r.ended_at);
+    const to = new Date(until ? Math.min(new Date(r.ended_at).getTime(), until.getTime()) : new Date(r.ended_at).getTime());
     const last = ps[ps.length - 1];
     if (last && from.getTime() - last.to.getTime() <= STORY_JOIN_MIN * 60000) { if (to > last.to) last.to = to; } else ps.push({ from, to });
   }
   const who = firstName || "She";
-  if (!ps.length) return `The Hub hasn't noticed ${who} up since 6 PM.`;
+  if (!ps.length) return until ? `The Hub didn't notice ${who} up that night.` : `The Hub hasn't noticed ${who} up since 6 PM.`;
   const t = (d) => fmt(round15(d), tz).replace(":00 ", " ");
   const midnight = zonedDateTimeToInstant(addDaysToDateString(startDay, 1), "00:00", tz);
   const was = [];
   let since = null;
   ps.forEach((p, i) => {
-    const ongoing = i === ps.length - 1 && now.getTime() - p.to.getTime() < 10 * 60000;
+    const ongoing = !until && i === ps.length - 1 && now.getTime() - p.to.getTime() < 10 * 60000;
     const evening = i === 0 && p.from < midnight && p.to <= new Date(midnight.getTime() + 3 * 3600000);
     if (ongoing) since = p.from;
     else if (evening) was.push(`awake until about ${t(p.to)}`);
@@ -199,4 +209,56 @@ async function nightStory(db, recipientId, firstName, tz, now = new Date()) {
   return `${who} was ${was.join(", then ")}${nowBit ? `, and ${nowBit}` : ""}.`;
 }
 
-module.exports = { lastNight, sentence, nightSummary, recordNightNote, recordWatching, timeline, nightStory, MERGE_GAP_MIN, MIN_TOTAL_MIN, WATCH_JOIN_MIN };
+// ─── v1.162.0 — every night, kept and shown 7 at a time ───
+// Pete, 11/25: "I want all the info stored to track over time. this is gold mine information for
+// caretakers in a progressing disease. Shows 7, keeps others if expanded." Nothing here deletes:
+// hub_awake and hub_watch keep every night. A night runs 6 PM to 9 AM in the care-location time
+// zone and is named by its evening ("Mon 11/24" is Monday night into Tuesday morning).
+const NIGHT_FROM = "18:00";
+const NIGHT_TO = "09:00";
+const NIGHT_MIN = 15 * 60;
+
+/**
+ * `count` nights, newest first, ending with the night whose evening is before `beforeDay`
+ * (YYYY-MM-DD) or, with none given, the most recent night (tonight's, once it's 6 PM).
+ * Each: { day, label, story, up: [[fromMin, toMin, person]], notWatching: [[fromMin, toMin]],
+ *         upMinutes, entries } — minutes count from 6 PM; entries is the hour-by-hour list.
+ * `more` says whether anything older is stored.
+ */
+async function nights(db, recipientId, firstName, tz, { count = 7, beforeDay = null, now = new Date() } = {}) {
+  // Today as of `now` in the care-location zone (not the server clock, so tests can pin it).
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
+  const [hh] = localTimeStringInZone(now, tz).split(":").map(Number);
+  let day = beforeDay ? addDaysToDateString(beforeDay, -1) : (hh < 18 ? addDaysToDateString(today, -1) : today);
+  const first = await db.prepare(`SELECT MIN(t) AS t FROM (
+      SELECT MIN(started_at) AS t FROM hub_awake WHERE care_recipient_id = ?
+      UNION ALL SELECT MIN(started_at) AS t FROM hub_watch WHERE care_recipient_id = ?) x`).get(recipientId, recipientId);
+  const earliest = first && first.t ? new Date(first.t) : null;
+  const out = [];
+  for (let i = 0; i < count; i++, day = addDaysToDateString(day, -1)) {
+    const start = zonedDateTimeToInstant(day, NIGHT_FROM, tz);
+    const fullEnd = zonedDateTimeToInstant(addDaysToDateString(day, 1), NIGHT_TO, tz);
+    if (!earliest || fullEnd <= earliest) break;
+    const end = fullEnd > now ? now : fullEnd;
+    const entries = await timelineBetween(db, recipientId, tz, start, end);
+    const toMin = (iso) => Math.round((new Date(iso).getTime() - start.getTime()) / 60000);
+    const up = entries.filter((e) => e.kind === "up").map((e) => [toMin(e.from), toMin(e.to), !!e.person]);
+    // Nothing reported at all that night: the whole night is unknown, never "quiet".
+    const notWatching = entries.length
+      ? entries.filter((e) => e.kind === "notWatching").map((e) => [toMin(e.from), toMin(e.to)])
+      : [[0, toMin(end.toISOString())]];
+    const story = await storyFor(db, recipientId, firstName, tz, day, now, end < now ? end : null);
+    const [y, m, d] = day.split("-").map(Number);
+    const weekday = new Date(Date.UTC(y, m - 1, d, 12)).toLocaleDateString("en-US", { weekday: "short", timeZone: "UTC" });
+    out.push({
+      day, label: `${weekday} ${m}/${d}`, inProgress: fullEnd > now,
+      story: entries.length ? story : `The Hub wasn't watching that night.`,
+      up, notWatching, upMinutes: up.reduce((n, [a, b]) => n + (b - a), 0), entries,
+    });
+  }
+  const oldest = out.length ? out[out.length - 1].day : day;
+  const more = !!earliest && earliest < zonedDateTimeToInstant(oldest, NIGHT_FROM, tz);
+  return { nights: out, more, nightMinutes: NIGHT_MIN, from: NIGHT_FROM, to: NIGHT_TO };
+}
+
+module.exports = { nights, timelineBetween, lastNight, sentence, nightSummary, recordNightNote, recordWatching, timeline, nightStory, MERGE_GAP_MIN, MIN_TOTAL_MIN, WATCH_JOIN_MIN };
