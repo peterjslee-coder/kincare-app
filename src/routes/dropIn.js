@@ -268,22 +268,160 @@ router.post("/:recipientId/awake", async (req, res) => {
     const last = await db.prepare("SELECT * FROM hub_awake WHERE care_recipient_id = ? ORDER BY ended_at DESC LIMIT 1").get(a.cr.id);
     const joins = last && (Date.now() - new Date(last.ended_at).getTime()) <= AWAKE_JOIN_MIN * 60000;
     // A person seen within the last few minutes: the stretch she is in.
-    const personRecently = !!(last && (last.person_minutes || 0) > 0 && (Date.now() - new Date(last.ended_at).getTime()) <= PERSON_RECENT_MIN * 60000);
+    // v1.164.0 — "recently" is measured from the last time a person was actually SEEN
+    // (last_person_at), not from the stretch's end. The end moves every minute the TV talks, so
+    // one sighting at 6 PM used to keep Betty "up" until morning (Pete, 11/26).
+    const lastSeen = last && last.last_person_at ? new Date(last.last_person_at).getTime() : 0;
+    const personRecently = !!lastSeen && (Date.now() - lastSeen) <= PERSON_RECENT_MIN * 60000;
+    // v1.164.0 — with no person check running, sound and movement can't be told from the TV,
+    // so only a touch counts. The Hub's status line says the check isn't working.
     const awake = person === null
-      ? (motion || talking || touches > 0)                         // no person check: the old rule
+      ? touches > 0
       : (person || touches > 0 || ((motion || talking) && personRecently)); // a person, not a TV
-    if (!awake) return res.json({ recorded: false });
+    const review = await require("../utils/hubReview").isOn(db, a.cr.id);
+    if (!awake) return res.json({ recorded: false, review });
     if (joins) {
-      await db.prepare(`UPDATE hub_awake SET ended_at = NOW(), motion_minutes = motion_minutes + ?, voice_minutes = voice_minutes + ?, touches = touches + ?, person_minutes = person_minutes + ? WHERE id = ?`)
-        .run(motion ? 1 : 0, talking ? 1 : 0, touches, person ? 1 : 0, last.id);
+      await db.prepare(`UPDATE hub_awake SET ended_at = NOW(), motion_minutes = motion_minutes + ?, voice_minutes = voice_minutes + ?, touches = touches + ?, person_minutes = person_minutes + ?, last_person_at = CASE WHEN ? THEN NOW() ELSE last_person_at END WHERE id = ?`)
+        .run(motion ? 1 : 0, talking ? 1 : 0, touches, person ? 1 : 0, !!person, last.id);
     } else {
-      await db.prepare(`INSERT INTO hub_awake (id, care_recipient_id, started_at, ended_at, motion_minutes, voice_minutes, touches, person_minutes) VALUES (?, ?, NOW() - INTERVAL '1 minute', NOW(), ?, ?, ?, ?)`)
-        .run(uuid(), a.cr.id, motion ? 1 : 0, talking ? 1 : 0, touches, person ? 1 : 0);
+      await db.prepare(`INSERT INTO hub_awake (id, care_recipient_id, started_at, ended_at, motion_minutes, voice_minutes, touches, person_minutes, last_person_at) VALUES (?, ?, NOW() - INTERVAL '1 minute', NOW(), ?, ?, ?, ?, CASE WHEN ? THEN NOW() ELSE NULL END)`)
+        .run(uuid(), a.cr.id, motion ? 1 : 0, talking ? 1 : 0, touches, person ? 1 : 0, !!person);
     }
-    res.json({ recorded: true });
+    res.json({ recorded: true, review });
   } catch (err) {
     captureException(err, { where: "dropIn: awake" });
     res.status(500).json({ error: "Couldn't record that" });
+  }
+});
+
+// ─── v1.164.0 — checking the noticing (utils/hubReview.js) ───
+const R = require("../utils/hubReview");
+
+function reviewView(cr, c, capacity, leader) {
+  return {
+    on: !!c,
+    endsAt: c ? c.ends_at : null,
+    signerName: c ? c.signer_name : null,
+    signedAt: c ? c.created_at : null,
+    wording: R.wordingFor(cr.first_name || "them"),
+    wordingVersion: R.WORDING_VERSION,
+    canSign: !!capacity,
+    capacityLabel: capacity ? D.CAPACITY_LABEL[capacity] : null,
+    isLeader: leader,
+    days: R.REVIEW_DAYS, hours: R.CLIP_HOURS,
+  };
+}
+
+// GET /:recipientId/review — is checking on, and the clips (leader only)
+router.get("/:recipientId/review", async (req, res) => {
+  try {
+    const db = await getDb();
+    const a = await access(db, req);
+    if (a.status !== 200 || a.herself) return res.status(404).json({ error: "Not found" });
+    const leader = await D.isLeader(db, a.cr, req.user.id);
+    const capacity = await D.signerCapacity(db, a.cr, req.user.id);
+    if (!leader && !capacity) return res.status(403).json({ error: "Only the team leader can see this" });
+    const c = await R.current(db, a.cr.id);
+    res.json({ ...reviewView(a.cr, c, capacity, leader), clips: leader ? await R.listClips(db, a.cr.id) : [] });
+  } catch (err) {
+    captureException(err, { where: "dropIn: review" });
+    res.status(500).json({ error: "Couldn't load that" });
+  }
+});
+
+// POST /:recipientId/review/consent { signerName, agree: true, wordingVersion }
+router.post("/:recipientId/review/consent", async (req, res) => {
+  try {
+    if (req.user.impersonatedBy) return res.status(403).json({ error: "A consent can't be signed while viewing as someone else." });
+    const db = await getDb();
+    const a = await access(db, req);
+    if (a.status !== 200) return res.status(a.status).json({ error: "Not found" });
+    const capacity = await D.signerCapacity(db, a.cr, req.user.id);
+    if (!capacity) return res.status(403).json({ error: `Only ${a.cr.first_name || "the person"}, or the agent recorded under their power of attorney or as their healthcare agent, can sign this.` });
+    if (!(await D.mayNotice(db, a.cr.id))) return res.status(409).json({ error: "Turn on noticing first (the drop-in consent and Notice when up)." });
+    const name = String((req.body && req.body.signerName) || "").trim().slice(0, 120);
+    if (req.body?.agree !== true || name.length < 2) return res.status(400).json({ error: "Type your full name and tick that you agree." });
+    if (req.body?.wordingVersion !== R.WORDING_VERSION) return res.status(409).json({ error: "The wording changed. Please read it again." });
+    const c = await R.sign(db, a.cr, req.user, capacity, name);
+    await D.audit(db, a.cr.id, req.user.id, "hub_review_signed",
+      `${name} agreed, as ${D.CAPACITY_LABEL[capacity]}, to the Hub saving pictures and sound for ${R.REVIEW_DAYS} days to check its noticing`,
+      { consentId: c.id, capacity, wordingVersion: R.WORDING_VERSION, endsAt: c.ends_at });
+    res.status(201).json(reviewView(a.cr, c, capacity, await D.isLeader(db, a.cr, req.user.id)));
+  } catch (err) {
+    captureException(err, { where: "dropIn: review consent" });
+    res.status(500).json({ error: "Couldn't record that" });
+  }
+});
+
+// POST /:recipientId/review/stop — stops checking and deletes everything saved
+router.post("/:recipientId/review/stop", async (req, res) => {
+  try {
+    if (req.user.impersonatedBy) return res.status(403).json({ error: "Not while viewing as someone else." });
+    const db = await getDb();
+    const a = await access(db, req);
+    if (a.status !== 200) return res.status(a.status).json({ error: "Not found" });
+    const may = a.herself || (await D.isLeader(db, a.cr, req.user.id)) || !!(await D.signerCapacity(db, a.cr, req.user.id));
+    if (!may) return res.status(403).json({ error: "Not allowed" });
+    const deleted = await R.withdraw(db, a.cr.id, req.user.id);
+    await D.audit(db, a.cr.id, req.user.id, "hub_review_stopped", `Checking the noticing was stopped; ${deleted} saved minute(s) deleted`, { deleted });
+    res.json({ on: false, deleted });
+  } catch (err) {
+    captureException(err, { where: "dropIn: review stop" });
+    res.status(500).json({ error: "Couldn't stop it" });
+  }
+});
+
+// POST /:recipientId/review-clip { photo, audio, counted, signals } — from her Hub only
+router.post("/:recipientId/review-clip", async (req, res) => {
+  try {
+    const db = await getDb();
+    const a = await access(db, req);
+    if (a.status !== 200 || !a.herself) return res.status(404).json({ error: "Not found" });
+    if (req.user.impersonatedBy) return res.json({ saved: false });
+    if (!(await R.isOn(db, a.cr.id))) return res.json({ saved: false, reason: "off" });
+    const b = req.body || {};
+    res.json(await R.saveClip(db, a.cr.id, { photo: b.photo, audio: b.audio, counted: b.counted === true, signals: b.signals }));
+  } catch (err) {
+    captureException(err, { where: "dropIn: review clip" });
+    res.status(500).json({ error: "Couldn't save that" });
+  }
+});
+
+// GET /:recipientId/review-clip/:clipId/:part — the picture or the sound (leader only)
+router.get("/:recipientId/review-clip/:clipId/:part", async (req, res) => {
+  try {
+    const db = await getDb();
+    const a = await access(db, req);
+    if (a.status !== 200 || a.herself || !(await D.isLeader(db, a.cr, req.user.id))) return res.status(404).json({ error: "Not found" });
+    const col = req.params.part === "photo" ? "photo_ref" : req.params.part === "audio" ? "audio_ref" : null;
+    if (!col) return res.status(404).json({ error: "Not found" });
+    const row = await db.prepare(`SELECT ${col} AS ref FROM hub_review_clips WHERE id = ? AND care_recipient_id = ? AND expires_at > NOW()`).get(req.params.clipId, a.cr.id);
+    if (!row || !row.ref) return res.status(404).json({ error: "Not found" });
+    const data = await require("../utils/storage").resolveFileData(row.ref);
+    const m = data && String(data).match(/^data:([^;,]+)[^,]*;base64,(.+)$/s);
+    if (!m) return res.status(404).json({ error: "Not found" });
+    res.set("Content-Type", m[1]);
+    res.set("Cache-Control", "private, no-store");
+    res.send(Buffer.from(m[2], "base64"));
+  } catch (err) {
+    captureException(err, { where: "dropIn: review clip read" });
+    res.status(500).json({ error: "Couldn't load that" });
+  }
+});
+
+// POST /:recipientId/review/delete { before? } — "Reviewed — delete these" (leader only)
+router.post("/:recipientId/review/delete", async (req, res) => {
+  try {
+    const db = await getDb();
+    const a = await access(db, req);
+    if (a.status !== 200 || a.herself || !(await D.isLeader(db, a.cr, req.user.id))) return res.status(404).json({ error: "Not found" });
+    const before = req.body && req.body.before && !Number.isNaN(Date.parse(req.body.before)) ? new Date(req.body.before).toISOString() : null;
+    const deleted = await R.deleteClips(db, a.cr.id, { before });
+    await D.audit(db, a.cr.id, req.user.id, "hub_review_deleted", `${deleted} reviewed minute(s) deleted`, { deleted });
+    res.json({ deleted });
+  } catch (err) {
+    captureException(err, { where: "dropIn: review delete" });
+    res.status(500).json({ error: "Couldn't delete them" });
   }
 });
 

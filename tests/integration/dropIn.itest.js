@@ -115,7 +115,9 @@ describe("noticing when she is up", () => {
     await h.request.put(`/api/drop-in/${recipientId}/settings`).set(h.auth(leader.token)).send({ noticeAwake: true });
     const quiet = await h.request.post(`/api/drop-in/${recipientId}/awake`).set(h.auth(mom.token)).send({ voiceSeconds: 6 });
     expect(quiet.body.recorded).toBe(false);
-    for (const body of [{ motion: true }, { voiceSeconds: 12 }, { touches: 2 }]) {
+    // v1.164.0 — with no person check (person omitted), movement and sound alone never count.
+    expect((await h.request.post(`/api/drop-in/${recipientId}/awake`).set(h.auth(mom.token)).send({ motion: true, voiceSeconds: 30 })).body.recorded).toBe(false);
+    for (const body of [{ motion: true, person: true }, { voiceSeconds: 12, person: false }, { touches: 2 }]) {
       const r = await h.request.post(`/api/drop-in/${recipientId}/awake`).set(h.auth(mom.token)).send(body);
       expect(r.body.recorded).toBe(true);
     }
@@ -168,11 +170,15 @@ describe("noticing when she is up", () => {
     const rows = await db.prepare("SELECT person_minutes, motion_minutes, voice_minutes, touches FROM hub_awake WHERE care_recipient_id = ?").all(recipientId);
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({ person_minutes: 1, motion_minutes: 1, voice_minutes: 1, touches: 1 });
-    // Five minutes after the last person sighting, sound alone stops counting again.
-    await db.prepare("UPDATE hub_awake SET ended_at = NOW() - INTERVAL '6 minutes' WHERE care_recipient_id = ?").run(recipientId);
+    // v1.164.0 — Pete, 11/26: "it's listening to the tv." Five minutes after the last time a
+    // person was SEEN, sound alone stops counting, even though the TV kept the stretch going
+    // (its end is recent; the sighting is not).
+    await db.prepare("UPDATE hub_awake SET last_person_at = NOW() - INTERVAL '6 minutes', ended_at = NOW() - INTERVAL '1 minute' WHERE care_recipient_id = ?").run(recipientId);
     expect((await post({ voiceSeconds: 40, person: false })).body.recorded).toBe(false);
-    // No person check on the tablet (null): the old rule, so noticing never silently stops.
-    expect((await post({ motion: true })).body.recorded).toBe(true);
+    expect((await post({ voiceSeconds: 40, motion: true, person: false })).body.recorded).toBe(false);
+    // No person check on the tablet (null): only a touch counts.
+    expect((await post({ motion: true, voiceSeconds: 40 })).body.recorded).toBe(false);
+    expect((await post({ touches: 1 })).body.recorded).toBe(true);
     const t = await require("../../src/utils/awake").timeline(db, recipientId, "America/New_York");
     expect(t.some((e) => e.kind === "up" && e.person === true)).toBe(true);
   });
@@ -227,6 +233,56 @@ describe("noticing when she is up", () => {
     expect((await h.request.get(`/api/drop-in/${recipientId}/nights`).set(h.auth(sister.token))).status).toBe(403);
     expect((await h.request.get(`/api/drop-in/${recipientId}/nights`).set(h.auth(tina.token))).status).toBe(404);
     expect((await h.request.get(`/api/drop-in/${recipientId}/nights`).set(h.auth(stranger.token))).status).toBe(404);
+  });
+
+  // v1.164.0 — Pete, 11/26: "I want to record the photos of every 'up' and get the sound...
+  // Delete it after every review."
+  test("checking the noticing: its own signature, leader-only, never base64 in Postgres, stop deletes", async () => {
+    const R = require("../../src/utils/hubReview");
+    const review = () => h.request.get(`/api/drop-in/${recipientId}/review`);
+    // Off; the leader sees the wording; a non-leader without capacity can't see it.
+    const v0 = await review().set(h.auth(leader.token));
+    expect(v0.status).toBe(200);
+    expect(v0.body).toMatchObject({ on: false, isLeader: true });
+    expect(v0.body.wording).toMatch(/one camera picture and about 15 seconds of sound/);
+    expect((await review().set(h.auth(stranger.token))).status).toBe(404);
+    // Her Hub can't save anything while it's off.
+    const off = await h.request.post(`/api/drop-in/${recipientId}/review-clip`).set(h.auth(mom.token)).send({ photo: "data:image/jpeg;base64,AAAA" });
+    expect(off.body).toMatchObject({ saved: false, reason: "off" });
+    // Signing needs a recorded capacity: insert one for the leader if the suite hasn't.
+    const has = await db.prepare("SELECT 1 FROM recipient_authorities WHERE care_recipient_id = ? AND user_id = ? AND kind = 'financial_poa'").get(recipientId, leader.user.id);
+    if (!has) await db.prepare("INSERT INTO recipient_authorities (id, care_recipient_id, user_id, kind) VALUES (?, ?, ?, 'financial_poa')").run(uuid(), recipientId, leader.user.id);
+    const bad = await h.request.post(`/api/drop-in/${recipientId}/review/consent`).set(h.auth(leader.token)).send({ signerName: "Pete Lee", agree: true, wordingVersion: "old" });
+    expect(bad.status).toBe(409);
+    const ok = await h.request.post(`/api/drop-in/${recipientId}/review/consent`).set(h.auth(leader.token)).send({ signerName: "Pete Lee", agree: true, wordingVersion: R.WORDING_VERSION });
+    expect(ok.status).toBe(201);
+    expect(ok.body.on).toBe(true);
+    const row = await db.prepare("SELECT wording_text, ends_at, created_at FROM hub_review_consents WHERE care_recipient_id = ? AND revoked_at IS NULL").get(recipientId);
+    expect(row.wording_text).toBe(R.wordingFor("Betty"));
+    expect(Math.round((new Date(row.ends_at) - new Date(row.created_at)) / 86400000)).toBe(R.REVIEW_DAYS);
+    // The Hub learns it's on from its next report.
+    expect((await h.request.post(`/api/drop-in/${recipientId}/awake`).set(h.auth(mom.token)).send({ touches: 1 })).body.review).toBe(true);
+    // No R2 in this harness: a clip is refused rather than written into Postgres.
+    const clip = await h.request.post(`/api/drop-in/${recipientId}/review-clip`).set(h.auth(mom.token)).send({ photo: "data:image/jpeg;base64,/9j/AAAA", counted: true, signals: { motion: true } });
+    expect(clip.body).toMatchObject({ saved: false, reason: "no_storage" });
+    expect((await db.prepare("SELECT COUNT(*)::int AS n FROM hub_review_clips WHERE care_recipient_id = ?").get(recipientId)).n).toBe(0);
+    // Only her Hub posts clips; only the leader reads them.
+    expect((await h.request.post(`/api/drop-in/${recipientId}/review-clip`).set(h.auth(leader.token)).send({})).status).toBe(404);
+    // A row as R2 would leave it: listed for the leader, gone after "Reviewed — delete these".
+    await db.prepare("INSERT INTO hub_review_clips (id, care_recipient_id, counted, signals, photo_ref, expires_at) VALUES (?, ?, TRUE, ?, NULL, NOW() + INTERVAL '72 hours')").run(uuid(), recipientId, JSON.stringify({ motion: true, person: null, personCheck: "failed" }));
+    await db.prepare("INSERT INTO hub_review_clips (id, care_recipient_id, counted, signals, expires_at) VALUES (?, ?, FALSE, '{}', NOW() - INTERVAL '1 minute')").run(uuid(), recipientId);
+    const list = await review().set(h.auth(leader.token));
+    expect(list.body.clips).toHaveLength(1); // the expired one is swept on read
+    expect(list.body.clips[0]).toMatchObject({ counted: true, signals: { personCheck: "failed" } });
+    expect((await review().set(h.auth(sister.token))).body.clips || []).toEqual([]);
+    expect((await h.request.post(`/api/drop-in/${recipientId}/review/delete`).set(h.auth(sister.token)).send({})).status).toBe(404);
+    const del = await h.request.post(`/api/drop-in/${recipientId}/review/delete`).set(h.auth(leader.token)).send({});
+    expect(del.body.deleted).toBe(1);
+    // Stop: off, and anything saved is deleted with it.
+    await db.prepare("INSERT INTO hub_review_clips (id, care_recipient_id, counted, signals, expires_at) VALUES (?, ?, TRUE, '{}', NOW() + INTERVAL '72 hours')").run(uuid(), recipientId);
+    const stop = await h.request.post(`/api/drop-in/${recipientId}/review/stop`).set(h.auth(leader.token)).send({});
+    expect(stop.body).toMatchObject({ on: false, deleted: 1 });
+    expect((await h.request.post(`/api/drop-in/${recipientId}/awake`).set(h.auth(mom.token)).send({ touches: 1 })).body.review).toBe(false);
   });
 
   test("withdrawing stops everything at once", async () => {

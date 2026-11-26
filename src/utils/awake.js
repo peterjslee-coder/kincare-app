@@ -172,7 +172,8 @@ const STORY_JOIN_MIN = 45;
 const round15 = (d) => new Date(Math.round(d.getTime() / 900000) * 900000);
 
 async function nightStory(db, recipientId, firstName, tz, now = new Date()) {
-  const today = getTodayStringInZone(tz);
+  // v1.164.0 — today as of `now`, not the server clock (the same fix as nights()).
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
   const [hh] = localTimeStringInZone(now, tz).split(":").map(Number);
   const startDay = hh < 18 ? addDaysToDateString(today, -1) : today;
   return storyFor(db, recipientId, firstName, tz, startDay, now, null);
@@ -207,6 +208,55 @@ async function storyFor(db, recipientId, firstName, tz, startDay, now, until) {
   const nowBit = since ? `has been up since about ${t(since)}` : "";
   if (!was.length) return `${who} ${nowBit}.`;
   return `${who} was ${was.join(", then ")}${nowBit ? `, and ${nowBit}` : ""}.`;
+}
+
+// ─── v1.164.0 — say "restless" when it was ───
+// Pete, 11/26: "even if this were accurate, 'Betty's been up since 6 pm' [is] inaccurate.
+// 'Betty's been restless and moving all night, her longest sleep was about an hour' would be
+// more accurate." From the hour-by-hour list: the up stretches and the longest run of quiet
+// (watching, nothing noticed). Quiet is what the Hub can vouch for; it is called quiet, not
+// sleep, because the camera can't tell the two apart.
+const RESTLESS_MIN_UPS = 4;          // at least this many separate up stretches...
+const RESTLESS_LONGEST_QUIET = 150;  // ...and no quiet run longer than this (minutes)
+
+function restlessness(entries) {
+  const ups = entries.filter((e) => e.kind === "up");
+  if (!ups.length) return null;
+  let best = null, run = null;
+  for (const e of entries) {
+    if (e.kind === "quiet") {
+      if (run) { run.to = e.to; run.toLabel = e.toLabel; } else run = { from: e.from, to: e.to, fromLabel: e.fromLabel, toLabel: e.toLabel };
+    } else {
+      if (run) { const m = (new Date(run.to) - new Date(run.from)) / 60000; if (!best || m > best.minutes) best = { ...run, minutes: m }; }
+      run = null;
+    }
+  }
+  if (run) { const m = (new Date(run.to) - new Date(run.from)) / 60000; if (!best || m > best.minutes) best = { ...run, minutes: m }; }
+  return {
+    ups: ups.length,
+    firstUp: ups[0].fromLabel, lastUp: ups[ups.length - 1].toLabel,
+    longest: best ? { minutes: Math.round(best.minutes), fromLabel: best.fromLabel, toLabel: best.toLabel } : null,
+    restless: ups.length >= RESTLESS_MIN_UPS && (!best || best.minutes < RESTLESS_LONGEST_QUIET),
+  };
+}
+
+function aboutDuration(min) {
+  if (min < 55) return `${Math.max(5, Math.round(min / 5) * 5)} minutes`;
+  const q = Math.round(min / 15) / 4; // quarter hours
+  const whole = Math.floor(q), frac = q - whole;
+  const f = frac === 0.25 ? "\u00BC" : frac === 0.5 ? "\u00BD" : frac === 0.75 ? "\u00BE" : "";
+  return `${whole || ""}${f} hour${q > 1 ? "s" : ""}`.replace(/^\u00BD hour$/, "half an hour").replace(/^1 hour$/, "an hour");
+}
+
+function restlessStory(firstName, r, inProgress) {
+  if (!r || !r.restless) return null;
+  const who = firstName || "They";
+  const longest = r.longest
+    ? `The longest quiet stretch${inProgress ? " so far" : ""} was about ${aboutDuration(r.longest.minutes)} (${r.longest.fromLabel}\u2013${r.longest.toLabel}).`
+    : "There was no quiet stretch.";
+  return inProgress
+    ? `${who} has been restless, up on and off since about ${r.firstUp}. ${longest}`
+    : `${who} was restless all night, up on and off from about ${r.firstUp} to ${r.lastUp}. ${longest}`;
 }
 
 // ─── v1.162.0 — every night, kept and shown 7 at a time ───
@@ -250,9 +300,12 @@ async function nights(db, recipientId, firstName, tz, { count = 7, beforeDay = n
     const story = await storyFor(db, recipientId, firstName, tz, day, now, end < now ? end : null);
     const [y, m, d] = day.split("-").map(Number);
     const weekday = new Date(Date.UTC(y, m - 1, d, 12)).toLocaleDateString("en-US", { weekday: "short", timeZone: "UTC" });
+    const rest = restlessness(entries);
+    let told = entries.length ? story : `The Hub wasn't watching that night.`;
+    if (rest) told = restlessStory(firstName, rest, fullEnd > now) || told;
     out.push({
       day, label: `${weekday} ${m}/${d}`, inProgress: fullEnd > now,
-      story: entries.length ? story : `The Hub wasn't watching that night.`,
+      story: told, longestQuiet: rest ? rest.longest : null,
       up, notWatching, upMinutes: up.reduce((n, [a, b]) => n + (b - a), 0), entries,
     });
   }
@@ -261,4 +314,4 @@ async function nights(db, recipientId, firstName, tz, { count = 7, beforeDay = n
   return { nights: out, more, nightMinutes: NIGHT_MIN, from: NIGHT_FROM, to: NIGHT_TO };
 }
 
-module.exports = { nights, timelineBetween, lastNight, sentence, nightSummary, recordNightNote, recordWatching, timeline, nightStory, MERGE_GAP_MIN, MIN_TOTAL_MIN, WATCH_JOIN_MIN };
+module.exports = { nights, timelineBetween, restlessness, restlessStory, aboutDuration, lastNight, sentence, nightSummary, recordNightNote, recordWatching, timeline, nightStory, MERGE_GAP_MIN, MIN_TOTAL_MIN, WATCH_JOIN_MIN };
