@@ -1027,6 +1027,19 @@ const WN_PREVIEWS = {
     </div>
   ),
   // v1.120.0 — "Did the check arrive?" (feedback bfbb79bd)
+  checkInSteps: () => (
+    <div>
+      <div style={{ display: 'flex', gap: 4, marginBottom: 6 }}>
+        <span style={{ flex: 1, height: 5, borderRadius: 3, background: 'var(--color-success)' }}></span>
+        <span style={{ flex: 1, height: 5, borderRadius: 3, background: '#C2410C' }}></span>
+        <span style={{ flex: 1, height: 5, borderRadius: 3, background: 'var(--border-light)' }}></span>
+      </div>
+      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 6 }}>Step 2 of 3</div>
+      <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 6 }}>Look over the care report</div>
+      <div style={{ ...wnCard, fontSize: 12, color: 'var(--text-secondary)' }}>Mom ate lunch and took a short nap.</div>
+      <div style={{ ...wnPill('#C2410C', '#fff'), textAlign: 'center', padding: '10px 0', fontSize: 14 }}>{'✓'} I{'’'}ve looked it over</div>
+    </div>
+  ),
   checkArrived: () => (
     <div style={{ padding: '12px 12px 10px', borderRadius: 12, border: '1px solid var(--border-color)', background: 'var(--bg-card)' }}>
       <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.4, color: 'var(--text-tertiary)', marginBottom: 4 }}>{'💵'} DID IT ARRIVE?</div>

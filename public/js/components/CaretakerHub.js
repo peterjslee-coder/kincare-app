@@ -361,7 +361,8 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
   // v1.109.6 — the family's instructions get their own acknowledgement, apart from the briefing
   const [instructionsAcked, setInstructionsAcked] = useState(false);
   const [ackingInstructionsId, setAckingInstructionsId] = useState(null);
-  const [checkInStep, setCheckInStep] = useState('briefing'); // 'briefing' | 'first-visit' | 'checkin'
+  const [checkInStep, setCheckInStep] = useState('start'); // v1.165.0: 'start' | 'instructions' | 'briefing' | 'first-visit' | 'checkin' | 'done'
+  const [checkInDone, setCheckInDone] = useState(null); // { at, offline } once the check-in went through
   // First-visit confirmation state
   const [firstVisitNeeded, setFirstVisitNeeded] = useState(false);
   const [firstVisitName, setFirstVisitName] = useState('');
@@ -373,6 +374,41 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
   const [continueHintVisible, setContinueHintVisible] = useState(false);
   const [continueShaking, setContinueShaking] = useState(false);
   const [incompleteCheckIn, setIncompleteCheckIn] = useState(null); // { sessionId, session, startedAt }
+  // v1.165.0 — every way into check-in (the Today card, the schedule, resuming) starts on the
+  // same first screen with nothing ticked. It also asks up front whether this is a first visit,
+  // so "Step 2 of 3" never changes to "of 4" halfway through.
+  const ciOpenedId = checkInSession ? checkInSession.id : null;
+  useEffect(() => {
+    if (!ciOpenedId) return undefined;
+    let live = true;
+    setCheckInStep('start');
+    setBriefingAcked(false);
+    setInstructionsAcked(false);
+    setFirstVisitNeeded(false);
+    setFirstVisitChoice('');
+    setFirstVisitNotes('');
+    setCheckInDone(null);
+    // The schedule's path opens check-in without loading the briefing; load it here.
+    if (!briefingLoading) {
+      setBriefingData(null);
+      setBriefingLoading(true);
+      apiFetch('/api/sessions/' + ciOpenedId + '/care-briefing')
+        .then(async (r) => { if (live && r?.ok) setBriefingData(await r.json()); })
+        .catch((e) => console.warn('Briefing fetch failed:', e))
+        .finally(() => { if (live) setBriefingLoading(false); });
+    }
+    apiFetch('/api/sessions/' + ciOpenedId + '/first-visit-check')
+      .then(async (r) => {
+        if (!live || !r?.ok) return;
+        const fv = await r.json();
+        if (fv.needsConfirmation) {
+          setFirstVisitNeeded(true);
+          setFirstVisitName(fv.recipientName || 'the care recipient');
+        }
+      })
+      .catch((e) => console.error('First-visit check failed:', e));
+    return () => { live = false; };
+  }, [ciOpenedId]);
   const incompleteTimerRef = useRef(null);
   // Expandable care profile state (Up Next cards)
   const [expandedProfileId, setExpandedProfileId] = useState(null);
@@ -1754,6 +1790,123 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
       : (checkInSession.special_instructions || checkInSession.specialInstructions || ''));
   const wizardHasInstructions = !!String(wizardInstructions).trim();
   const briefingReady = briefingAcked && (!wizardHasInstructions || instructionsAcked);
+
+  // ─── v1.165.0 — the check-in wizard, one step per screen ───
+  // Pete, 11/26: "Kay has trouble checking in… She keeps trying to hit the check-in button
+  // because it looks like that's what she's supposed to do." Each screen now has ONE big orange
+  // button that does the next thing; the words "Check in" appear only on the last step.
+  const CI_ORANGE = '#C2410C'; // darker than --accent-color so white text passes 4.5:1, light or dark mode
+  const ciBigBtn = (busy) => ({
+    width: '100%', minHeight: 72, border: 'none', borderRadius: 18, padding: '14px 18px',
+    background: CI_ORANGE, color: '#fff', fontSize: 22, fontWeight: 700, cursor: busy ? 'wait' : 'pointer',
+    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, opacity: busy ? 0.7 : 1,
+    boxShadow: '0 4px 16px rgba(194,65,12,0.3)',
+  });
+  const ciTile = {
+    width: '100%', minHeight: 72, borderRadius: 18, padding: '12px 16px', marginBottom: 12,
+    background: 'var(--bg-card)', border: '3px solid ' + CI_ORANGE, color: 'var(--text-primary)',
+    fontSize: 19, fontWeight: 700, cursor: 'pointer', textAlign: 'left',
+    display: 'flex', alignItems: 'center', gap: 14,
+  };
+  const ciRecipFirst = checkInSession ? ((checkInSession.recipientName || checkInSession.recipient_name || '').split(' ')[0] || 'your client') : '';
+  // The work steps, in order. Start (the "3 quick steps" screen) and Done sit outside the count.
+  const ciWorkSteps = [
+    ...(wizardHasInstructions ? ['instructions'] : []),
+    'briefing',
+    ...(firstVisitNeeded ? ['first-visit'] : []),
+  ];
+  const ciAllSteps = ['start', ...ciWorkSteps, 'checkin'];
+  const ciWorkIdx = checkInStep === 'checkin' ? ciWorkSteps.length : Math.max(0, ciWorkSteps.indexOf(checkInStep));
+  const ciGoNext = () => {
+    const i = ciAllSteps.indexOf(checkInStep);
+    setCheckInStep(ciAllSteps[Math.min(i + 1, ciAllSteps.length - 1)]);
+  };
+  const ciGoBack = () => {
+    const i = ciAllSteps.indexOf(checkInStep);
+    setCheckInStep(ciAllSteps[Math.max(i - 1, 0)]);
+  };
+  const ciStepLabel = {
+    instructions: 'Read ' + ciRecipFirst + '’s care instructions',
+    briefing: 'Look over the care report',
+    'first-visit': 'Tell us how ' + ciRecipFirst + ' is',
+  };
+  const ciDoneLabel = {
+    instructions: 'Read care instructions',
+    briefing: 'Looked over the care report',
+    'first-visit': ({ yes: ciRecipFirst + ': knows I’m here', asleep: ciRecipFirst + ': asleep', no: ciRecipFirst + ': seems unaware', unable: ciRecipFirst + ': couldn’t tell' })[firstVisitChoice] || ('Told us how ' + ciRecipFirst + ' is'),
+  };
+  const ciCheckSvg = (color, size) => (
+    <svg width={size || 24} height={size || 24} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 12l5 5L20 6"/></svg>
+  );
+  const ciSubmitFirstVisit = async (choice, notes) => {
+    setFirstVisitSubmitting(true);
+    try {
+      await apiFetch('/api/sessions/' + checkInSession.id + '/first-visit-confirm', {
+        method: 'POST',
+        body: JSON.stringify({ confirmation: choice, notes: notes || null }),
+      });
+    } catch (e) { console.error('First-visit confirm error:', e); }
+    setFirstVisitSubmitting(false);
+    setCheckInStep('checkin');
+  };
+  const ciDoCheckIn = async () => {
+                setCheckSubmitting(true);
+                setIncompleteCheckIn(null);
+                const checkInData = {
+                  checkInLatitude: checkInLocation?.lat || null,
+                  checkInLongitude: checkInLocation?.lng || null,
+                  briefingAcknowledged: true,
+                  // v1.109.6 — the exact words she checked off; the server stamps only on a match
+                  ...(wizardHasInstructions && instructionsAcked ? { acknowledgedInstructions: wizardInstructions } : {}),
+                };
+                try {
+                  const res = await apiFetch('/api/sessions/' + checkInSession.id + '/check-in', {
+                    method: 'POST',
+                    body: JSON.stringify(checkInData),
+                  });
+                  if (res?.ok) {
+                    await res.json();
+                    setIncompleteCheckIn(null);
+                    setCheckInDone({ at: TimezoneHelper.formatTimestamp(new Date().toISOString(), checkInSession.timezone, { hour: 'numeric', minute: '2-digit' }) || '' });
+                    setCheckInStep('done');
+                    if (incompleteTimerRef.current) { clearTimeout(incompleteTimerRef.current); incompleteTimerRef.current = null; }
+                    try {
+                      const refreshRes = await apiFetch('/api/dashboard');
+                      if (refreshRes?.ok) setData(await refreshRes.json());
+                    } catch (e) { /* refresh is best-effort */ }
+                  } else if (res?.status === 503 || !navigator.onLine) {
+                    if (window.OfflineQueue) {
+                      await window.OfflineQueue.queueCheckIn(checkInSession.id, checkInData);
+                      setIncompleteCheckIn(null);
+                      setCheckInDone({ offline: true });
+                      setCheckInStep('done');
+                    } else {
+                      showToast('You\'re offline — please try again when connected', 'error');
+                    }
+                  } else if (res?.status === 402) {
+                    const err = await res?.json().catch(() => null);
+                    showToast(err?.code === 'FAMILY_UNPAID'
+                      ? 'Check-in blocked — the family has an unpaid balance. They\'ve been notified.'
+                      : (err?.message || 'Check-in blocked — payment issue'), 'error');
+                    setCheckInSession(null);
+                  } else {
+                    const err = await res?.json().catch(() => null);
+                    showToast(err?.message || err?.error || 'Check-in failed', 'error');
+                  }
+                } catch (e) {
+                  if (window.OfflineQueue) {
+                    try {
+                      await window.OfflineQueue.queueCheckIn(checkInSession.id, checkInData);
+                      setIncompleteCheckIn(null);
+                      setCheckInDone({ offline: true });
+                      setCheckInStep('done');
+                    } catch { showToast('Check-in failed — could not save offline', 'error'); }
+                  } else {
+                    showToast('Check-in failed — no connection', 'error');
+                  }
+                }
+                setCheckSubmitting(false);
+              };
 
   // v1.109.6 — "I've read these" on the active-visit card (instructions changed after check-in)
   const acknowledgeInstructions = async (sess) => {
@@ -4267,52 +4420,69 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
           position: 'fixed', inset: 0, background: 'var(--bg-surface)', zIndex: 1200,
           display: 'flex', flexDirection: 'column',
         }}>
-          {/* ── STEPPER BAR ── */}
-          <div style={{
-            display: 'flex', alignItems: 'center', padding: '14px 20px',
-            background: 'var(--bg-primary)', borderBottom: '1px solid var(--border-light)',
-          }}>
-            {[
-              { key: 'briefing', label: 'Briefing', num: 1 },
-              ...(firstVisitNeeded ? [{ key: 'first-visit', label: 'Confirm', num: 2 }] : []),
-              { key: 'checkin', label: 'Check In', num: firstVisitNeeded ? 3 : 2 },
-            ].map((step, i, arr) => {
-              const steps = ['briefing', ...(firstVisitNeeded ? ['first-visit'] : []), 'checkin'];
-              const currentIdx = steps.indexOf(checkInStep);
-              const stepIdx = steps.indexOf(step.key);
-              const isDone = stepIdx < currentIdx;
-              const isActive = stepIdx === currentIdx;
-              return React.createElement(React.Fragment, { key: step.key },
-                React.createElement('div', { style: { display: 'flex', flexDirection: 'column', alignItems: 'center' } },
-                  React.createElement('div', { style: {
-                    width: 32, height: 32, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: 13, fontWeight: 700, transition: 'all 0.3s',
-                    background: isDone ? 'var(--color-success)' : isActive ? 'var(--role-color)' : 'var(--bg-primary)',
-                    color: isDone || isActive ? 'var(--text-on-primary)' : 'var(--text-muted)',
-                    border: isDone ? 'none' : isActive ? 'none' : '2px solid var(--border-light)',
-                    boxShadow: isActive ? '0 0 10px rgba(27,107,90,0.3)' : 'none',
-                  }}, isDone ? '✓' : step.num),
-                  React.createElement('div', { style: {
-                    fontSize: 9, marginTop: 3, fontWeight: isActive ? 700 : 500,
-                    color: isDone ? 'var(--color-success)' : isActive ? 'var(--role-color)' : 'var(--text-muted)',
-                  }}, step.label)
-                ),
-                i < arr.length - 1 ? React.createElement('div', { style: {
-                  flex: 1, height: 2, margin: '0 8px', marginBottom: 14,
-                  background: isDone ? 'var(--color-success)' : 'var(--border-light)',
-                }}) : null
-              );
-            })}
-            <div style={{ flex: 1 }}></div>
-            <button onClick={() => setExitWarningOpen(true)} style={{
-              background: 'var(--bg-primary)', border: '1px solid var(--border-light)', borderRadius: '50%',
-              width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center',
-              cursor: 'pointer', color: 'var(--text-muted)', fontSize: 16, marginBottom: 14,
-            }}>✕</button>
-          </div>
+          {/* ── v1.165.0 — PROGRESS BAR (Pete, 11/26: Kay kept tapping the check-in button) ──
+              One step per screen, one big orange button per screen. The old stepper showed
+              "Check In" from the first screen and a grey continue button that only
+              shook, so she tapped it over and over. Now nothing on screen says "check in" until
+              the last step, and every screen's only button is the next thing to do. */}
+          {checkInStep !== 'done' && (
+            <div style={{ padding: '14px 20px 12px', background: 'var(--bg-primary)', borderBottom: '1px solid var(--border-light)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <div style={{ flex: 1, fontSize: 15, color: 'var(--text-secondary)' }}>
+                  {'Visit with ' + ciRecipFirst}
+                </div>
+                <button aria-label="Close check-in" onClick={() => setExitWarningOpen(true)} style={{
+                  background: 'var(--bg-surface)', border: '1px solid var(--border-light)', borderRadius: '50%',
+                  width: 40, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  cursor: 'pointer', color: 'var(--text-muted)', fontSize: 18,
+                }}>✕</button>
+              </div>
+              {checkInStep !== 'start' && (
+                <div data-testid="checkin-progress" style={{ marginTop: 10 }}>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    {ciWorkSteps.map((k, i) => (
+                      <span key={k} style={{
+                        flex: 1, height: 8, borderRadius: 4,
+                        background: i < ciWorkIdx ? 'var(--color-success)' : i === ciWorkIdx ? CI_ORANGE : 'var(--border-light)',
+                      }}></span>
+                    ))}
+                  </div>
+                  <div style={{ marginTop: 8, fontSize: 16, fontWeight: 700, color: checkInStep === 'checkin' ? 'var(--color-success)' : 'var(--text-primary)' }}>
+                    {checkInStep === 'checkin' ? 'All steps done' : ('Step ' + (ciWorkIdx + 1) + ' of ' + ciWorkSteps.length)}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* ── Step content area ── */}
           <div style={{ flex: 1, overflowY: 'auto', padding: '20px 16px', maxWidth: 520, width: '100%', margin: '0 auto' }}>
+
+            {/* ── v1.165.0 — START: what's ahead, in her words ── */}
+            {checkInStep === 'start' && (
+              <div>
+                <h2 style={{ margin: '8px 0 10px', fontSize: 34, lineHeight: 1.1 }}>{'Hi ' + ((profile && (profile.firstName || (profile.name || '').split(' ')[0])) || 'there') + '!'}</h2>
+                <p style={{ margin: '0 0 20px', fontSize: 20, lineHeight: 1.4 }}>
+                  {'Checking in at ' + ciRecipFirst + '’s takes '}<b>{ciWorkSteps.length + ' quick step' + (ciWorkSteps.length === 1 ? '' : 's')}</b>.
+                </p>
+                {ciWorkSteps.map((k, i) => (
+                  <div key={k} style={{ display: 'flex', alignItems: 'center', gap: 14, background: 'var(--bg-card)', border: '1px solid var(--border-light)', borderRadius: 16, padding: '14px 16px', marginBottom: 12 }}>
+                    <span style={{ width: 38, height: 38, borderRadius: 19, background: CI_ORANGE, color: '#fff', fontWeight: 700, fontSize: 19, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{i + 1}</span>
+                    <span style={{ fontSize: 19 }}>{ciStepLabel[k]}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* ── v1.165.0 — INSTRUCTIONS: the family's words for today, on their own screen ── */}
+            {checkInStep === 'instructions' && (
+              <div data-testid="wizard-instructions">
+                <h2 style={{ margin: '4px 0 14px', fontSize: 28, lineHeight: 1.15 }}>{ciStepLabel.instructions}</h2>
+                <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-light)', borderRadius: 16, padding: 18, fontSize: 19, lineHeight: 1.5, color: 'var(--text-primary)', whiteSpace: 'pre-wrap' }}>
+                  {wizardInstructions}
+                </div>
+              </div>
+            )}
 
             {/* ── STEP 1: Care Briefing ── */}
             {checkInStep === 'briefing' && (() => {
@@ -4426,27 +4596,7 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                             )
                           ),
 
-                      // ── Special instructions for this session ──
-                      // v1.109.6 — first, above the AI summary, with its own checkbox: these are the
-                      // family's words for today, and "reviewed the briefing" does not cover them.
-                      wizardHasInstructions
-                        ? React.createElement('div', { 'data-testid': 'wizard-instructions', style: {
-                            padding: 12, background: 'var(--bg-highlight)', borderRadius: 8,
-                            border: instructionsAcked ? '2px solid #4caf50' : '2px solid var(--color-warning)', marginBottom: 14,
-                          }},
-                            React.createElement('div', { style: { fontSize: 12, fontWeight: 700, color: 'var(--role-color)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.4px' } }, '\u{1F4CB} Today\'s instructions from the family'),
-                            React.createElement('div', { style: { fontSize: 14, color: 'var(--text-primary)', whiteSpace: 'pre-wrap', lineHeight: 1.5 } }, wizardInstructions),
-                            React.createElement('label', { style: { display: 'flex', alignItems: 'center', gap: 8, marginTop: 10, cursor: 'pointer' } },
-                              React.createElement('input', {
-                                type: 'checkbox', checked: instructionsAcked,
-                                onChange: (e) => setInstructionsAcked(e.target.checked),
-                                style: { width: 18, height: 18, accentColor: 'var(--role-color)' },
-                              }),
-                              React.createElement('span', { style: { fontSize: 13, fontWeight: 600, color: instructionsAcked ? 'var(--color-success)' : 'var(--text-primary)' } },
-                                'I\'ve read today\'s instructions')
-                            )
-                          )
-                        : null,
+                      // v1.165.0 — today's instructions moved to their own step, before this one.
 
                       // ── iPAi synthesis (or fallback to raw notes) ──
                       // v1.141.2 — theme colours only. This box was a hard-coded pale green with
@@ -4486,82 +4636,38 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
               );
             })()}
 
-            {/* ── STEP 1.5: First-Visit Confirmation (conditional) ── */}
-            {checkInStep === 'first-visit' && React.createElement('div', null,
-              React.createElement('div', { style: { textAlign: 'center', marginBottom: 20 } },
-                React.createElement('div', { style: { fontSize: 40, marginBottom: 8 } }, '\u{1F44B}'),
-                React.createElement('h3', { style: { marginTop: 0, marginBottom: 4, fontSize: 20 } }, 'First Visit Confirmation'),
-                React.createElement('p', { style: { fontSize: 13, color: 'var(--text-secondary)', margin: 0 } },
-                  'This is your first session with ' + firstVisitName + '. Please confirm their awareness.')
-              ),
-
-              React.createElement('div', { style: { padding: 16, background: 'var(--color-warning-bg)', borderRadius: 10, border: '2px solid #e8724a', marginBottom: 16 } },
-                React.createElement('div', { style: { fontSize: 14, fontWeight: 700, marginBottom: 12, color: 'var(--color-warning)' } },
-                  'Is ' + firstVisitName.split(' ')[0] + ' aware that you\'re here to provide care today?'),
-                [
-                  { key: 'yes', label: 'Yes, they acknowledged me', emoji: '\u2705' },
-                  // v1.153.3 \u2014 Pete, 11/23: "we need an option besides whether or not Betty is
-                  // aware. Because she was asleep." Asleep is not a concern: nothing is paused
-                  // and nobody is alerted; the question comes back at the fifteen-minute check.
-                  { key: 'asleep', label: firstVisitName.split(' ')[0] + ' is asleep \u2014 I\u2019ll ask when they wake', emoji: '\uD83D\uDE34' },
-                  { key: 'no', label: 'They seem unaware of my visit', emoji: '\u26A0\uFE0F' },
-                  { key: 'unable', label: 'Unable to assess their awareness', emoji: '\u2753' },
-                ].map(opt =>
-                  React.createElement('label', {
-                    key: opt.key,
-                    style: {
-                      display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', marginBottom: 6,
-                      borderRadius: 8, cursor: 'pointer',
-                      background: firstVisitChoice === opt.key ? 'var(--color-warning-bg)' : 'var(--bg-card)',
-                      border: firstVisitChoice === opt.key ? '2px solid #e8724a' : '2px solid #eee',
-                    }
-                  },
-                    React.createElement('input', {
-                      type: 'radio', name: 'firstVisitChoice', value: opt.key,
-                      checked: firstVisitChoice === opt.key,
-                      onChange: () => setFirstVisitChoice(opt.key),
-                      style: { accentColor: 'var(--accent-color)' }
-                    }),
-                    React.createElement('span', { style: { fontSize: 16 } }, opt.emoji),
-                    React.createElement('span', { style: { fontSize: 13, fontWeight: firstVisitChoice === opt.key ? 700 : 400 } }, opt.label)
-                  )
-                ),
-
-                (firstVisitChoice === 'no' || firstVisitChoice === 'unable') && React.createElement('div', { style: { marginTop: 12 } },
-                  React.createElement('label', { style: { display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4, color: 'var(--text-secondary)' } }, 'Notes (optional — will be shared with the family):'),
-                  React.createElement('textarea', {
-                    value: firstVisitNotes, onChange: e => setFirstVisitNotes(e.target.value),
-                    placeholder: 'Describe what you observed...',
-                    style: { width: '100%', minHeight: 70, padding: 10, borderRadius: 8, border: '1px solid #ddd', fontSize: 13, resize: 'vertical', boxSizing: 'border-box' }
-                  })
-                )
-              ),
-
-              React.createElement('div', { style: { display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 20 } },
-                React.createElement('button', {
-                  onClick: () => setCheckInStep('briefing'),
-                  style: { padding: '10px 20px', border: '1px solid #ddd', background: 'var(--bg-surface)', borderRadius: 8, cursor: 'pointer', fontSize: 13 }
-                }, '\u2190 Back'),
-                React.createElement('button', {
-                  onClick: async () => {
-                    if (!firstVisitChoice) return;
-                    setFirstVisitSubmitting(true);
-                    try {
-                      await apiFetch('/api/sessions/' + checkInSession.id + '/first-visit-confirm', {
-                        method: 'POST',
-                        body: JSON.stringify({ confirmation: firstVisitChoice, notes: firstVisitNotes || null }),
-                      });
-                    } catch (e) { console.error('First-visit confirm error:', e); }
-                    setFirstVisitSubmitting(false);
-                    setCheckInStep('checkin');
-                  },
-                  disabled: !firstVisitChoice || firstVisitSubmitting,
-                  style: {
-                    padding: '10px 24px', background: firstVisitChoice ? 'var(--role-color)' : 'var(--border-light)', color: 'var(--text-on-primary)', border: 'none',
-                    borderRadius: 8, cursor: firstVisitChoice ? 'pointer' : 'not-allowed', fontSize: 14, fontWeight: 700,
-                  }
-                }, firstVisitSubmitting ? 'Submitting...' : 'Continue to Check In \u2192')
-              )
+            {/* ── First visit: how is she right now? (v1.165.0 — big tiles; tap one and go on) ── */}
+            {checkInStep === 'first-visit' && (
+              <div>
+                <h2 style={{ margin: '4px 0 8px', fontSize: 28, lineHeight: 1.15 }}>{'How is ' + ciRecipFirst + ' right now?'}</h2>
+                <p style={{ margin: '0 0 18px', fontSize: 18, color: 'var(--text-secondary)' }}>
+                  {'Your first visit with ' + ciRecipFirst + '. Tap the one that fits.'}
+                </p>
+                {[
+                  { key: 'yes', label: 'Awake, knows I’m here', emoji: '\u{1F642}' },
+                  // v1.153.3 — asleep is not a concern: nothing paused, nobody alerted; asked again later.
+                  { key: 'asleep', label: 'Asleep — I’ll ask when they wake', emoji: '\u{1F634}' },
+                  { key: 'no', label: 'Doesn’t seem to know I’m here', emoji: '⚠️' },
+                  { key: 'unable', label: 'I can’t tell', emoji: '❓' },
+                ].map(opt => (
+                  <button key={opt.key} data-testid={'first-visit-' + opt.key} disabled={firstVisitSubmitting}
+                    onClick={() => {
+                      setFirstVisitChoice(opt.key);
+                      if (opt.key === 'yes' || opt.key === 'asleep') ciSubmitFirstVisit(opt.key, null);
+                    }}
+                    style={{ ...ciTile, background: firstVisitChoice === opt.key ? 'var(--color-warning-bg)' : ciTile.background }}>
+                    <span style={{ fontSize: 26 }} aria-hidden="true">{opt.emoji}</span>
+                    <span>{opt.label}</span>
+                  </button>
+                ))}
+                {(firstVisitChoice === 'no' || firstVisitChoice === 'unable') && (
+                  <div style={{ marginTop: 6 }}>
+                    <label htmlFor="ci-fv-notes" style={{ display: 'block', fontSize: 17, fontWeight: 700, marginBottom: 6 }}>What did you notice? (optional — the family will see this)</label>
+                    <textarea id="ci-fv-notes" value={firstVisitNotes} onChange={e => setFirstVisitNotes(e.target.value)}
+                      style={{ width: '100%', minHeight: 90, padding: 12, borderRadius: 12, border: '2px solid var(--border-light)', fontSize: 17, resize: 'vertical', boxSizing: 'border-box', background: 'var(--bg-card)', color: 'var(--text-primary)' }} />
+                  </div>
+                )}
+              </div>
             )}
 
             {/* ── STEP 2: Check In (mood, location, confirm) ── */}
@@ -4571,189 +4677,99 @@ const CaretakerHub = window.CaretakerHub = ({ onNeedsOnboarding, initialTab }) =
                 coat on. Whatever she picks is a guess, and a guess recorded as an observation
                 is worse than none, because the family reads it as one. The eight faces now
                 appear fifteen minutes in — see the settled-in card on the active visit. */}
-            {checkInStep === 'checkin' && React.createElement('div', null,
-              React.createElement('div', { style: { textAlign: 'center', marginBottom: 20 } },
-                React.createElement('h3', { style: { marginTop: 0, marginBottom: 4, fontSize: 22 } }, 'Almost there!'),
-                React.createElement('p', { style: { fontSize: 13, color: 'var(--text-secondary)', margin: 0 } },
-                  ((first) => first ? `We\u2019ll ask how ${first} is doing in a little while, once you\u2019ve settled in.` : 'We\u2019ll ask how the visit is going in a little while, once you\u2019ve settled in.')((checkInSession.recipientName || checkInSession.recipient_name || '').split(' ')[0])
-                )
-              ),
+            {/* ── v1.165.0 — READY: everything ticked, one button left ── */}
+            {checkInStep === 'checkin' && (
+              <div>
+                <h2 style={{ margin: '4px 0 16px', fontSize: 30, lineHeight: 1.15 }}>You{'’'}re ready to check in</h2>
+                {ciWorkSteps.map(k => (
+                  <div key={k} style={{ display: 'flex', alignItems: 'center', gap: 14, background: 'var(--bg-card)', border: '1px solid var(--border-light)', borderRadius: 16, padding: '14px 16px', marginBottom: 12, fontSize: 19 }}>
+                    <span style={{ width: 36, height: 36, borderRadius: 18, background: 'var(--color-success-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{ciCheckSvg('var(--color-success)', 22)}</span>
+                    <span>{ciDoneLabel[k]}</span>
+                  </div>
+                ))}
+                {checkInLocation
+                  ? <div style={{ marginTop: 4, fontSize: 15, color: 'var(--color-success)' }}>{'📍 Location found'}</div>
+                  : (locationError ? <div style={{ marginTop: 4, fontSize: 15, color: 'var(--color-warning)' }}>{'⚠️ Location unavailable — you can still check in'}</div> : null)}
+              </div>
+            )}
 
-              checkInLocation
-                ? React.createElement('div', { style: { marginBottom: 16, padding: 12, background: 'var(--color-success-bg)', borderRadius: 10, border: '1px solid var(--color-success)', fontSize: 13, color: 'var(--color-success)', display: 'flex', alignItems: 'center', gap: 8 } },
-                    React.createElement('span', { style: { fontSize: 16 } }, '📍'), 'Location captured · ' + Math.round(checkInLocation.accuracy || 0) + 'm accuracy')
-                : null,
-              locationError && !checkInLocation
-                ? React.createElement('div', { style: { marginBottom: 16, padding: 12, background: 'var(--color-warning-bg)', borderRadius: 10, border: '1px solid var(--color-warning)', fontSize: 13, color: 'var(--color-warning)', display: 'flex', alignItems: 'center', gap: 8 } },
-                    React.createElement('span', { style: { fontSize: 16 } }, '⚠️'), 'Location unavailable — you can still check in')
-                : null,
-
-              // Back link
-              React.createElement('button', {
-                onClick: () => setCheckInStep(firstVisitNeeded ? 'first-visit' : 'briefing'),
-                style: { background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, color: 'var(--text-muted)', padding: '8px 0', marginBottom: 8 }
-              }, '\u2190 Back to briefing'),
+            {/* ── v1.165.0 — DONE: she should SEE that it worked ── */}
+            {checkInStep === 'done' && (
+              <div data-testid="checkin-done" style={{ textAlign: 'center', paddingTop: 48 }}>
+                <span style={{ width: 140, height: 140, borderRadius: 70, background: 'var(--color-success)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>{ciCheckSvg('#fff', 80)}</span>
+                <h2 style={{ margin: '24px 0 12px', fontSize: 34, lineHeight: 1.1, color: 'var(--color-success)' }}>
+                  {checkInDone && checkInDone.offline ? 'Saved!' : 'You’re checked in!'}
+                </h2>
+                <p style={{ margin: '0 0 10px', fontSize: 21, lineHeight: 1.4 }}>
+                  {checkInDone && checkInDone.offline
+                    ? 'No signal right now. Your check-in will send as soon as you’re back online.'
+                    : ('Your visit with ' + ciRecipFirst + ' started' + (checkInDone && checkInDone.at ? ' at ' + checkInDone.at : '') + '.')}
+                </p>
+              </div>
             )}
 
           </div>{/* end step content area */}
 
-          {/* ── PINNED BRIEFING FOOTER (acknowledge + continue) ── */}
-          {checkInStep === 'briefing' && React.createElement('div', {
-            style: {
-              flexShrink: 0,
-              padding: '12px 16px', paddingBottom: 'max(12px, env(safe-area-inset-bottom))',
-              background: 'var(--bg-surface)',
-              borderTop: '1px solid var(--border-light)',
-              maxWidth: 520, width: '100%', margin: '0 auto',
-              boxSizing: 'border-box',
-            }
-          },
-            React.createElement('label', {
-              style: {
-                display: 'flex', alignItems: 'flex-start', gap: 10, padding: 12,
-                background: briefingAcked ? 'var(--color-success-bg)' : 'var(--bg-primary)', borderRadius: 10,
-                border: briefingAcked ? '2px solid #4caf50' : '2px solid #ddd', cursor: 'pointer',
-                transition: 'all 0.2s', marginBottom: 12,
-              }
-            },
-              React.createElement('input', {
-                type: 'checkbox', checked: briefingAcked,
-                onChange: (e) => setBriefingAcked(e.target.checked),
-                style: { marginTop: 2, width: 18, height: 18, accentColor: 'var(--role-color)' }
-              }),
-              React.createElement('span', { style: { fontSize: 13, fontWeight: 600, color: briefingAcked ? 'var(--color-success)' : 'var(--text-secondary)' } },
-                'I\'ve reviewed this care briefing')
-            ),
-            React.createElement('button', {
-              onClick: async () => {
-                if (!briefingReady) {
-                  setContinueShaking(true);
-                  setContinueHintVisible(true);
-                  setTimeout(() => setContinueShaking(false), 400);
-                  return;
-                }
-                setContinueHintVisible(false);
-                try {
-                  const fvRes = await apiFetch('/api/sessions/' + checkInSession.id + '/first-visit-check');
-                  if (fvRes?.ok) {
-                    const fvData = await fvRes.json();
-                    if (fvData.needsConfirmation) {
-                      setFirstVisitNeeded(true);
-                      setFirstVisitName(fvData.recipientName || 'the care recipient');
-                      setFirstVisitChoice('');
-                      setFirstVisitNotes('');
-                      setCheckInStep('first-visit');
-                      return;
-                    }
-                  }
-                } catch (e) { console.error('First-visit check failed:', e); }
-                setCheckInStep('checkin');
-              },
-              style: {
-                width: '100%', padding: '16px', borderRadius: 14,
-                fontSize: 16, fontWeight: 700, cursor: 'pointer',
-                background: briefingReady
-                  ? 'linear-gradient(135deg, var(--role-color), var(--color-success))'
-                  : 'var(--bg-primary)',
-                color: briefingReady ? 'var(--text-on-primary)' : 'var(--text-muted)',
-                transition: 'all 0.2s',
-                animation: continueShaking ? 'checkInShake 0.4s ease-in-out' : 'none',
-                border: briefingReady ? 'none' : '1px solid var(--border-light)',
-              }
-            }, 'Continue to Check In →'),
-            continueHintVisible && !briefingReady
-              ? React.createElement('div', { style: {
-                  textAlign: 'center', fontSize: 13, color: 'var(--color-warning)', marginTop: 8,
-                  fontWeight: 500, animation: 'fadeIn 0.3s ease',
-                }}, (wizardHasInstructions && !instructionsAcked)
-                  ? '☝️ Please read and check off today\'s instructions first'
-                  : '☝️ Please acknowledge the care briefing first')
-              : null
-          )}
+          {/* ── v1.165.0 — ONE pinned footer: a hint line and one big orange button per step ── */}
+          <div style={{
+            flexShrink: 0, padding: '12px 16px', paddingBottom: 'max(16px, env(safe-area-inset-bottom))',
+            background: 'var(--bg-surface)', borderTop: checkInStep === 'done' ? 'none' : '1px solid var(--border-light)',
+            maxWidth: 520, width: '100%', margin: '0 auto', boxSizing: 'border-box',
+          }}>
+            {({
+              start: 'Tap the orange button to begin',
+              instructions: 'When you’ve read them, tap below',
+              briefing: 'When you’ve looked it over, tap below',
+              'first-visit': (firstVisitChoice === 'no' || firstVisitChoice === 'unable') ? 'Then tap Continue' : '',
+              checkin: 'Last step — tap to start your visit',
+            })[checkInStep]
+              ? <p style={{ margin: '0 0 10px', textAlign: 'center', fontSize: 17, color: 'var(--text-secondary)' }}>{({
+                  start: 'Tap the orange button to begin',
+                  instructions: 'When you’ve read them, tap below',
+                  briefing: 'When you’ve looked it over, tap below',
+                  'first-visit': 'Then tap Continue',
+                  checkin: 'Last step — tap to start your visit',
+                })[checkInStep]}</p>
+              : null}
 
-          {/* ── PINNED CHECK-IN BUTTON (always visible at bottom) ── */}
-          {checkInStep === 'checkin' && React.createElement('div', {
-            style: {
-              flexShrink: 0,
-              padding: '16px 16px', paddingBottom: 'max(16px, env(safe-area-inset-bottom))',
-              background: 'var(--bg-surface)',
-              borderTop: '1px solid var(--border-light)',
-              maxWidth: 520, width: '100%', margin: '0 auto',
-              boxSizing: 'border-box',
-            }
-          },
-            React.createElement('button', {
-              onClick: async () => {
-                setCheckSubmitting(true);
-                setIncompleteCheckIn(null);
-                const checkInData = {
-                  checkInLatitude: checkInLocation?.lat || null,
-                  checkInLongitude: checkInLocation?.lng || null,
-                  briefingAcknowledged: true,
-                  // v1.109.6 — the exact words she checked off; the server stamps only on a match
-                  ...(wizardHasInstructions && instructionsAcked ? { acknowledgedInstructions: wizardInstructions } : {}),
-                };
-                try {
-                  const res = await apiFetch('/api/sessions/' + checkInSession.id + '/check-in', {
-                    method: 'POST',
-                    body: JSON.stringify(checkInData),
-                  });
-                  if (res?.ok) {
-                    await res.json();
-                    showToast('Checked in! Session started.', 'success');
-                    setCheckInSession(null);
-                    setIncompleteCheckIn(null);
-                    if (incompleteTimerRef.current) { clearTimeout(incompleteTimerRef.current); incompleteTimerRef.current = null; }
-                    try {
-                      const refreshRes = await apiFetch('/api/dashboard');
-                      if (refreshRes?.ok) setData(await refreshRes.json());
-                    } catch (e) { /* refresh is best-effort */ }
-                  } else if (res?.status === 503 || !navigator.onLine) {
-                    if (window.OfflineQueue) {
-                      await window.OfflineQueue.queueCheckIn(checkInSession.id, checkInData);
-                      showToast('Saved offline — will sync when you reconnect', 'success');
-                      setCheckInSession(null);
-                      setIncompleteCheckIn(null);
-                    } else {
-                      showToast('You\'re offline — please try again when connected', 'error');
-                    }
-                  } else if (res?.status === 402) {
-                    const err = await res?.json().catch(() => null);
-                    showToast(err?.code === 'FAMILY_UNPAID'
-                      ? 'Check-in blocked — the family has an unpaid balance. They\'ve been notified.'
-                      : (err?.message || 'Check-in blocked — payment issue'), 'error');
-                    setCheckInSession(null);
-                  } else {
-                    const err = await res?.json().catch(() => null);
-                    showToast(err?.message || err?.error || 'Check-in failed', 'error');
-                  }
-                } catch (e) {
-                  if (window.OfflineQueue) {
-                    try {
-                      await window.OfflineQueue.queueCheckIn(checkInSession.id, checkInData);
-                      showToast('Saved offline — will sync when you reconnect', 'success');
-                      setCheckInSession(null);
-                      setIncompleteCheckIn(null);
-                    } catch { showToast('Check-in failed — could not save offline', 'error'); }
-                  } else {
-                    showToast('Check-in failed — no connection', 'error');
-                  }
-                }
-                setCheckSubmitting(false);
-              },
-              disabled: checkSubmitting,
-              style: {
-                width: '100%', padding: 22, border: 'none', borderRadius: 16,
-                fontSize: 20, fontWeight: 800, cursor: 'pointer', letterSpacing: 0.5,
-                background: 'linear-gradient(135deg, var(--color-success), #16a34a)',
-                color: '#fff', boxShadow: '0 6px 24px rgba(34, 197, 94, 0.4)',
-                transition: 'all 0.15s',
-                opacity: checkSubmitting ? 0.6 : 1,
-              }
-            }, checkSubmitting ? 'Checking in...' : "I'm Here \u2713"),
-            React.createElement('p', { style: { textAlign: 'center', fontSize: 11, color: 'var(--text-muted)', marginTop: 8 } },
-              'This will start your session timer')
-          )}
+            {checkInStep === 'start' && (
+              <button data-testid="checkin-next" disabled={briefingLoading} onClick={ciGoNext} style={ciBigBtn(briefingLoading)}>
+                {briefingLoading ? 'Getting ready…' : 'Start check-in →'}
+              </button>
+            )}
+            {checkInStep === 'instructions' && (
+              <button data-testid="checkin-next" onClick={() => { setInstructionsAcked(true); ciGoNext(); }} style={ciBigBtn(false)}>
+                {ciCheckSvg('#fff', 26)}I{'’'}ve read these
+              </button>
+            )}
+            {checkInStep === 'briefing' && (
+              <button data-testid="checkin-next" disabled={briefingLoading} onClick={() => { setBriefingAcked(true); ciGoNext(); }} style={ciBigBtn(briefingLoading)}>
+                {briefingLoading ? 'Loading…' : <>{ciCheckSvg('#fff', 26)}I{'’'}ve looked it over</>}
+              </button>
+            )}
+            {checkInStep === 'first-visit' && (firstVisitChoice === 'no' || firstVisitChoice === 'unable') && (
+              <button data-testid="checkin-next" disabled={firstVisitSubmitting} onClick={() => ciSubmitFirstVisit(firstVisitChoice, firstVisitNotes)} style={ciBigBtn(firstVisitSubmitting)}>
+                {firstVisitSubmitting ? 'Saving…' : 'Continue →'}
+              </button>
+            )}
+            {checkInStep === 'checkin' && (
+              <button data-testid="checkin-submit" disabled={checkSubmitting} onClick={ciDoCheckIn} style={{ ...ciBigBtn(checkSubmitting), minHeight: 88, fontSize: 26 }}>
+                {checkSubmitting ? 'Checking in…' : 'Check in now'}
+              </button>
+            )}
+            {checkInStep === 'done' && (
+              <button data-testid="checkin-finish" onClick={() => { setCheckInSession(null); setCheckInStep('start'); }} style={ciBigBtn(false)}>
+                Go to my visit {'→'}
+              </button>
+            )}
+
+            {checkInStep !== 'start' && checkInStep !== 'done' && (
+              <button onClick={ciGoBack} disabled={checkSubmitting || firstVisitSubmitting} style={{
+                display: 'block', width: '100%', marginTop: 6, minHeight: 44, background: 'none', border: 'none',
+                fontSize: 17, color: 'var(--text-secondary)', textDecoration: 'underline', cursor: 'pointer',
+              }}>Back</button>
+            )}
+          </div>
 
           {/* ── EXIT WARNING OVERLAY ── */}
           {exitWarningOpen && React.createElement('div', {

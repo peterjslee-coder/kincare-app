@@ -42,7 +42,7 @@ describe("who sees what", () => {
     expect(got).not.toContain("todos-caregiver");
   });
   test("a caregiver sees the caregiver one", () => {
-    expect(ids({ roles: ["caregiver"], createdAt: "2026-01-01" }).sort()).toEqual(["asleep-at-check-in", "calendar-whole-month", "cancel-one-or-series", "caregiver-get-ready", "caregiver-home-tidy", "change-the-series", "change-visit-day", "checkr-inplace-pays", "day-card-stays", "day-folds", "handoff-caregiver", "hub-photos-caregiver", "iphone-uploads", "meds-follow-the-shift", "mileage-caregiver", "mileage-legs", "overnight-first", "place-search-google", "quiet-hours-what-happened", "recording-pause", "start-and-end-times", "time-change-in-words", "today-short-rows", "todos-caregiver", "todos-folded-bar", "undo-accept", "updates-from-inplace"]);
+    expect(ids({ roles: ["caregiver"], createdAt: "2026-01-01" }).sort()).toEqual(["asleep-at-check-in", "calendar-whole-month", "cancel-one-or-series", "caregiver-get-ready", "caregiver-home-tidy", "change-the-series", "change-visit-day", "checkin-one-step-at-a-time", "checkr-inplace-pays", "day-card-stays", "day-folds", "handoff-caregiver", "hub-photos-caregiver", "iphone-uploads", "meds-follow-the-shift", "mileage-caregiver", "mileage-legs", "overnight-first", "place-search-google", "quiet-hours-what-happened", "recording-pause", "start-and-end-times", "time-change-in-words", "today-short-rows", "todos-caregiver", "todos-folded-bar", "undo-accept", "updates-from-inplace"]);
   });
   test("seen entries do not come back, and a second entry on the same day still does", () => {
     const got = ids({ roles: ["family"], createdAt: "2026-01-01", seenIds: ["todos-next-visit"] });
