@@ -46,6 +46,21 @@ const ENTRIES = [
     preview: "hubOneStream",
   },
   {
+    id: "hub-noticing-check",
+    version: "1.164.0",
+    date: "2026-11-26",
+    audience: ["family"],
+    title: "Nights you can check",
+    body: "The Hub no longer counts the TV's sound as your loved one being up, and a broken night now reads as restless with its longest quiet stretch. If you want to see for yourself, you can turn on checking for a week, and each minute it counts comes with a picture and a few seconds of sound that you review and then delete.",
+    howTo: [
+      "Accessibility Options, then Check what it's counting",
+      "Signing turns it on for 7 days; the Hub shows a small Checking mark",
+      "Look and listen, then tap Reviewed \u2014 delete these",
+    ],
+    examples: ["Mom was restless all night, up on and off from about 9 PM to 5:50 AM. The longest quiet stretch was about an hour."],
+    preview: "hubNoticingCheck",
+  },
+  {
     id: "quiet-hours-ring-through",
     version: "1.163.0",
     date: "2026-11-25",

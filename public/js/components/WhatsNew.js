@@ -521,6 +521,19 @@ const WN_PREVIEWS = {
     </div>
   ),
   // v1.161.0 — the caller's picture fills her tablet
+  // v1.164.0 — checking what the Hub counts as up
+  hubNoticingCheck: () => (
+    <div style={{ ...wnCard, padding: 10, fontSize: 11, color: 'var(--text-primary)' }}>
+      <div style={{ fontWeight: 800, marginBottom: 6 }}>{'\u{1F50E}'} Check what it's counting</div>
+      {[['2:14 AM', 'Counted as up', 'person seen \u00b7 movement'], ['3:02 AM', 'Not counted', 'no person seen \u00b7 sound 22s']].map(([t, c, g]) => (
+        <div key={t} style={{ display: 'flex', gap: 8, alignItems: 'center', borderTop: '1px solid var(--border-color)', padding: '5px 0' }}>
+          <span style={{ width: 44, height: 32, borderRadius: 4, background: 'var(--bg-surface)', border: '1px solid var(--border-color)' }} />
+          <span style={{ flex: 1 }}><strong>{t}</strong> <span style={{ color: c === 'Counted as up' ? '#1b7a3d' : 'var(--text-muted)', fontWeight: 700 }}>{c}</span><br /><span style={{ color: 'var(--text-secondary)' }}>{g}</span></span>
+          <span style={{ color: 'var(--role-color)', fontWeight: 700 }}>{'\u25B6'}</span>
+        </div>
+      ))}
+    </div>
+  ),
   // v1.163.0 — quiet hours, and calling twice to ring through
   quietRingThrough: () => (
     <div style={{ ...wnCard, padding: 10, fontSize: 11, color: 'var(--text-primary)', background: '#1f1a16' }}>

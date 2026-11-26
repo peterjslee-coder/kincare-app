@@ -3926,6 +3926,52 @@ async function initializeDatabase() {
         `ALTER TABLE hub_awake ADD COLUMN IF NOT EXISTS person_minutes INTEGER NOT NULL DEFAULT 0`,
       ],
     },
+    {
+      // v1.164.0 — Pete, 11/26: "I don't believe this report... I want to record the photos of
+      // every 'up' and get the sound that together the app is counting as 'up'... Delete it after
+      // every review, until I'm sure it's accurate."
+      //
+      // hub_awake.last_person_at: when a person was last actually SEEN in this stretch. "Movement
+      // or talking count only within 5 minutes of a person" used the stretch's end time, which
+      // the TV's sound itself kept pushing forward, so one sighting at 6 PM kept her up all night.
+      //
+      // hub_review_consents: a separate signature for checking the noticing. The drop-in consent
+      // says no pictures or sound are saved; this one says they are, for a limited time, and for
+      // what. One row per signature, never edited; ends_at is fixed when signed.
+      //
+      // hub_review_clips: one row per reported minute while checking is on. The picture and the
+      // sound live in R2 (photo_ref/audio_ref are "r2:" markers, never base64 here). Deleted
+      // when reviewed, and always by expires_at.
+      id: "104_hub_review",
+      statements: [
+        `ALTER TABLE hub_awake ADD COLUMN IF NOT EXISTS last_person_at TIMESTAMPTZ`,
+        `CREATE TABLE IF NOT EXISTS hub_review_consents (
+          id TEXT PRIMARY KEY,
+          care_recipient_id TEXT NOT NULL,
+          signed_by TEXT NOT NULL,
+          signer_capacity TEXT NOT NULL,
+          signer_name TEXT NOT NULL,
+          wording_version TEXT NOT NULL,
+          wording_text TEXT NOT NULL,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          ends_at TIMESTAMPTZ NOT NULL,
+          revoked_at TIMESTAMPTZ,
+          revoked_by TEXT
+        )`,
+        `CREATE INDEX IF NOT EXISTS idx_hub_review_consents_cr ON hub_review_consents(care_recipient_id, created_at DESC)`,
+        `CREATE TABLE IF NOT EXISTS hub_review_clips (
+          id TEXT PRIMARY KEY,
+          care_recipient_id TEXT NOT NULL,
+          taken_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          counted BOOLEAN NOT NULL DEFAULT FALSE,
+          signals TEXT,
+          photo_ref TEXT,
+          audio_ref TEXT,
+          expires_at TIMESTAMPTZ NOT NULL
+        )`,
+        `CREATE INDEX IF NOT EXISTS idx_hub_review_clips_cr ON hub_review_clips(care_recipient_id, taken_at)`,
+      ],
+    },
   ];
   for (const m of MIGRATIONS_V2) {
     if (applied.has(m.id)) continue;

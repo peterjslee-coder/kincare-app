@@ -273,6 +273,8 @@ function limitBodySize(maxBytes = 50000) {
     // v1.105.74 — family visits (one optional base64 photo; express.json 8mb applies and the
     // route enforces its own 5MB + magic-byte check)
     if (req.originalUrl?.startsWith("/api/family-visits")) return next();
+    // v1.164.0 — the Hub's review clip (express.json 2mb on /api/drop-in; the route caps each part)
+    if (req.originalUrl?.startsWith("/api/drop-in") && /\/review-clip$/.test(req.path || "")) return next();
     const contentLength = parseInt(req.headers["content-length"] || "0");
     if (contentLength > maxBytes) {
       return res.status(413).json({ error: "Request body too large" });

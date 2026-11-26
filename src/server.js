@@ -750,6 +750,9 @@ app.use("/api/caregiver-onboarding", express.json({ limit: "10mb" }));
 // BOTH a route-scoped express.json limit AND a limitBodySize exemption, or the global 100kb
 // cap 413s every photo. That has now been the same bug four times.
 app.use("/api/family-visits", express.json({ limit: "8mb" }));
+// v1.164.0 — the Hub's review clip: one picture (≤400 KB) and ~15 s of sound (≤600 KB) as base64,
+// stored straight to R2 (utils/hubReview.js). Same two-gate rule as above.
+app.use("/api/drop-in", express.json({ limit: "2mb" }));
 // Skip JSON parsing for webhooks that need raw body for signature verification
 app.use((req, res, next) => {
   if (req.originalUrl === '/api/payments/webhook' || req.originalUrl === '/api/checkr/webhook') return next();
@@ -1024,7 +1027,7 @@ app.use("/api/safety", require("./routes/safety"));
 
 // ─── App version check (lightweight, no auth) ───
 const { cancelPassedPrivateOffers, releaseExpiredExclusiveOffers } = require("./utils/exclusiveOffers");
-const APP_VERSION = "1.163.1";
+const APP_VERSION = "1.164.0";
 app.get("/api/version", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({ version: APP_VERSION, minAppVersion: MIN_APP_VERSION });

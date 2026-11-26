@@ -870,6 +870,9 @@ const VOICE_OVER_FLOOR = 2.2;    // speech-band loudness this many times the roo
 // found — remembered on this tablet, since a TV doesn't move — is ignored.
 const PERSON_CHECK_MS = 15000;
 const HubAwake = ({ recipientId }) => {
+  // v1.164.0 — checking the noticing (utils/hubReview.js): while it's signed for, each reported
+  // minute also sends one picture and the last ~15 s of sound, and a small mark shows here.
+  const [reviewOn, setReviewOn] = React.useState(false);
   React.useEffect(() => {
     // Touches anywhere on the Hub — the night screen included — count as "she's up".
     let touches = 0;
@@ -880,6 +883,47 @@ const HubAwake = ({ recipientId }) => {
     let stream = null, ctx = null, analyser = null, tick = null, report = null, stopped = false;
     let prev = null, motion = false, voiceSec = 0, floor = null;
     let personSeen = false, detectTimer = null, detecting = false;
+    let lastSeen = [], review = false, recorder = null, recTimer = null, lastAudio = null;
+    // Rolling ~15 s of sound, only while checking is on: a fresh recorder every 15 s, keeping the
+    // newest finished piece (each piece is a whole file on its own).
+    const startRecorder = () => {
+      if (recorder || !stream || typeof MediaRecorder === 'undefined' || !stream.getAudioTracks().length) return;
+      const audioOnly = new MediaStream(stream.getAudioTracks());
+      const next = () => {
+        if (stopped || !review) { recorder = null; return; }
+        let r;
+        try { r = new MediaRecorder(audioOnly, { audioBitsPerSecond: 24000 }); } catch { recorder = null; return; }
+        const parts = [];
+        r.ondataavailable = (e) => { if (e.data && e.data.size) parts.push(e.data); };
+        r.onstop = () => { if (parts.length) lastAudio = new Blob(parts, { type: r.mimeType || 'audio/webm' }); };
+        recorder = r;
+        try { r.start(); } catch { recorder = null; return; }
+        recTimer = setTimeout(() => { try { r.state !== 'inactive' && r.stop(); } catch { /* gone */ } next(); }, 15000);
+      };
+      next();
+    };
+    const stopRecorder = () => {
+      clearTimeout(recTimer); recTimer = null;
+      try { recorder && recorder.state !== 'inactive' && recorder.stop(); } catch { /* gone */ }
+      recorder = null; lastAudio = null;
+    };
+    const toDataUri = (blob) => new Promise((resolve) => {
+      const fr = new FileReader(); fr.onload = () => resolve(fr.result); fr.onerror = () => resolve(null); fr.readAsDataURL(blob);
+    });
+    const sendClip = async (body, counted) => {
+      let photo = null, audio = null;
+      try {
+        if (video.videoWidth) {
+          const c = document.createElement('canvas'); c.width = 480; c.height = Math.round(480 * video.videoHeight / video.videoWidth);
+          c.getContext('2d').drawImage(video, 0, 0, c.width, c.height);
+          photo = c.toDataURL('image/jpeg', 0.6);
+        }
+      } catch { photo = null; }
+      try { if (lastAudio) audio = await toDataUri(lastAudio); } catch { audio = null; }
+      if (audio && !/^data:audio\/(webm|ogg|mp4)/.test(audio)) audio = audio.replace(/^data:[^;,]+/, 'data:audio/webm');
+      const personCheck = window.HubPersonCheck ? window.HubPersonCheck.state() : 'missing';
+      apiFetch(`/api/drop-in/${recipientId}/review-clip`, { method: 'POST', body: JSON.stringify({ photo, audio, counted, signals: { ...body, seen: lastSeen, personCheck } }) }).catch(() => {});
+    };
     const SCREENS_KEY = 'inplace_hub_screens_' + recipientId;
     let known = [];
     try { known = JSON.parse(localStorage.getItem(SCREENS_KEY) || '[]') || []; } catch { known = []; }
@@ -938,6 +982,7 @@ const HubAwake = ({ recipientId }) => {
         try {
           const r = await window.HubPersonCheck.check(video, known);
           if (r.person) personSeen = true;
+          lastSeen = Array.isArray(r.seen) ? r.seen : [];
           if (r.screens && r.screens.length) {
             known = window.HubPersonCheck.rememberScreens(known, r.screens, Date.now());
             try { localStorage.setItem(SCREENS_KEY, JSON.stringify(known)); } catch { /* storage off */ }
@@ -959,18 +1004,34 @@ const HubAwake = ({ recipientId }) => {
         const body = { motion, voiceSeconds: Math.round(voiceSec), touches, person: checking ? personSeen : null, screens: known.length };
         motion = false; voiceSec = 0; personSeen = false;
         if (!body.motion && body.voiceSeconds < 10 && !body.touches && !body.person) return;
-        apiFetch(`/api/drop-in/${recipientId}/awake`, { method: 'POST', body: JSON.stringify(body) }).catch(() => {});
+        apiFetch(`/api/drop-in/${recipientId}/awake`, { method: 'POST', body: JSON.stringify(body) })
+          .then((r) => (r && r.ok ? r.json() : null))
+          .then((d) => {
+            if (!d || stopped) return;
+            const on = d.review === true;
+            if (on !== review) { review = on; setReviewOn(on); if (on) startRecorder(); else stopRecorder(); }
+            if (on) sendClip(body, d.recorded === true);
+          })
+          .catch(() => {});
       }, AWAKE_REPORT_MS);
     })();
     return () => {
       stopped = true;
       clearInterval(tick); clearInterval(report); clearInterval(detectTimer);
+      stopRecorder();
       try { stream && stream.getTracks().forEach((t) => t.stop()); } catch { /* gone */ }
       try { ctx && ctx.close(); } catch { /* gone */ }
       document.removeEventListener('pointerdown', onTouch, true);
     };
   }, [recipientId]);
-  return null;
+  // Never secret in her home: a small mark while pictures and sound are being saved.
+  if (!reviewOn) return null;
+  return (
+    <div data-testid="hub-review-mark" aria-label="Checking: pictures and sound are being saved for the family to check"
+      style={{ position: 'fixed', left: 10, bottom: 10, zIndex: 50, display: 'flex', alignItems: 'center', gap: 6, padding: '4px 10px', borderRadius: 999, background: 'rgba(0,0,0,0.45)', color: '#fff', fontSize: 13, fontWeight: 600, pointerEvents: 'none' }}>
+      <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#e53935' }} /> Checking
+    </div>
+  );
 };
 
 const HubBoard = ({ hub, first, now, show, calls, note, s, failed, readFlash, reading, acking, unread, awake, onWake, onRead, onAck, onText, onMessages, onCall, onHubShape }) => {
@@ -2044,6 +2105,142 @@ const HubNights = ({ recipientId, name }) => {
   );
 };
 
+// ─── v1.164.0 — checking the noticing: see and hear what each minute was ───
+// Pete, 11/26: "The only way it's going to work is if I can review and verify what the camera is
+// seeing... Delete it after every review, until I'm sure it's accurate."
+const ReviewMedia = ({ recipientId, clip }) => {
+  const [img, setImg] = useState(null);
+  const [aud, setAud] = useState(null);
+  const [loading, setLoading] = useState(false);
+  useEffect(() => {
+    let url = null, live = true;
+    if (clip.hasPhoto) {
+      apiFetch(`/api/drop-in/${recipientId}/review-clip/${clip.id}/photo`).then((r) => (r && r.ok ? r.blob() : null))
+        .then((b) => { if (b && live) { url = URL.createObjectURL(b); setImg(url); } }).catch(() => {});
+    }
+    return () => { live = false; if (url) URL.revokeObjectURL(url); };
+  }, [clip.id]);
+  useEffect(() => () => { if (aud) URL.revokeObjectURL(aud); }, [aud]);
+  const play = async () => {
+    if (aud || loading) return;
+    setLoading(true);
+    try {
+      const r = await apiFetch(`/api/drop-in/${recipientId}/review-clip/${clip.id}/audio`);
+      if (r && r.ok) setAud(URL.createObjectURL(await r.blob()));
+    } catch { /* stays unplayed */ }
+    setLoading(false);
+  };
+  return (
+    <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+      <div style={{ width: 150, height: 112, flexShrink: 0, borderRadius: 8, overflow: 'hidden', background: 'var(--bg-surface)', border: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, color: 'var(--text-muted)' }}>
+        {img ? <img src={img} alt="What the Hub's camera saw" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : clip.hasPhoto ? 'Loading…' : 'No picture'}
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        {clip.hasAudio ? (aud
+          ? <audio src={aud} controls autoPlay style={{ width: '100%', height: 32 }} />
+          : <button type="button" onClick={play} style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid var(--role-color)', background: 'var(--bg-card)', color: 'var(--role-color)', fontWeight: 700, fontSize: 12.5, cursor: 'pointer', fontFamily: 'inherit' }}>{loading ? 'Loading…' : '▶ Play the sound'}</button>)
+          : <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>No sound saved</span>}
+      </div>
+    </div>
+  );
+};
+
+const describeSignals = (g) => {
+  const out = [];
+  out.push(g.person === true ? 'person seen' : g.person === false ? 'no person seen' : `person check ${g.personCheck === 'failed' ? 'NOT WORKING' : g.personCheck === 'ready' ? 'on' : (g.personCheck || 'off')}`);
+  if (g.motion) out.push('movement');
+  if (g.voiceSeconds) out.push(`sound ${g.voiceSeconds}s`);
+  if (g.touches) out.push(`${g.touches} touch${g.touches === 1 ? '' : 'es'}`);
+  return out.join(' · ');
+};
+
+const HubReview = ({ recipientId, name }) => {
+  const { showToast } = useToast();
+  const [v, setV] = useState(null);
+  const [onlyUp, setOnlyUp] = useState(true);
+  const [shown, setShown] = useState(20);
+  const [signName, setSignName] = useState('');
+  const [agree, setAgree] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [open, setOpen] = useState(false);
+  const load = async () => { try { const r = await apiFetch(`/api/drop-in/${recipientId}/review`); if (r && r.ok) setV(await r.json()); } catch { /* none */ } };
+  useEffect(() => { load(); }, [recipientId]);
+  if (!v || (!v.isLeader && !v.canSign)) return null;
+  const clips = (v.clips || []).filter((c) => !onlyUp || c.counted);
+  const fmt = (iso) => new Date(iso).toLocaleString('en-US', { weekday: 'short', hour: 'numeric', minute: '2-digit' });
+  const sign = async () => {
+    setBusy(true);
+    try {
+      const r = await apiFetch(`/api/drop-in/${recipientId}/review/consent`, { method: 'POST', body: JSON.stringify({ signerName: signName, agree, wordingVersion: v.wordingVersion }) });
+      const d = await r.json().catch(() => ({}));
+      if (r.ok) { showToast(`Checking is on for ${v.days} days`, 'success'); load(); } else showToast(d.error || 'Could not sign', 'error');
+    } catch { showToast('Could not reach the server', 'error'); }
+    setBusy(false);
+  };
+  const del = async (stop) => {
+    if (!window.confirm(stop ? `Stop checking and delete everything saved?` : `Delete all ${v.clips.length} saved minutes? They can't be brought back.`)) return;
+    setBusy(true);
+    try {
+      const r = await apiFetch(`/api/drop-in/${recipientId}/review/${stop ? 'stop' : 'delete'}`, { method: 'POST', body: JSON.stringify({}) });
+      const d = await r.json().catch(() => ({}));
+      if (r.ok) { showToast(`Deleted ${d.deleted || 0} saved minute${d.deleted === 1 ? '' : 's'}`, 'success'); load(); } else showToast(d.error || 'Could not delete', 'error');
+    } catch { showToast('Could not reach the server', 'error'); }
+    setBusy(false);
+  };
+  const btn = { padding: '8px 12px', borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' };
+  return (
+    <div data-testid="hub-review" style={{ border: '1px solid var(--border-color)', borderRadius: 12, padding: 14, background: 'var(--bg-card)', marginTop: 10 }}>
+      <button type="button" onClick={() => setOpen(!open)} style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: 'inherit' }}>
+        <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>{'\u{1F50E}'} Check what it's counting</span>
+        <span style={{ fontSize: 12, color: v.on ? '#c62828' : 'var(--text-muted)', fontWeight: 700 }}>{v.on ? `● On · ${v.clips ? v.clips.length : 0} saved` : 'Off'} {open ? '▴' : '▾'}</span>
+      </button>
+      {open && !v.on && (
+        <div style={{ marginTop: 10, fontSize: 13, color: 'var(--text-primary)', lineHeight: 1.5 }}>
+          <div style={{ whiteSpace: 'pre-wrap', padding: 10, borderRadius: 8, background: 'var(--bg-surface)', fontSize: 12.5 }}>{v.wording}</div>
+          {v.canSign ? (
+            <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <input value={signName} onChange={(e) => setSignName(e.target.value)} placeholder="Your full name" style={{ padding: 8, borderRadius: 8, border: '1px solid var(--border-color)', fontSize: 14 }} />
+              <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13 }}><input type="checkbox" checked={agree} onChange={(e) => setAgree(e.target.checked)} /> I agree, as {v.capacityLabel}</label>
+              <button type="button" disabled={busy || !agree || signName.trim().length < 2} onClick={sign} style={{ ...btn, border: 'none', background: 'var(--role-color)', color: 'var(--text-on-primary)' }}>Sign and start checking</button>
+            </div>
+          ) : <div style={{ marginTop: 8, fontSize: 12.5, color: 'var(--text-secondary)' }}>{name}, or the agent under {name}'s power of attorney or as healthcare agent, has to sign this.</div>}
+        </div>
+      )}
+      {open && v.on && (
+        <div style={{ marginTop: 10 }}>
+          <div style={{ fontSize: 12.5, color: 'var(--text-secondary)', marginBottom: 8 }}>
+            Signed by {v.signerName}. Ends {fmt(v.endsAt)}. Each saved minute is deleted after {v.hours} hours, or sooner when you delete it here.
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
+            <button type="button" disabled={busy || !(v.clips || []).length} onClick={() => del(false)} style={{ ...btn, border: 'none', background: 'var(--role-color)', color: 'var(--text-on-primary)' }} data-testid="review-delete">Reviewed {'—'} delete these</button>
+            <button type="button" disabled={busy} onClick={() => del(true)} style={{ ...btn, border: '1px solid var(--color-error)', background: 'var(--bg-card)', color: 'var(--color-error)' }}>Stop checking</button>
+          </div>
+          <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13, marginBottom: 8 }}>
+            <input type="checkbox" checked={onlyUp} onChange={(e) => { setOnlyUp(e.target.checked); setShown(20); }} /> Only minutes it counted as up
+          </label>
+          {clips.length === 0 && <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>Nothing saved yet. The Hub saves a minute each time it notices something.</div>}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {clips.slice(0, shown).map((c) => (
+              <div key={c.id} style={{ borderTop: '1px solid var(--border-color)', paddingTop: 10 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginBottom: 6, fontSize: 13 }}>
+                  <strong style={{ color: 'var(--text-primary)' }}>{fmt(c.takenAt)}</strong>
+                  <span style={{ fontWeight: 700, color: c.counted ? '#1b7a3d' : 'var(--text-muted)' }}>{c.counted ? 'Counted as up' : 'Not counted'}</span>
+                </div>
+                <div style={{ fontSize: 12.5, color: 'var(--text-secondary)', marginBottom: 6 }}>
+                  {describeSignals(c.signals || {})}
+                  {c.signals && c.signals.seen && c.signals.seen.length > 0 && <div style={{ color: 'var(--text-muted)' }}>The camera's guess: {c.signals.seen.join(', ')}</div>}
+                </div>
+                <ReviewMedia recipientId={recipientId} clip={c} />
+              </div>
+            ))}
+          </div>
+          {clips.length > shown && <button type="button" onClick={() => setShown(shown + 20)} style={{ ...btn, marginTop: 10, border: '1px solid var(--border-color)', background: 'var(--bg-card)', color: 'var(--text-primary)' }}>Show 20 more ({clips.length - shown} left)</button>}
+        </div>
+      )}
+    </div>
+  );
+};
+
 const SimpleModeSettings = window.SimpleModeSettings = ({ recipientId, firstName, phoneExtras }) => {
   const { showToast } = useToast();
   const [cfg, setCfg] = useState(null);
@@ -2171,6 +2368,7 @@ const SimpleModeSettings = window.SimpleModeSettings = ({ recipientId, firstName
       )}
       {callHost.ui}
       {hub && hub.on && <HubNights recipientId={recipientId} name={name} />}
+      {hub && hub.on && <HubReview recipientId={recipientId} name={name} />}
 
       <A11yBranch stickyKey={`a11y.phone.${recipientId}`} icon={'\u{1F4F1}'} title={`${name}'s phone`} summary={branchSummaryPhone} testid="a11y-branch-phone">
       <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 14, color: 'var(--text-primary)', cursor: 'pointer', marginBottom: 6 }}>
