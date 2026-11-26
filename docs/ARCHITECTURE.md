@@ -7,7 +7,7 @@ build red.
 
 Hand-written sections (§3 "Where is…") are preserved across regeneration; edit those freely.
 
-Structure at last generation: 684 HTTP routes across 72 mounts ·
+Structure at last generation: 685 HTTP routes across 72 mounts ·
 131 `CREATE TABLE` statements · 17 background jobs · 45 socket events
 (18 with no client listener) · 77 push event types · 66 `window.__*` globals.
 
@@ -69,7 +69,7 @@ JSX is *not* compiled in the browser; Babel-standalone is not loaded. Editing an
 | `/api/costs` | `src/routes/costs.js` | 8 |  |
 | `/api/dashboard` | `src/routes/dashboard.js` | 1 |  |
 | `/api/documents` | `src/routes/documents.js` | 14 |  |
-| `/api/drop-in` | `src/routes/dropIn.js` | 14 |  |
+| `/api/drop-in` | `src/routes/dropIn.js` | 15 |  |
 | `/api/family-visits` | `src/routes/familyVisits.js` | 5 |  |
 | `/api/feedback` | `src/routes/feedback.js` | 6 |  |
 | `/api/geocode` | `src/routes/geocode.js` | 2 |  |

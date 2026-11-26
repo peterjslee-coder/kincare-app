@@ -8,11 +8,9 @@ const { instructionsNeedAck, sameInstructions } = require("../src/utils/instruct
 
 describe("check-in wizard", () => {
   const src = read("CaretakerHub.js");
-  // v1.165.0 — the instructions are their own step now, before the briefing: the only way past
-  // them is the orange "I've read these" button, which is what records the acknowledgement.
-  test("today's instructions are their own step, and its button is the acknowledgement", () => {
-    expect(src).toMatch(/\.\.\.\(wizardHasInstructions \? \['instructions'\] : \[\]\),\s*'briefing',/);
-    expect(src).toMatch(/checkInStep === 'instructions' && \(\s*<button data-testid="checkin-next" onClick=\{\(\) => \{ setInstructionsAcked\(true\); ciGoNext\(\); \}\}/);
+  test("Continue is gated on the instructions checkbox, not only the briefing", () => {
+    expect(src).toMatch(/const briefingReady = briefingAcked && \(!wizardHasInstructions \|\| instructionsAcked\)/);
+    expect(src).toMatch(/if \(!briefingReady\) \{/);
   });
   test("the check-in sends the exact text she checked off", () => {
     expect(src).toMatch(/acknowledgedInstructions: wizardInstructions/);

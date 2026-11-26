@@ -31,21 +31,6 @@ const WINDOW_DAYS = 45;
 
 const ENTRIES = [
   {
-    id: "checkin-one-step-at-a-time",
-    version: "1.165.0",
-    date: "2026-11-26",
-    audience: ["caregiver"],
-    title: "Checking in, one step at a time",
-    body: "Check-in now shows one thing per screen with one big orange button: read the instructions, look over the care report, then Check in now. A green screen tells you it worked.",
-    howTo: [
-      "Tap Check In Now on your visit",
-      "Tap the orange button on each screen when you're done reading",
-      "Tap Check in now on the last screen, and look for the green check",
-    ],
-    examples: ["I've read these", "I've looked it over", "You're checked in!"],
-    preview: "checkInSteps",
-  },
-  {
     id: "hub-one-stream",
     version: "1.161.0",
     date: "2026-11-25",
@@ -59,6 +44,20 @@ const ENTRIES = [
     ],
     examples: ["Just to you, from Sam", "Mom's Hub"],
     preview: "hubOneStream",
+  },
+  {
+    id: "in-a-call-now",
+    version: "1.165.0",
+    date: "2026-11-26",
+    audience: ["family"],
+    title: "See when they're on a call",
+    body: "The top of Accessibility Options now says when your loved one is on a call, who with, and since when. It checks every 20 seconds while you're looking.",
+    howTo: [
+      "Care Team, then Accessibility Options",
+      "Look under their name at the top",
+    ],
+    examples: ["In a call with Sam since 11:52 AM"],
+    preview: "inCallNow",
   },
   {
     id: "hub-noticing-check",

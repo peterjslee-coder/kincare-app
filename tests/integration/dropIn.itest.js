@@ -327,6 +327,24 @@ describe("noticing when she is up", () => {
     expect((await h.request.post(`/api/drop-in/${recipientId}/awake`).set(h.auth(mom.token)).send({ touches: 1 })).body.review).toBe(false);
   });
 
+  // v1.165.0 — "Can I see if she's currently in a call?"
+  test("live: her family can ask; without Twilio the answer is unknown, never 'not in a call'", async () => {
+    const r = await h.request.get(`/api/drop-in/${recipientId}/live`).set(h.auth(leader.token));
+    expect(r.status).toBe(200);
+    expect(r.body).toEqual({ inCall: null });
+    // Names come only from her care team, and the asker sees "you".
+    const L = require("../../src/utils/liveCall");
+    const real = L.callFor;
+    L.callFor = async () => ({ inCall: true, since: "2026-11-26T16:52:00Z", withIds: [sister.user.id, leader.user.id, "outsider"] });
+    try {
+      const w = await h.request.get(`/api/drop-in/${recipientId}/live`).set(h.auth(leader.token));
+      expect(w.body).toEqual({ inCall: true, since: "2026-11-26T16:52:00Z", with: ["Sara", "you", "someone"] });
+    } finally { L.callFor = real; }
+    expect((await h.request.get(`/api/drop-in/${recipientId}/live`).set(h.auth(tina.token))).status).toBe(404);
+    expect((await h.request.get(`/api/drop-in/${recipientId}/live`).set(h.auth(stranger.token))).status).toBe(404);
+    expect((await h.request.get(`/api/drop-in/${recipientId}/live`).set(h.auth(mom.token))).status).toBe(404);
+  });
+
   test("withdrawing stops everything at once", async () => {
     const r = await h.request.post(`/api/drop-in/${recipientId}/revoke`).set(h.auth(mom.token)).send({});
     expect(r.status).toBe(200);
