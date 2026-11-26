@@ -297,16 +297,24 @@ router.post("/:recipientId/awake", async (req, res) => {
 // ─── v1.164.0 — checking the noticing (utils/hubReview.js) ───
 const R = require("../utils/hubReview");
 
-function reviewView(cr, c, capacity, leader) {
+/** Who would be told if the leader signs: her recorded agents, by first name ("Sara", "Sara and Dean"). */
+async function agentNames(db, cr, exceptUserId) {
+  const signers = (await D.possibleSigners(db, cr)).filter((x) => x.capacity !== "self" && x.userId !== exceptUserId);
+  const names = signers.map((x) => x.firstName).filter(Boolean);
+  return { signers, text: names.length > 1 ? names.slice(0, -1).join(", ") + " and " + names[names.length - 1] : (names[0] || "") };
+}
+
+function reviewView(cr, c, capacity, leader, agents) {
+  const asLeader = !capacity && leader;
   return {
     on: !!c,
     endsAt: c ? c.ends_at : null,
     signerName: c ? c.signer_name : null,
     signedAt: c ? c.created_at : null,
-    wording: R.wordingFor(cr.first_name || "them"),
+    wording: R.wordingFor(cr.first_name || "them", asLeader, agents || ""),
     wordingVersion: R.WORDING_VERSION,
-    canSign: !!capacity,
-    capacityLabel: capacity ? D.CAPACITY_LABEL[capacity] : null,
+    canSign: !!capacity || leader,
+    capacityLabel: capacity ? D.CAPACITY_LABEL[capacity] : leader ? "care team leader" : null,
     isLeader: leader,
     days: R.REVIEW_DAYS, hours: R.CLIP_HOURS,
   };
@@ -322,7 +330,8 @@ router.get("/:recipientId/review", async (req, res) => {
     const capacity = await D.signerCapacity(db, a.cr, req.user.id);
     if (!leader && !capacity) return res.status(403).json({ error: "Only the team leader can see this" });
     const c = await R.current(db, a.cr.id);
-    res.json({ ...reviewView(a.cr, c, capacity, leader), clips: leader ? await R.listClips(db, a.cr.id) : [] });
+    const agents = (await agentNames(db, a.cr, req.user.id)).text;
+    res.json({ ...reviewView(a.cr, c, capacity, leader, agents), clips: leader ? await R.listClips(db, a.cr.id) : [] });
   } catch (err) {
     captureException(err, { where: "dropIn: review" });
     res.status(500).json({ error: "Couldn't load that" });
@@ -337,16 +346,33 @@ router.post("/:recipientId/review/consent", async (req, res) => {
     const a = await access(db, req);
     if (a.status !== 200) return res.status(a.status).json({ error: "Not found" });
     const capacity = await D.signerCapacity(db, a.cr, req.user.id);
-    if (!capacity) return res.status(403).json({ error: `Only ${a.cr.first_name || "the person"}, or the agent recorded under their power of attorney or as their healthcare agent, can sign this.` });
+    const leader = await D.isLeader(db, a.cr, req.user.id);
+    if (!capacity && !leader) return res.status(403).json({ error: `Only the care team leader, ${a.cr.first_name || "the person"}, or the agent recorded under their power of attorney or as their healthcare agent, can sign this.` });
     if (!(await D.mayNotice(db, a.cr.id))) return res.status(409).json({ error: "Turn on noticing first (the drop-in consent and Notice when up)." });
     const name = String((req.body && req.body.signerName) || "").trim().slice(0, 120);
     if (req.body?.agree !== true || name.length < 2) return res.status(400).json({ error: "Type your full name and tick that you agree." });
     if (req.body?.wordingVersion !== R.WORDING_VERSION) return res.status(409).json({ error: "The wording changed. Please read it again." });
-    const c = await R.sign(db, a.cr, req.user, capacity, name);
+    const asLeader = !capacity;
+    const agents = await agentNames(db, a.cr, req.user.id);
+    const role = capacity || "team_leader";
+    const label = capacity ? D.CAPACITY_LABEL[capacity] : "care team leader";
+    const c = await R.sign(db, a.cr, req.user, role, name, R.wordingFor(a.cr.first_name || "them", asLeader, agents.text));
     await D.audit(db, a.cr.id, req.user.id, "hub_review_signed",
-      `${name} agreed, as ${D.CAPACITY_LABEL[capacity]}, to the Hub saving pictures and sound for ${R.REVIEW_DAYS} days to check its noticing`,
-      { consentId: c.id, capacity, wordingVersion: R.WORDING_VERSION, endsAt: c.ends_at });
-    res.status(201).json(reviewView(a.cr, c, capacity, await D.isLeader(db, a.cr, req.user.id)));
+      `${name} agreed, as ${label}, to the Hub saving pictures and sound for ${R.REVIEW_DAYS} days to check its noticing`,
+      { consentId: c.id, capacity: role, wordingVersion: R.WORDING_VERSION, endsAt: c.ends_at, told: agents.signers.map((x) => x.userId) });
+    // Her agents hear about it at once, and can stop it (POST /review/stop allows them).
+    // No details on the lock screen (v1.105.39): who and where are in the app.
+    for (const ag of agents.signers) {
+      try {
+        const { sendPushToUser } = require("../utils/push");
+        await sendPushToUser(db, ag.userId, "InPlace Hub", `${name.split(" ")[0]} turned on a 7-day check of the Hub. Open InPlace to see it or stop it.`, { type: "hub_review_started", page: "care-team" }).catch(() => {});
+        await db.prepare("INSERT INTO activity_feed (id, family_user_id, event_type, title, message, metadata) VALUES (?, ?, ?, ?, ?, ?)")
+          .run(uuid(), ag.userId, "hub_review_started", `${a.cr.first_name}'s Hub: checking is on for ${R.REVIEW_DAYS} days`,
+            `${name} turned on checking: for ${R.REVIEW_DAYS} days the Hub saves a picture and a few seconds of sound each minute it notices something, so the leader can see whether it's noticing ${a.cr.first_name} or the TV. You can stop it in Care Team, Accessibility Options, Check what it's counting.`,
+            JSON.stringify({ careRecipientId: a.cr.id }));
+      } catch (e) { captureException(e, { where: "dropIn: review notify agent" }); }
+    }
+    res.status(201).json(reviewView(a.cr, c, capacity, leader, agents.text));
   } catch (err) {
     captureException(err, { where: "dropIn: review consent" });
     res.status(500).json({ error: "Couldn't record that" });

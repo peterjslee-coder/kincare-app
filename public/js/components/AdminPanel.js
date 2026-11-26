@@ -2093,6 +2093,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
       { id: 'docreview', label: 'Doc Review', icon: '📄', badge: pendingDocsCount || null },
       { id: 'authorizations', label: 'Auth', icon: '\u{1F512}', badge: consentAlerts.length || null },
       { id: 'bgchecks', label: 'BG Checks', icon: '🔍', badge: checkrAlertCount || null },
+      { id: 'hubcheck', label: 'Hub check', icon: '\u{1F4F7}' }, // v1.164.1 — checking what a Hub counts as up
       { id: 'safety', label: 'Safety Flags', icon: '🚨', badge: safetyFlagCount || null },
       { id: 'security', label: 'Security', icon: '🛡️' },
       { id: 'blocked', label: 'Blocked', icon: '🚫' },
@@ -6521,6 +6522,7 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
         </div>
       )}
       {/* ── BACKGROUND CHECKS TAB ── */}
+      {activeTab === 'hubcheck' && <AdminHubCheck />}
       {activeTab === 'bgchecks' && (() => {
         const actionStatuses = ['consider', 'suspended', 'disputed', 'adverse_action', 'processing', 'invitation_sent', 'invitation_expired', 'invitation_canceled'];
         const filedStatuses = ['clear', 'consider_approved', 'rejected', 'did_not_pass'];
@@ -7779,6 +7781,28 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
         </>
       )}
 
+    </div>
+  );
+};
+
+
+// ─── v1.164.1 — Hub check (Pete, 11/26: "Put it in admin or something behind a passkey. I can
+// review there.") Lists every Hub; each opens HubReview (RecipientPhone.js). ───
+const AdminHubCheck = () => {
+  const [hubs, setHubs] = useState(null);
+  useEffect(() => {
+    (async () => {
+      try { const r = await apiFetch('/api/admin/hub-check'); setHubs(r && r.ok ? (await r.json()).hubs : []); } catch { setHubs([]); }
+    })();
+  }, []);
+  if (!hubs) return <div style={{ padding: 16, color: 'var(--text-muted)' }}>Loading{'\u2026'}</div>;
+  if (!hubs.length) return <div style={{ padding: 16, color: 'var(--text-muted)' }}>No Hubs are turned on.</div>;
+  return (
+    <div style={{ padding: '8px 0' }}>
+      <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 12 }}>
+        Turn on checking to save a picture and a few seconds of sound for each minute a Hub notices something, so you can see whether it's counting the person or the TV. It stops by itself after 7 days, and each saved minute is deleted within 72 hours.
+      </div>
+      {hubs.map((h) => (typeof window.HubReview === 'function' ? React.createElement(window.HubReview, { key: h.id, hub: h }) : null))}
     </div>
   );
 };

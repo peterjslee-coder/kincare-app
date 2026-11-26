@@ -25,10 +25,16 @@ const CLIP_HOURS = 72;
 const MAX_PHOTO_BYTES = 400 * 1024;
 const MAX_AUDIO_BYTES = 600 * 1024;
 const WORDING_VERSION = "2026-11-26";
-const wordingFor = (name) => [
+// v1.164.1 — Pete, 11/26: "Why can't I sign for it. Give me that option." The care team leader
+// may sign this one too (not the drop-in consent): it is time-limited, visible on the Hub, and
+// its agents are told the moment it starts and can stop it (routes/dropIn.js notifies them).
+const LEADER_CLOSE = (name, agents) => `I am the care team leader and I am choosing this on purpose. ${agents ? `${agents} ${/ and /.test(agents) ? "are" : "is"} told right away and can stop it` : `${name} can stop it`} at any time in InPlace. It ends by itself after ${REVIEW_DAYS} days.`;
+const wordingFor = (name, asLeader = false, agents = "") => [
   `I agree that, for ${REVIEW_DAYS} days from now, the InPlace Hub in ${name}'s home may save what it sees and hears when it notices something, so the care team leader can check whether it is noticing ${name} or something else, like the TV:`,
   `Each minute it notices movement, talking, a person or a touch, it saves one camera picture and about 15 seconds of sound, with what it noticed. Only the care team leader can see or play them. They are deleted when the leader marks them reviewed, and always within ${CLIP_HOURS} hours. The Hub shows a small "Checking" mark while this is on.`,
-  `I am ${name}, or I hold ${name}'s durable power of attorney or am ${name}'s healthcare agent, and I am choosing this on purpose. It ends by itself after ${REVIEW_DAYS} days, and anyone signing it, ${name}, or the care team leader can stop it sooner in InPlace.`,
+  asLeader
+    ? LEADER_CLOSE(name, agents)
+    : `I am ${name}, or I hold ${name}'s durable power of attorney or am ${name}'s healthcare agent, and I am choosing this on purpose. It ends by itself after ${REVIEW_DAYS} days, and anyone signing it, ${name}, or the care team leader can stop it sooner in InPlace.`,
 ].join("\n\n");
 
 async function current(db, careRecipientId) {
@@ -45,12 +51,12 @@ async function isOn(db, careRecipientId) {
   return !!(await current(db, careRecipientId));
 }
 
-async function sign(db, cr, user, capacity, signerName) {
+async function sign(db, cr, user, capacity, signerName, wording) {
   const id = uuid();
   await db.prepare(
     `INSERT INTO hub_review_consents (id, care_recipient_id, signed_by, signer_capacity, signer_name, wording_version, wording_text, ends_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, NOW() + INTERVAL '${REVIEW_DAYS} days')`
-  ).run(id, cr.id, user.id, capacity, String(signerName).slice(0, 120), WORDING_VERSION, wordingFor(cr.first_name || "them"));
+  ).run(id, cr.id, user.id, capacity, String(signerName).slice(0, 120), WORDING_VERSION, wording || wordingFor(cr.first_name || "them"));
   return current(db, cr.id);
 }
 

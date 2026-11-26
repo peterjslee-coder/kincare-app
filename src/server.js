@@ -985,6 +985,7 @@ app.use("/api/admin/tickets", require("./routes/tickets"));
 app.use("/api/admin/legal-readiness", require("./routes/legalReadiness").adminRouter); // v1.110 — after /api/admin, so its network gate runs first
 app.use("/api/admin/outreach", require("./routes/outreach")); // v1.113.0 — caregiver outreach; after /api/admin for the same reason
 app.use("/api/admin/links", require("./routes/track").adminRouter); // v1.117.0 — campaign links; after /api/admin for the same reason
+app.use("/api/admin/hub-check", require("./routes/hubCheck")); // v1.164.1 — after /api/admin for the same reason
 app.use("/api/t", require("./routes/track").beaconRouter); // v1.117.0 — journey beacon (utils/tracking.js)
 app.use("/api/sms", require("./routes/smsWebhooks")); // v1.113.0 — Twilio webhooks (signature-checked in the router)
 app.use("/api/costs", require("./routes/costs"));
@@ -1027,7 +1028,7 @@ app.use("/api/safety", require("./routes/safety"));
 
 // ─── App version check (lightweight, no auth) ───
 const { cancelPassedPrivateOffers, releaseExpiredExclusiveOffers } = require("./utils/exclusiveOffers");
-const APP_VERSION = "1.164.0";
+const APP_VERSION = "1.164.1";
 app.get("/api/version", (req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   res.json({ version: APP_VERSION, minAppVersion: MIN_APP_VERSION });
