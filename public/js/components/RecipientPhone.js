@@ -1986,10 +1986,16 @@ const HubNowCard = ({ recipientId, name, cfg, hub, callHost, noteOn, noteUI }) =
   const { showToast } = useToast();
   const [v, setV] = useState(null);
   const [noteOpen, setNoteOpen] = useState(false);
+  // v1.165.0 — Pete: "Can I see if she's currently in a call?" Asked every 20 s while this card
+  // is on screen; the server answers from Twilio (utils/liveCall.js).
+  const [liveCall, setLiveCall] = useState(null);
   useEffect(() => {
     let live = true;
     (async () => { try { const r = await apiFetch(`/api/drop-in/${recipientId}`); if (r && r.ok && live) setV(await r.json()); } catch { /* no drop-in row */ } })();
-    return () => { live = false; };
+    const poll = async () => { try { const r = await apiFetch(`/api/drop-in/${recipientId}/live`); if (r && r.ok && live) setLiveCall(await r.json()); } catch { /* keep the last answer */ } };
+    poll();
+    const iv = setInterval(() => { if (!document.hidden) poll(); }, 20000);
+    return () => { live = false; clearInterval(iv); };
   }, [recipientId]);
   const ring = (type, opts) => {
     const to = opts && opts.dropIn ? v.hubUserId : cfg.recipientUserId;
@@ -2010,6 +2016,12 @@ const HubNowCard = ({ recipientId, name, cfg, hub, callHost, noteOn, noteUI }) =
     <div data-testid="a11y-now" style={{ border: '1px solid var(--border-color)', borderRadius: 12, padding: 14, background: 'var(--bg-card)' }}>
       <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>{name} right now</div>
       {bits.length > 0 && <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>{bits.join(' · ')}</div>}
+      {liveCall && liveCall.inCall && (
+        <div data-testid="a11y-in-call" style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-success)', marginTop: 6 }}>
+          {'\u{1F4DE}'} In a call with {(liveCall.with || []).join(' and ') || 'someone'}{liveCall.since ? ` since ${new Date(liveCall.since).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}` : ''}
+        </div>
+      )}
+      {liveCall && liveCall.inCall === false && <div data-testid="a11y-not-in-call" style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>Not in a call</div>}
       {hub && hub.on && (canDrop ? (
         <button type="button" data-testid="dropin-now" onClick={() => ring('video', { dropIn: true })}
           style={{ width: '100%', minHeight: 52, marginTop: 12, borderRadius: 10, border: 'none', background: 'var(--role-color)', color: 'var(--text-on-primary)', fontWeight: 800, fontSize: 16, cursor: 'pointer', fontFamily: 'inherit' }}>

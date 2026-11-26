@@ -46,6 +46,20 @@ const ENTRIES = [
     preview: "hubOneStream",
   },
   {
+    id: "in-a-call-now",
+    version: "1.165.0",
+    date: "2026-11-26",
+    audience: ["family"],
+    title: "See when they're on a call",
+    body: "The top of Accessibility Options now says when your loved one is on a call, who with, and since when. It checks every 20 seconds while you're looking.",
+    howTo: [
+      "Care Team, then Accessibility Options",
+      "Look under their name at the top",
+    ],
+    examples: ["In a call with Sam since 11:52 AM"],
+    preview: "inCallNow",
+  },
+  {
     id: "hub-noticing-check",
     version: "1.164.0",
     date: "2026-11-26",

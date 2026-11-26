@@ -90,6 +90,35 @@ router.get("/:recipientId", async (req, res) => {
   }
 });
 
+// GET /:recipientId/live — v1.165.0: is she in a call right now, and with whom (utils/liveCall.js).
+// Pete, 11/26: "Can I see if she's currently in a call?" Her family (anyone `access` lets in,
+// not hired caregivers). Names only for people on her care team; anyone else is "someone".
+router.get("/:recipientId/live", async (req, res) => {
+  try {
+    const db = await getDb();
+    const a = await access(db, req);
+    if (a.status !== 200 || a.herself) return res.status(404).json({ error: "Not found" });
+    const linked = a.cr.linked_user_id || (await db.prepare("SELECT linked_user_id FROM care_recipients WHERE id = ?").get(a.cr.id) || {}).linked_user_id;
+    if (!linked) return res.json({ inCall: false });
+    const c = await require("../utils/liveCall").callFor(linked);
+    if (!c.inCall) return res.json({ inCall: c.inCall });
+    const names = [];
+    for (const id of c.withIds) {
+      const u = await db.prepare(
+        `SELECT u.first_name FROM users u WHERE u.id = ? AND (u.id = ? OR EXISTS (
+           SELECT 1 FROM care_team_members m JOIN care_teams t ON t.id = m.care_team_id
+            WHERE t.care_recipient_id = ? AND m.user_id = u.id) OR EXISTS (
+           SELECT 1 FROM care_recipients r WHERE r.id = ? AND r.family_user_id = u.id))`
+      ).get(id, req.user.id, a.cr.id, a.cr.id);
+      names.push(u ? (id === req.user.id ? "you" : u.first_name) : "someone");
+    }
+    res.json({ inCall: true, since: c.since, with: names });
+  } catch (err) {
+    captureException(err, { where: "dropIn: live" });
+    res.json({ inCall: null });
+  }
+});
+
 // GET /:recipientId/nights?before=YYYY-MM-DD&count=7 — v1.162.0, the night-by-night record.
 // Leader only, like last24. Shown whether or not noticing is on today: nights already recorded
 // under consent stay readable (Pete, 11/25: "keep all the info stored to track over time").

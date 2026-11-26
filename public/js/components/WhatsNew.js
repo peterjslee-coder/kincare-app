@@ -521,6 +521,13 @@ const WN_PREVIEWS = {
     </div>
   ),
   // v1.161.0 — the caller's picture fills her tablet
+  // v1.165.0 — is she on a call right now
+  inCallNow: () => (
+    <div style={{ ...wnCard, padding: 10, fontSize: 11, color: 'var(--text-primary)' }}>
+      <div style={{ fontWeight: 700, fontSize: 13 }}>Mom right now</div>
+      <div style={{ color: 'var(--color-success)', fontWeight: 700, marginTop: 4 }}>{'\u{1F4DE}'} In a call with Sam since 11:52 AM</div>
+    </div>
+  ),
   // v1.164.0 — checking what the Hub counts as up
   hubNoticingCheck: () => (
     <div style={{ ...wnCard, padding: 10, fontSize: 11, color: 'var(--text-primary)' }}>
