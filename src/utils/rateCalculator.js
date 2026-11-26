@@ -2,6 +2,8 @@
 // Pure functions for tiered rate calculation, short-notice surcharge, overnight minimums.
 // Tier boundaries: daytime 7:00–18:00, nighttime 18:00–24:00, overnight 0:00–7:00.
 
+const { zonedDateTimeToInstant, DEFAULT_TIMEZONE } = require("./timezone");
+
 const TIER_BOUNDARIES = [
   { tier: 'overnight', start: 0, end: 7 },    // 12am – 7am
   { tier: 'daytime',   start: 7, end: 18 },   // 7am – 6pm
@@ -30,15 +32,33 @@ function detectTier(hour) {
 
 /**
  * Check if a booking qualifies for short-notice surcharge (<24h before start).
- * @param {string|Date} sessionStart — session start datetime
+ * @param {string|Date} sessionStart — session start datetime (a real instant)
  * @param {string|Date} bookingTime — when the booking was made (default: now)
  * @returns {boolean}
+ *
+ * v1.163.1 — do NOT pass a naive "YYYY-MM-DDTHH:MM" string here: Node reads it in the
+ * SERVER's zone (UTC on Railway), so a 5pm Eastern visit looked like noon and a booking
+ * 25 hours out was charged as a rush. Use isShortNoticeVisit below for wall-clock times.
  */
 function isShortNotice(sessionStart, bookingTime) {
   const start = new Date(sessionStart);
   const booked = bookingTime ? new Date(bookingTime) : new Date();
   const hoursUntilStart = (start.getTime() - booked.getTime()) / (1000 * 60 * 60);
   return hoursUntilStart < SHORT_NOTICE_HOURS;
+}
+
+/**
+ * Short-notice check for a visit stored as care-location wall clock (date + "HH:MM").
+ * v1.163.1 — Faith's Nov 23–25 series: booked Sun 4:00pm ET for Mon 5:00pm ET (25h out),
+ * read as 5:00pm UTC (20h out) and charged the 20% rush. The visit's own zone decides.
+ * @param {string} dateStr — "YYYY-MM-DD"
+ * @param {string} timeStr — "HH:MM"
+ * @param {string} [tz] — care recipient's IANA timezone (default America/New_York)
+ * @param {string|Date} [bookingTime] — default now
+ */
+function isShortNoticeVisit(dateStr, timeStr, tz, bookingTime) {
+  const start = zonedDateTimeToInstant(dateStr, timeStr, tz || DEFAULT_TIMEZONE);
+  return isShortNotice(start, bookingTime);
 }
 
 /**
@@ -160,6 +180,7 @@ function formatCostBreakdown(result) {
 module.exports = {
   detectTier,
   isShortNotice,
+  isShortNoticeVisit,
   calculateSessionCost,
   formatCostBreakdown,
   TIER_BOUNDARIES,

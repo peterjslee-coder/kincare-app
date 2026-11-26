@@ -9,7 +9,7 @@ const { validateSession } = require("../middleware/validate");
 const { captureException } = require("../utils/sentry");
 const availabilityRouter = require("./availability");
 const { sendPushToUser, notifyAdmins, sendSessionReminders } = require("./push");
-const { calculateSessionCost, isShortNotice, SURCHARGE_CAREGIVER_SHARE } = require("../utils/rateCalculator");
+const { calculateSessionCost, isShortNoticeVisit, SURCHARGE_CAREGIVER_SHARE } = require("../utils/rateCalculator");
 const { getNowInZone, getTodayStringInZone, buildDateTimeInZone, zonedDateTimeToInstant, formatTimeForDisplay, parseTimeToMinutes, formatDateRelative } = require("../utils/timezone");
 // v1.123.0 — the one describer for "what does this time change change" (shared with the client).
 const TimeChange = require("../../public/js/timeChange");
@@ -206,7 +206,7 @@ router.post("/request", async (req, res) => {
 
   // Find the care_recipient record linked to this user
   const recipient = await db.prepare(`
-    SELECT cr.id, cr.family_user_id FROM care_recipients cr
+    SELECT cr.id, cr.family_user_id, cr.timezone FROM care_recipients cr
     WHERE cr.linked_user_id = ? AND ${TRUSTED_LINK_SQL}
     LIMIT 1
   `).get(req.user.id);
@@ -235,7 +235,7 @@ router.post("/request", async (req, res) => {
   // Estimate cost using default service-type rates (no specific caregiver yet)
   const defaultRates = { meals: 30, rides: 28, companion: 25, full_day: 22 };
   const baseRate = defaultRates[serviceType] || 28;
-  const shortNotice = isShortNotice(`${scheduledDate}T${scheduledTime}`);
+  const shortNotice = isShortNoticeVisit(scheduledDate, scheduledTime, recipient.timezone);
   const costResult = calculateSessionCost(scheduledTime, null, { base: baseRate }, {
     scheduledDate,
     durationHours,
@@ -1011,14 +1011,21 @@ router.post("/", requireRole("family", "care_for"), validateSession, async (req,
     const defaultRates = { meals: 30, rides: 28, companion: 25, full_day: 22 };
     costRates.base = defaultRates[serviceType] || 28;
   }
-  const shortNotice = isShortNotice(`${scheduledDate}T${scheduledTime}`);
-  const costResult = calculateSessionCost(scheduledTime, null, costRates, {
-    scheduledDate,
+  // v1.163.1 — the rush check runs in the care recipient's zone and PER VISIT (below).
+  // It used to run once, on the first date read as UTC, and every row in the series copied
+  // that answer: a Nov 23–25 series booked Sunday afternoon charged all three visits +20%,
+  // when none of them was inside 24 hours of the booking.
+  const tzRow = careRecipientId
+    ? await db.prepare("SELECT timezone FROM care_recipients WHERE id = ?").get(careRecipientId)
+    : null;
+  const visitTz = tzRow?.timezone || undefined;
+  const costFor = (dateStr) => calculateSessionCost(scheduledTime, null, costRates, {
+    scheduledDate: dateStr,
     durationHours,
-    shortNotice,
+    shortNotice: isShortNoticeVisit(dateStr, scheduledTime, visitTz),
     overnightMinHours,
   });
-  const estimatedCost = costResult.total;
+  const costResult = costFor(scheduledDate);
 
   // Determine dates to create
   //
@@ -1090,8 +1097,10 @@ router.post("/", requireRole("family", "care_for"), validateSession, async (req,
 
     for (const sessionDate of dates) {
       const id = uuid();
-      // costResult already uses proposedRate when set (see rate logic above)
-      const finalCost = estimatedCost;
+      // costRates already use proposedRate when set (see rate logic above).
+      // v1.163.1 — priced per visit: only a visit inside 24 hours carries the rush.
+      const visitCost = costFor(sessionDate);
+      const finalCost = visitCost.total;
 
       await tx.prepare(`
         INSERT INTO care_sessions
@@ -1107,8 +1116,8 @@ router.post("/", requireRole("family", "care_for"), validateSession, async (req,
         specialInstructions || null, finalCost,
         isRecurring ? recurrenceRule : null,
         recurrenceGroupId,
-        costResult.surcharge || 0,
-        JSON.stringify(costResult.tierBreakdown),
+        visitCost.surcharge || 0,
+        JSON.stringify(visitCost.tierBreakdown),
         proposedRate ? parseFloat(proposedRate) : null,
         isExclusive ? bookCaregiverId : null,
         exclusiveUntil,
@@ -1395,7 +1404,12 @@ router.get("/cost-preview", async (req, res) => {
     }
   }
 
-  const shortNotice = isShortNotice(`${scheduledDate}T${scheduledTime}`);
+  // v1.163.1 — in the recipient's zone, same as the booking itself.
+  const previewRecipientId = typeof req.query.careRecipientId === "string" ? req.query.careRecipientId : null;
+  const previewTz = previewRecipientId
+    ? (await db.prepare("SELECT timezone FROM care_recipients WHERE id = ?").get(previewRecipientId))?.timezone
+    : undefined;
+  const shortNotice = isShortNoticeVisit(scheduledDate, scheduledTime, previewTz);
   const costResult = calculateSessionCost(scheduledTime, null, costRates, {
     scheduledDate,
     durationHours: parseFloat(durationHours),

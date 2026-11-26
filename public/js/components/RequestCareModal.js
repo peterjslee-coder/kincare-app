@@ -155,8 +155,8 @@ const RequestCareModal = window.RequestCareModal = ({ onClose }) => {
     }));
     const subtotal = Math.round(tierBreakdown.reduce((s, t) => s + t.amount, 0) * 100) / 100;
     const surcharge = costPreview.shortNotice ? Math.round(subtotal * 0.20 * 100) / 100 : 0;
-    const surchargeCaregiver = Math.round(surcharge * 0.75 * 100) / 100;
-    const surchargePlatform = Math.round(surcharge * 0.25 * 100) / 100;
+    const surchargeCaregiver = Math.round(surcharge * 0.8 * 100) / 100;
+    const surchargePlatform = Math.round(surcharge * 0.2 * 100) / 100;
     const caregiverPayout = Math.round((subtotal + surchargeCaregiver) * 100) / 100;
     const feePercent = costPreview.platformFeePercent || 20;
     const platformFee = Math.round((subtotal * (feePercent / 100) + surchargePlatform) * 100) / 100;
