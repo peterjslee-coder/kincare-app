@@ -22,6 +22,7 @@ beforeAll(async () => {
     "/api/care-recipients": "../../src/routes/careRecipients",
     "/api/drop-in": "../../src/routes/dropIn",
     "/api/dashboard": "../../src/routes/dashboard",
+    "/api/admin/hub-check": "../../src/routes/hubCheck",
   } });
   db = h.db;
   leader = await h.createUser({ firstName: "Pete", lastName: "ITest" });
@@ -282,6 +283,47 @@ describe("noticing when she is up", () => {
     await db.prepare("INSERT INTO hub_review_clips (id, care_recipient_id, counted, signals, expires_at) VALUES (?, ?, TRUE, '{}', NOW() + INTERVAL '72 hours')").run(uuid(), recipientId);
     const stop = await h.request.post(`/api/drop-in/${recipientId}/review/stop`).set(h.auth(leader.token)).send({});
     expect(stop.body).toMatchObject({ on: false, deleted: 1 });
+    // v1.164.1 — Pete: "Why can't I sign for it. Give me that option." The leader without a
+    // recorded capacity may sign this one; the wording says so, and her agents are told.
+    await db.prepare("DELETE FROM recipient_authorities WHERE care_recipient_id = ? AND user_id = ?").run(recipientId, leader.user.id);
+    const asLeader = await review().set(h.auth(leader.token));
+    expect(asLeader.body).toMatchObject({ canSign: true, capacityLabel: "care team leader" });
+    expect(asLeader.body.wording).toMatch(/I am the care team leader/);
+    const signed = await h.request.post(`/api/drop-in/${recipientId}/review/consent`).set(h.auth(leader.token)).send({ signerName: "Pete Lee", agree: true, wordingVersion: R.WORDING_VERSION });
+    expect(signed.status).toBe(201);
+    const c = await db.prepare("SELECT signer_capacity, wording_text FROM hub_review_consents WHERE care_recipient_id = ? AND revoked_at IS NULL").get(recipientId);
+    expect(c.signer_capacity).toBe("team_leader");
+    expect(c.wording_text).toMatch(/I am the care team leader/);
+    // A non-leader with no capacity still can't.
+    expect((await h.request.post(`/api/drop-in/${recipientId}/review/consent`).set(h.auth(sister.token)).send({ signerName: "Sis", agree: true, wordingVersion: R.WORDING_VERSION })).status).toBe(403);
+    await h.request.post(`/api/drop-in/${recipientId}/review/stop`).set(h.auth(leader.token)).send({});
+    expect((await h.request.post(`/api/drop-in/${recipientId}/awake`).set(h.auth(mom.token)).send({ touches: 1 })).body.review).toBe(false);
+  });
+
+  // v1.164.1 — Pete: "Put it in admin or something behind a passkey. I can review there."
+  test("Admin → Hub check: admins only; start, list, delete, stop", async () => {
+    const admin = await h.createUser({ firstName: "Ad", lastName: "Min", isAdmin: true });
+    await db.prepare("UPDATE users SET is_admin = 1 WHERE id = ?").run(admin.user.id);
+    const A = (r) => r.set(h.auth(admin.token));
+    expect((await h.request.get("/api/admin/hub-check").set(h.auth(leader.token))).status).toBeGreaterThanOrEqual(401);
+    const list = await A(h.request.get("/api/admin/hub-check"));
+    expect(list.status).toBe(200);
+    const hub = list.body.hubs.find((x) => x.id === recipientId);
+    expect(hub).toMatchObject({ hubOn: true, noticing: true, on: false });
+    const start = await A(h.request.post(`/api/admin/hub-check/${recipientId}/start`).send({}));
+    expect(start.status).toBe(201);
+    expect(start.body.on).toBe(true);
+    const c = await db.prepare("SELECT signer_capacity, wording_text, ends_at, created_at FROM hub_review_consents WHERE care_recipient_id = ? AND revoked_at IS NULL").get(recipientId);
+    expect(c.signer_capacity).toBe("admin");
+    expect(Math.round((new Date(c.ends_at) - new Date(c.created_at)) / 86400000)).toBe(7);
+    // Her Hub hears it's on with its next report.
+    expect((await h.request.post(`/api/drop-in/${recipientId}/awake`).set(h.auth(mom.token)).send({ touches: 1 })).body.review).toBe(true);
+    await db.prepare("INSERT INTO hub_review_clips (id, care_recipient_id, counted, signals, expires_at) VALUES (?, ?, TRUE, '{}', NOW() + INTERVAL '72 hours')").run(uuid(), recipientId);
+    const one = await A(h.request.get(`/api/admin/hub-check/${recipientId}`));
+    expect(one.body.clips).toHaveLength(1);
+    expect((await A(h.request.post(`/api/admin/hub-check/${recipientId}/delete`).send({}))).body.deleted).toBe(1);
+    const stop = await A(h.request.post(`/api/admin/hub-check/${recipientId}/stop`).send({}));
+    expect(stop.body.on).toBe(false);
     expect((await h.request.post(`/api/drop-in/${recipientId}/awake`).set(h.auth(mom.token)).send({ touches: 1 })).body.review).toBe(false);
   });
 

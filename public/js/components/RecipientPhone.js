@@ -2108,14 +2108,14 @@ const HubNights = ({ recipientId, name }) => {
 // ─── v1.164.0 — checking the noticing: see and hear what each minute was ───
 // Pete, 11/26: "The only way it's going to work is if I can review and verify what the camera is
 // seeing... Delete it after every review, until I'm sure it's accurate."
-const ReviewMedia = ({ recipientId, clip }) => {
+const ReviewMedia = ({ apiBase, clip }) => {
   const [img, setImg] = useState(null);
   const [aud, setAud] = useState(null);
   const [loading, setLoading] = useState(false);
   useEffect(() => {
     let url = null, live = true;
     if (clip.hasPhoto) {
-      apiFetch(`/api/drop-in/${recipientId}/review-clip/${clip.id}/photo`).then((r) => (r && r.ok ? r.blob() : null))
+      apiFetch(`${apiBase}/clips/${clip.id}/photo`).then((r) => (r && r.ok ? r.blob() : null))
         .then((b) => { if (b && live) { url = URL.createObjectURL(b); setImg(url); } }).catch(() => {});
     }
     return () => { live = false; if (url) URL.revokeObjectURL(url); };
@@ -2125,7 +2125,7 @@ const ReviewMedia = ({ recipientId, clip }) => {
     if (aud || loading) return;
     setLoading(true);
     try {
-      const r = await apiFetch(`/api/drop-in/${recipientId}/review-clip/${clip.id}/audio`);
+      const r = await apiFetch(`${apiBase}/clips/${clip.id}/audio`);
       if (r && r.ok) setAud(URL.createObjectURL(await r.blob()));
     } catch { /* stays unplayed */ }
     setLoading(false);
@@ -2154,67 +2154,45 @@ const describeSignals = (g) => {
   return out.join(' · ');
 };
 
-const HubReview = ({ recipientId, name }) => {
+// Admin only (Pete, 11/26: "Put it in admin or something behind a passkey. I can review there.")
+const HubReview = window.HubReview = ({ hub: initial }) => {
   const { showToast } = useToast();
-  const [v, setV] = useState(null);
+  const apiBase = `/api/admin/hub-check/${initial.id}`;
+  const [v, setV] = useState(initial);
   const [onlyUp, setOnlyUp] = useState(true);
   const [shown, setShown] = useState(20);
-  const [signName, setSignName] = useState('');
-  const [agree, setAgree] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [open, setOpen] = useState(false);
-  const load = async () => { try { const r = await apiFetch(`/api/drop-in/${recipientId}/review`); if (r && r.ok) setV(await r.json()); } catch { /* none */ } };
-  useEffect(() => { load(); }, [recipientId]);
-  if (!v || (!v.isLeader && !v.canSign)) return null;
+  const load = async () => { try { const r = await apiFetch(apiBase); if (r && r.ok) setV(await r.json()); } catch { /* keep */ } };
+  useEffect(() => { load(); }, [initial.id]);
   const clips = (v.clips || []).filter((c) => !onlyUp || c.counted);
   const fmt = (iso) => new Date(iso).toLocaleString('en-US', { weekday: 'short', hour: 'numeric', minute: '2-digit' });
-  const sign = async () => {
+  const act = async (path, confirmText, done) => {
+    if (confirmText && !window.confirm(confirmText)) return;
     setBusy(true);
     try {
-      const r = await apiFetch(`/api/drop-in/${recipientId}/review/consent`, { method: 'POST', body: JSON.stringify({ signerName: signName, agree, wordingVersion: v.wordingVersion }) });
+      const r = await apiFetch(`${apiBase}/${path}`, { method: 'POST', body: JSON.stringify({}) });
       const d = await r.json().catch(() => ({}));
-      if (r.ok) { showToast(`Checking is on for ${v.days} days`, 'success'); load(); } else showToast(d.error || 'Could not sign', 'error');
-    } catch { showToast('Could not reach the server', 'error'); }
-    setBusy(false);
-  };
-  const del = async (stop) => {
-    if (!window.confirm(stop ? `Stop checking and delete everything saved?` : `Delete all ${v.clips.length} saved minutes? They can't be brought back.`)) return;
-    setBusy(true);
-    try {
-      const r = await apiFetch(`/api/drop-in/${recipientId}/review/${stop ? 'stop' : 'delete'}`, { method: 'POST', body: JSON.stringify({}) });
-      const d = await r.json().catch(() => ({}));
-      if (r.ok) { showToast(`Deleted ${d.deleted || 0} saved minute${d.deleted === 1 ? '' : 's'}`, 'success'); load(); } else showToast(d.error || 'Could not delete', 'error');
+      if (r.ok) { showToast(done(d), 'success'); load(); } else showToast(d.error || 'That didn’t work', 'error');
     } catch { showToast('Could not reach the server', 'error'); }
     setBusy(false);
   };
   const btn = { padding: '8px 12px', borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' };
   return (
-    <div data-testid="hub-review" style={{ border: '1px solid var(--border-color)', borderRadius: 12, padding: 14, background: 'var(--bg-card)', marginTop: 10 }}>
-      <button type="button" onClick={() => setOpen(!open)} style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: 'inherit' }}>
-        <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>{'\u{1F50E}'} Check what it's counting</span>
-        <span style={{ fontSize: 12, color: v.on ? '#c62828' : 'var(--text-muted)', fontWeight: 700 }}>{v.on ? `● On · ${v.clips ? v.clips.length : 0} saved` : 'Off'} {open ? '▴' : '▾'}</span>
-      </button>
-      {open && !v.on && (
-        <div style={{ marginTop: 10, fontSize: 13, color: 'var(--text-primary)', lineHeight: 1.5 }}>
-          <div style={{ whiteSpace: 'pre-wrap', padding: 10, borderRadius: 8, background: 'var(--bg-surface)', fontSize: 12.5 }}>{v.wording}</div>
-          {v.canSign ? (
-            <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <input value={signName} onChange={(e) => setSignName(e.target.value)} placeholder="Your full name" style={{ padding: 8, borderRadius: 8, border: '1px solid var(--border-color)', fontSize: 14 }} />
-              <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13 }}><input type="checkbox" checked={agree} onChange={(e) => setAgree(e.target.checked)} /> I agree, as {v.capacityLabel}</label>
-              <button type="button" disabled={busy || !agree || signName.trim().length < 2} onClick={sign} style={{ ...btn, border: 'none', background: 'var(--role-color)', color: 'var(--text-on-primary)' }}>Sign and start checking</button>
-            </div>
-          ) : <div style={{ marginTop: 8, fontSize: 12.5, color: 'var(--text-secondary)' }}>{name}, or the agent under {name}'s power of attorney or as healthcare agent, has to sign this.</div>}
-        </div>
-      )}
-      {open && v.on && (
-        <div style={{ marginTop: 10 }}>
-          <div style={{ fontSize: 12.5, color: 'var(--text-secondary)', marginBottom: 8 }}>
-            Signed by {v.signerName}. Ends {fmt(v.endsAt)}. Each saved minute is deleted after {v.hours} hours, or sooner when you delete it here.
-          </div>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
-            <button type="button" disabled={busy || !(v.clips || []).length} onClick={() => del(false)} style={{ ...btn, border: 'none', background: 'var(--role-color)', color: 'var(--text-on-primary)' }} data-testid="review-delete">Reviewed {'—'} delete these</button>
-            <button type="button" disabled={busy} onClick={() => del(true)} style={{ ...btn, border: '1px solid var(--color-error)', background: 'var(--bg-card)', color: 'var(--color-error)' }}>Stop checking</button>
-          </div>
+    <div data-testid="hub-review" style={{ border: '1px solid var(--border-color)', borderRadius: 12, padding: 14, background: 'var(--bg-card)', marginBottom: 12 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>{v.firstName} {v.lastName}'s Hub</span>
+        <span style={{ fontSize: 12, fontWeight: 700, color: v.on ? '#c62828' : 'var(--text-muted)' }}>{v.on ? `● Checking until ${fmt(v.endsAt)} · ${(v.clips || []).length} saved` : 'Not checking'}</span>
+      </div>
+      {!v.noticing && <div style={{ fontSize: 12.5, color: 'var(--text-secondary)', marginTop: 6 }}>Noticing is off for this Hub, so there's nothing to check.</div>}
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', margin: '10px 0' }}>
+        {!v.on && v.noticing && <button type="button" disabled={busy} onClick={() => act('start', null, () => `Checking on for ${v.days} days`)} style={{ ...btn, border: 'none', background: 'var(--role-color)', color: 'var(--text-on-primary)' }}>Start checking ({v.days} days)</button>}
+        {v.on && <button type="button" disabled={busy || !(v.clips || []).length} onClick={() => act('delete', `Delete all ${(v.clips || []).length} saved minutes?`, (d) => `Deleted ${d.deleted || 0}`)} style={{ ...btn, border: 'none', background: 'var(--role-color)', color: 'var(--text-on-primary)' }} data-testid="review-delete">Reviewed {'—'} delete these</button>}
+        {v.on && <button type="button" disabled={busy} onClick={() => act('stop', 'Stop checking and delete everything saved?', (d) => `Stopped; deleted ${d.deleted || 0}`)} style={{ ...btn, border: '1px solid var(--color-error)', background: 'var(--bg-card)', color: 'var(--color-error)' }}>Stop checking</button>}
+        {v.on && <button type="button" disabled={busy} onClick={load} style={{ ...btn, border: '1px solid var(--border-color)', background: 'var(--bg-card)', color: 'var(--text-primary)' }}>Refresh</button>}
+      </div>
+      {v.on && (
+        <div>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>Each saved minute is deleted after {v.hours} hours if you don't delete it first. The Hub shows a small "Checking" mark while this is on.</div>
           <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13, marginBottom: 8 }}>
             <input type="checkbox" checked={onlyUp} onChange={(e) => { setOnlyUp(e.target.checked); setShown(20); }} /> Only minutes it counted as up
           </label>
@@ -2230,7 +2208,7 @@ const HubReview = ({ recipientId, name }) => {
                   {describeSignals(c.signals || {})}
                   {c.signals && c.signals.seen && c.signals.seen.length > 0 && <div style={{ color: 'var(--text-muted)' }}>The camera's guess: {c.signals.seen.join(', ')}</div>}
                 </div>
-                <ReviewMedia recipientId={recipientId} clip={c} />
+                <ReviewMedia apiBase={apiBase} clip={c} />
               </div>
             ))}
           </div>
@@ -2368,7 +2346,6 @@ const SimpleModeSettings = window.SimpleModeSettings = ({ recipientId, firstName
       )}
       {callHost.ui}
       {hub && hub.on && <HubNights recipientId={recipientId} name={name} />}
-      {hub && hub.on && <HubReview recipientId={recipientId} name={name} />}
 
       <A11yBranch stickyKey={`a11y.phone.${recipientId}`} icon={'\u{1F4F1}'} title={`${name}'s phone`} summary={branchSummaryPhone} testid="a11y-branch-phone">
       <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 14, color: 'var(--text-primary)', cursor: 'pointer', marginBottom: 6 }}>
