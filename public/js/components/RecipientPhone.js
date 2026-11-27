@@ -699,7 +699,12 @@ function HubHeartbeat({ recipientId, busy, watching }) {
       try {
         if (navigator.getBattery) { const b = await navigator.getBattery(); body.battery = { level: Math.round(b.level * 100), charging: !!b.charging }; }
       } catch { /* no battery reading */ }
-      try { await apiFetch(`/api/care-recipients/${recipientId}/simple-screen/hub-status`, { method: 'POST', body: JSON.stringify(body) }); } catch { /* next time */ }
+      try {
+        const r = await apiFetch(`/api/care-recipients/${recipientId}/simple-screen/hub-status`, { method: 'POST', body: JSON.stringify(body) });
+        const d = r && r.ok ? await r.json().catch(() => null) : null;
+        // v1.166.0 — lost mode pressed while this Hub was offline starts on its next report.
+        if (d && d.finding === true) window.dispatchEvent(new CustomEvent('inplace:hub-find', { detail: { on: true } }));
+      } catch { /* next time */ }
     };
     const quiet = () => !busyRef.current && Date.now() - lastTouch.current > HUB_QUIET_MS;
     const checkVersion = async () => {
@@ -740,6 +745,68 @@ function HubHeartbeat({ recipientId, busy, watching }) {
   return null;
 }
 
+// ─── HubFinder (v1.166.0) — lost mode ───
+// Pete, 11/27: "I need to hit a button [and] the hub keeps playing the tone at maximum volume
+// until I turn it off or it is found." The family presses Find it (HubStatusLine); the Hub
+// hears it on its socket (hub_find) or from its next report, turns the media volume all the
+// way up (InPlaceKiosk.maxVolume, Android build vc27 and later; older builds play at whatever
+// the volume is), and sounds a loud three-beep alarm every two seconds with a full-screen
+// "Found it" button. It stops when someone taps Found it, or when the family turns it off.
+const playAlarm = () => {
+  try {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx) return;
+    const ctx = new Ctx();
+    if (ctx.state === 'suspended' && ctx.resume) ctx.resume().catch(() => {});
+    const comp = ctx.createDynamicsCompressor();
+    comp.connect(ctx.destination);
+    [0, 0.3, 0.6].forEach((off, i) => {
+      const t0 = ctx.currentTime + off;
+      const osc = ctx.createOscillator(); const gain = ctx.createGain();
+      osc.type = 'square'; osc.frequency.setValueAtTime(i === 1 ? 1568 : 1319, t0);
+      gain.gain.setValueAtTime(0, t0); gain.gain.linearRampToValueAtTime(1, t0 + 0.01);
+      gain.gain.setValueAtTime(1, t0 + 0.2); gain.gain.linearRampToValueAtTime(0, t0 + 0.24);
+      osc.connect(gain); gain.connect(comp); osc.start(t0); osc.stop(t0 + 0.25);
+    });
+    setTimeout(() => { try { ctx.close(); } catch { /* gone */ } }, 1500);
+  } catch { /* no audio: the screen still says Found it */ }
+};
+
+function HubFinder({ recipientId }) {
+  const [on, setOn] = React.useState(false);
+  React.useEffect(() => {
+    const set = (v) => setOn(!!v);
+    const onWin = (e) => set(e.detail && e.detail.on);
+    window.addEventListener('inplace:hub-find', onWin);
+    const off = typeof onSocketEvent === 'function' ? onSocketEvent('hub_find', (d) => set(d && d.on)) : null;
+    return () => { window.removeEventListener('inplace:hub-find', onWin); if (off) off(); };
+  }, []);
+  React.useEffect(() => {
+    if (!on) return undefined;
+    const K = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.InPlaceKiosk;
+    const loud = () => { try { if (K && K.maxVolume) K.maxVolume().catch(() => {}); } catch { /* older build */ } };
+    loud(); playAlarm();
+    // Volume again each round: someone turning it down doesn't silence a lost tablet.
+    const iv = setInterval(() => { loud(); playAlarm(); }, 2000);
+    return () => { clearInterval(iv); try { if (K && K.restoreVolume) K.restoreVolume().catch(() => {}); } catch { /* older build */ } };
+  }, [on]);
+  if (!on) return null;
+  const found = async () => {
+    setOn(false);
+    try { await apiFetch(`/api/care-recipients/${recipientId}/simple-screen/hub-found`, { method: 'POST', body: '{}' }); } catch { /* the sound is off here */ }
+  };
+  return (
+    <div role="alertdialog" aria-label="This tablet is being looked for" data-testid="hub-finder"
+      style={{ position: 'fixed', inset: 0, zIndex: 10000, background: '#b71c1c', color: '#fff', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 28, padding: 24, textAlign: 'center' }}>
+      <div style={{ fontSize: 'clamp(28px, 5vw, 56px)', fontWeight: 800, lineHeight: 1.2 }}>{'\u{1F50A}'} The family is looking for this tablet</div>
+      <button type="button" onClick={found}
+        style={{ fontSize: 'clamp(28px, 5vw, 52px)', fontWeight: 800, padding: '24px 64px', borderRadius: 20, border: 'none', background: '#fff', color: '#b71c1c', cursor: 'pointer', fontFamily: 'inherit' }}>
+        Found it {'—'} stop the sound
+      </button>
+    </div>
+  );
+}
+
 // v1.158.0 — "Online · seen 2 min ago · version 1.158.0 · locked · charging 100%", and Refresh.
 function HubStatusLine({ status, name, recipientId }) {
   const { showToast } = useToast();
@@ -758,6 +825,25 @@ function HubStatusLine({ status, name, recipientId }) {
       const d = r ? await r.json().catch(() => ({})) : {};
       if (r && r.ok) showToast(d.sent ? 'The Hub is refreshing' : "The Hub isn't connected right now", d.sent ? 'success' : 'error');
       else showToast(d.error || "Couldn't reach the Hub", 'error');
+    } catch { showToast("Couldn't reach the Hub", 'error'); }
+    setBusy(false);
+  };
+  // v1.166.0 — lost mode: Find it / Stop the sound.
+  const [finding, setFinding] = React.useState(!!(status && status.finding));
+  React.useEffect(() => { setFinding(!!(status && status.finding)); }, [status && status.finding]);
+  React.useEffect(() => {
+    const off = typeof onSocketEvent === 'function' ? onSocketEvent('hub_found', () => { setFinding(false); showToast(`${name}'s Hub was found`, 'success'); }) : null;
+    return () => { if (off) off(); };
+  }, [name]);
+  const find = async (on) => {
+    setBusy(true);
+    try {
+      const r = await apiFetch(`/api/care-recipients/${recipientId}/simple-screen/hub-find`, { method: 'POST', body: JSON.stringify({ on }) });
+      const d = r ? await r.json().catch(() => ({})) : {};
+      if (r && r.ok) {
+        setFinding(on);
+        showToast(on ? (d.sent ? 'The Hub is sounding. Tap Stop when you have it.' : "The Hub isn't connected. It will sound as soon as it's back online.") : 'The sound is off', on && !d.sent ? 'error' : 'success');
+      } else showToast(d.error || "Couldn't reach the Hub", 'error');
     } catch { showToast("Couldn't reach the Hub", 'error'); }
     setBusy(false);
   };
@@ -781,6 +867,10 @@ function HubStatusLine({ status, name, recipientId }) {
       <button type="button" disabled={busy} onClick={refresh} data-testid="hub-refresh"
         style={{ marginLeft: 'auto', padding: '4px 10px', borderRadius: 6, border: '1px solid var(--role-color)', background: 'none', color: 'var(--role-color)', fontWeight: 600, fontSize: 12, cursor: 'pointer' }}>
         {'\u21BB'} Refresh the Hub
+      </button>
+      <button type="button" disabled={busy} onClick={() => find(!finding)} data-testid="hub-find"
+        style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid var(--color-error)', background: finding ? 'var(--color-error)' : 'none', color: finding ? '#fff' : 'var(--color-error)', fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>
+        {finding ? '\u25A0 Stop the sound' : '\u{1F50A} Find the Hub'}
       </button>
     </div>
   );
@@ -1628,6 +1718,7 @@ const SimpleViewInner = ({ initial, onPanelChange, startCall, callBusy }) => {
       {s.hub && <HubKiosk on={s.hub.kiosk !== false} />}
       {s.hub && <HubScreen />}
       {s.hub && data && data.careRecipientId && <HubHeartbeat recipientId={data.careRecipientId} busy={!!callBusy} watching={!!(s.hub.noticeAwake && !callBusy)} />}
+      {s.hub && data && data.careRecipientId && <HubFinder recipientId={data.careRecipientId} />}
       {s.hub && <HubPopups hub={s.hub} s={s} note={note} now={now} onRead={markRead} onAck={ackText} onText={openText} />}
       </>
     );

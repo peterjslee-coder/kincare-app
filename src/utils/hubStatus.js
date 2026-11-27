@@ -35,9 +35,30 @@ function record(recipientId, body, now = Date.now()) {
 function get(recipientId, now = Date.now()) {
   const s = _hubs.get(recipientId);
   if (!s) return null;
-  return { ...s, at: new Date(s.at).toISOString(), online: now - s.at < ONLINE_MS };
+  return { ...s, at: new Date(s.at).toISOString(), online: now - s.at < ONLINE_MS, finding: finding(recipientId) };
 }
 
-function _reset() { _hubs.clear(); }
+// ─── v1.166.0 — lost mode (Pete, 11/27: "a button [that] keeps playing the tone at maximum
+// volume until I turn it off or it is found"). In memory like the rest of this file: a restart
+// forgets it, and the family presses the button again. The Hub also learns it from its
+// two-minute report, so a Hub that was offline when the button was pressed starts as soon as
+// it is back. ───
+const _finding = new Map(); // recipientId -> { since, byUserId, byName }
 
-module.exports = { record, get, clean, ONLINE_MS, _reset };
+function startFinding(recipientId, byUserId, byName, now = Date.now()) {
+  if (!_finding.has(recipientId)) _finding.set(recipientId, { since: now, byUserId, byName: byName || null });
+  return finding(recipientId);
+}
+function stopFinding(recipientId) {
+  const f = _finding.get(recipientId) || null;
+  _finding.delete(recipientId);
+  return f;
+}
+function finding(recipientId) {
+  const f = _finding.get(recipientId);
+  return f ? { since: new Date(f.since).toISOString(), byName: f.byName } : null;
+}
+
+function _reset() { _hubs.clear(); _finding.clear(); }
+
+module.exports = { record, get, clean, ONLINE_MS, startFinding, stopFinding, finding, _reset };

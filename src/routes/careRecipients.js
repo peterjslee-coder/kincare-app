@@ -900,7 +900,8 @@ router.post("/:id/simple-screen/hub-status", async (req, res) => {
     if (req.body && req.body.watching === true && req.body.personCheck === "ready" && await require("../utils/dropIn").mayNotice(db, cr.id)) {
       await require("../utils/awake").recordWatching(db, cr.id);
     }
-    res.json({ recorded: true });
+    // v1.166.0 — a Hub that was offline when someone pressed Find it starts on its next report.
+    res.json({ recorded: true, finding: !!require("../utils/hubStatus").finding(cr.id) });
   } catch (err) {
     captureException(err, { where: "careRecipients: hub-status" });
     res.status(500).json({ error: "Couldn't record that" });
@@ -922,6 +923,57 @@ router.post("/:id/simple-screen/hub-refresh", requireRole("family"), async (req,
   } catch (err) {
     captureException(err, { where: "careRecipients: hub-refresh" });
     res.status(500).json({ error: "Couldn't reach the Hub" });
+  }
+});
+
+// ─── v1.166.0 — lost mode ───
+// Pete, 11/27: "I need a lost mode feature for the hub. I need to hit a button [and] the hub
+// keeps playing the tone at maximum volume until I turn it off or it is found."
+// POST { on: true } starts it, { on: false } stops it. Her family (the leader, or the account
+// that owns her record) may press it. The Hub hears it on its socket at once, or from its next
+// two-minute report if it was offline.
+router.post("/:id/simple-screen/hub-find", requireRole("family"), async (req, res) => {
+  try {
+    const db = await getDb();
+    const { cr, ok } = await leaderOrOwner(db, req.params.id, req.user.id);
+    if (!cr) return res.status(404).json({ error: "Care recipient not found" });
+    if (!ok) return res.status(403).json({ error: "Only the care team leader can do this" });
+    const linkedUserId = await trustedLinkedUserId(db, cr);
+    if (!linkedUserId) return res.status(409).json({ error: "They don't have their own login yet" });
+    const H = require("../utils/hubStatus");
+    const on = !(req.body && req.body.on === false);
+    if (on) {
+      const me = await db.prepare("SELECT first_name FROM users WHERE id = ?").get(req.user.id);
+      H.startFinding(cr.id, req.user.id, me && me.first_name);
+    } else {
+      H.stopFinding(cr.id);
+    }
+    const sent = require("../utils/callRegistry").emitToUser(linkedUserId, "hub_find", { on });
+    res.json({ on, sent, finding: H.finding(cr.id) });
+  } catch (err) {
+    captureException(err, { where: "careRecipients: hub-find" });
+    res.status(500).json({ error: "Couldn't reach the Hub" });
+  }
+});
+
+// The Hub's "Found it" button. Stops the sound and tells whoever pressed Find it.
+router.post("/:id/simple-screen/hub-found", async (req, res) => {
+  try {
+    const db = await getDb();
+    const { cr, ok } = await asTheLinkedPerson(db, req);
+    if (!cr) return res.status(404).json({ error: "Not found" });
+    if (!ok) return res.status(403).json({ error: "Not allowed" });
+    const f = require("../utils/hubStatus").stopFinding(cr.id);
+    if (f && f.byUserId && !req.user.impersonatedBy) {
+      try {
+        await require("../utils/push").sendPushToUser(db, f.byUserId, "InPlace Hub", `${cr.first_name || "Their"}'s Hub was found. The sound is off.`, { type: "hub_found", page: "care-team" });
+      } catch { /* the sound is off either way */ }
+      require("../utils/callRegistry").emitToUser(f.byUserId, "hub_found", { careRecipientId: cr.id });
+    }
+    res.json({ stopped: !!f });
+  } catch (err) {
+    captureException(err, { where: "careRecipients: hub-found" });
+    res.status(500).json({ error: "Couldn't record that" });
   }
 });
 

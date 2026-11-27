@@ -521,6 +521,13 @@ const WN_PREVIEWS = {
     </div>
   ),
   // v1.161.0 — the caller's picture fills her tablet
+  // v1.166.0 — lost mode
+  findTheHub: () => (
+    <div style={{ ...wnCard, padding: 10, fontSize: 11, background: '#b71c1c', color: '#fff', textAlign: 'center' }}>
+      <div style={{ fontWeight: 800, fontSize: 13 }}>{'\u{1F50A}'} The family is looking for this tablet</div>
+      <span style={{ display: 'inline-block', marginTop: 8, background: '#fff', color: '#b71c1c', borderRadius: 10, padding: '6px 14px', fontWeight: 800 }}>Found it {'\u2014'} stop the sound</span>
+    </div>
+  ),
   // v1.165.0 — is she on a call right now
   inCallNow: () => (
     <div style={{ ...wnCard, padding: 10, fontSize: 11, color: 'var(--text-primary)' }}>
