@@ -47,3 +47,17 @@ describe("full-screen video on her screens", () => {
     expect(raw("public/js/components/VideoCallOverlay.js")).toMatch(/Turn your phone sideways for a bigger picture on their screen/);
   });
 });
+
+// v1.165.1 — Pete, 11/27: "it swung all the way to no activity at all since 6pm?" Without a
+// running person check the Hub can't tell her from the TV, so it must not record "watching".
+describe("watching needs a running person check", () => {
+  const { code } = require("./helpers/source");
+  test("hub-status records watching only with personCheck 'ready'", () => {
+    expect(code("src/routes/careRecipients.js")).toMatch(/req\.body\.watching === true && req\.body\.personCheck === "ready" && await require\("\.\.\/utils\/dropIn"\)\.mayNotice/);
+  });
+  test("the admin list never says 'Nothing saved yet' over hidden minutes", () => {
+    const phone = code("public/js/components/RecipientPhone.js");
+    expect(phone).toMatch(/clips\.length === 0 && \(v\.clips \|\| \[\]\)\.length === 0 &&/);
+    expect(phone).toMatch(/None of the \{\(v\.clips \|\| \[\]\)\.length\} saved minutes counted as up\./);
+  });
+});

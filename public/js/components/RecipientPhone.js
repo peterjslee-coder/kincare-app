@@ -2206,9 +2206,16 @@ const HubReview = window.HubReview = ({ hub: initial }) => {
         <div>
           <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>Each saved minute is deleted after {v.hours} hours if you don't delete it first. The Hub shows a small "Checking" mark while this is on.</div>
           <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13, marginBottom: 8 }}>
-            <input type="checkbox" checked={onlyUp} onChange={(e) => { setOnlyUp(e.target.checked); setShown(20); }} /> Only minutes it counted as up
+            <input type="checkbox" checked={onlyUp} onChange={(e) => { setOnlyUp(e.target.checked); setShown(20); }} /> Only minutes it counted as up ({(v.clips || []).filter((c) => c.counted).length} of {(v.clips || []).length})
           </label>
-          {clips.length === 0 && <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>Nothing saved yet. The Hub saves a minute each time it notices something.</div>}
+          {/* v1.165.1 — Pete saw "8 saved" over "Nothing saved yet": all 8 were minutes it did NOT count, hidden by the filter. */}
+          {clips.length === 0 && (v.clips || []).length === 0 && <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>Nothing saved yet. The Hub saves a minute each time it notices something.</div>}
+          {clips.length === 0 && (v.clips || []).length > 0 && (
+            <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+              None of the {(v.clips || []).length} saved minutes counted as up.{' '}
+              <button type="button" onClick={() => setOnlyUp(false)} style={{ background: 'none', border: 'none', padding: 0, color: 'var(--accent-color)', fontWeight: 700, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}>Show all {(v.clips || []).length}</button>
+            </div>
+          )}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             {clips.slice(0, shown).map((c) => (
               <div key={c.id} style={{ borderTop: '1px solid var(--border-color)', paddingTop: 10 }}>

@@ -893,7 +893,11 @@ router.post("/:id/simple-screen/hub-status", async (req, res) => {
     require("../utils/hubStatus").record(cr.id, req.body);
     // v1.159.0 — remember that it was watching, so a quiet night reads as asleep, not unknown.
     // Only under the signed consent with noticing on (the same gate as the awake reports).
-    if (req.body && req.body.watching === true && await require("../utils/dropIn").mayNotice(db, cr.id)) {
+    // v1.165.1 — Pete, 11/27, after a night that read "no activity at all since 6pm": the Hub
+    // only counts as watching when its person check is actually running. Without it the Hub
+    // can't tell her from the TV (v1.164.0 counts only touches then), so those hours must read
+    // "not watching", never "quiet".
+    if (req.body && req.body.watching === true && req.body.personCheck === "ready" && await require("../utils/dropIn").mayNotice(db, cr.id)) {
       await require("../utils/awake").recordWatching(db, cr.id);
     }
     res.json({ recorded: true });
