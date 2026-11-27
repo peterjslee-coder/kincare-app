@@ -46,6 +46,21 @@ const ENTRIES = [
     preview: "hubOneStream",
   },
   {
+    id: "find-the-hub",
+    version: "1.166.0",
+    date: "2026-11-27",
+    audience: ["family"],
+    title: "Find a lost Hub",
+    body: "If the Hub tablet goes missing, press Find the Hub and it sounds a loud alarm until someone taps Found it on the tablet or you press Stop. If it's offline, it starts as soon as it's back.",
+    howTo: [
+      "Accessibility Options, then the Hub",
+      "Tap Find the Hub next to Refresh the Hub",
+      "Tap Stop the sound, or Found it on the tablet",
+    ],
+    examples: ["The family is looking for this tablet"],
+    preview: "findTheHub",
+  },
+  {
     id: "in-a-call-now",
     version: "1.165.0",
     date: "2026-11-26",

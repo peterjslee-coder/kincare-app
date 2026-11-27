@@ -202,6 +202,36 @@ test("v1.155.6: nobody here → the Hub names who comes next, with a face; someo
   }
 });
 
+describe("v1.166.0 — lost mode", () => {
+  test("the leader starts it, the Hub hears it (now or on its next report), Found it stops it and tells the leader", async () => {
+    const H = require("../../src/utils/hubStatus");
+    H._reset();
+    const sent = [];
+    require("../../src/utils/callRegistry").setEmitter((uid, event, data) => { sent.push({ uid, event, data }); return 1; });
+    expect((await h.request.post(`/api/care-recipients/${recipientId}/simple-screen/hub-find`).set(h.auth(tina.token)).send({ on: true })).status).toBe(403);
+    const on = await h.request.post(`/api/care-recipients/${recipientId}/simple-screen/hub-find`).set(h.auth(leader.token)).send({ on: true });
+    expect(on.status).toBe(200);
+    expect(on.body).toMatchObject({ on: true, sent: 1 });
+    expect(sent.find((x) => x.event === "hub_find" && x.uid === mom.user.id).data).toEqual({ on: true });
+    // A Hub that missed the socket starts from its next report.
+    const rep = await h.request.post(`/api/care-recipients/${recipientId}/simple-screen/hub-status`).set(h.auth(mom.token)).send({ version: "1.166.0" });
+    expect(rep.body.finding).toBe(true);
+    const seen = await h.request.get(`/api/care-recipients/${recipientId}/simple-mode`).set(h.auth(leader.token));
+    expect(seen.body.hubStatus.finding).toMatchObject({ byName: expect.any(String) });
+    // Only her own account can say Found it.
+    expect((await h.request.post(`/api/care-recipients/${recipientId}/simple-screen/hub-found`).set(h.auth(leader.token)).send({})).status).toBe(403);
+    const found = await h.request.post(`/api/care-recipients/${recipientId}/simple-screen/hub-found`).set(h.auth(mom.token)).send({});
+    expect(found.body).toEqual({ stopped: true });
+    expect(sent.some((x) => x.event === "hub_found" && x.uid === leader.user.id)).toBe(true);
+    expect((await h.request.post(`/api/care-recipients/${recipientId}/simple-screen/hub-status`).set(h.auth(mom.token)).send({})).body.finding).toBe(false);
+    // The family can turn it off too.
+    await h.request.post(`/api/care-recipients/${recipientId}/simple-screen/hub-find`).set(h.auth(leader.token)).send({ on: true });
+    const off = await h.request.post(`/api/care-recipients/${recipientId}/simple-screen/hub-find`).set(h.auth(leader.token)).send({ on: false });
+    expect(off.body).toMatchObject({ on: false, finding: null });
+    expect(sent.filter((x) => x.event === "hub_find").pop().data).toEqual({ on: false });
+  });
+});
+
 describe("v1.158.0 — seeing and refreshing the Hub from the family's phone", () => {
   test("only her own account reports; the leader sees it; nobody else can refresh", async () => {
     require("../../src/utils/hubStatus")._reset();
