@@ -118,12 +118,20 @@ router.get("/sessions/open", async (req, res) => {
 });
 
 // ─── GET /api/admin/sessions/all ───
-// List all sessions (any status) for admin drill-down. Supports ?status= and ?days= filters.
+// List all sessions (any status) for admin drill-down. Supports ?status=, ?days= and
+// ?caregiverId= (caregiver_profiles.id) filters.
+//
+// v1.166.1 — Pete, 11/27: "a way in sessions to sort based off of which caretaker" — Faith
+// asked whether $76.56 was right for her first visit and there was no way to line up one
+// caregiver's visits with what each one paid her. Each row now carries what was charged and
+// what was paid out (from ledger_entries, the record of money that actually moved; the
+// payments table only for visits from before the ledger), and `caregivers` lists everyone with a visit in the window for the picker.
 router.get("/sessions/all", authenticate, requireAdmin, async (req, res) => {
   try {
     const db = await getDb();
     const statusFilter = req.query.status;
-    const days = parseInt(req.query.days) || 30;
+    const days = Math.min(Math.max(parseInt(req.query.days) || 30, 1), 365);
+    const caregiverId = typeof req.query.caregiverId === "string" && req.query.caregiverId ? req.query.caregiverId : null;
 
     let where = `cs.scheduled_date::date >= CURRENT_DATE - INTERVAL '${days} days' AND ${NOT_DEMO_SESSION()}`;
     const params = [];
@@ -131,11 +139,22 @@ router.get("/sessions/all", authenticate, requireAdmin, async (req, res) => {
       where += ` AND cs.status = ?`;
       params.push(statusFilter);
     }
+    const listWhere = where;
+    const listParams = [...params];
+    if (caregiverId) {
+      where += ` AND cs.caregiver_id = ?`;
+      params.push(caregiverId);
+    }
 
     const rows = await db.prepare(`
       SELECT cs.id, cs.status, cs.scheduled_date, cs.scheduled_time, cs.service_type,
         cs.duration_hours, cs.payment_status, cs.caregiver_no_show,
-        cs.cancelled_by, cs.review_required,
+        cs.cancelled_by, cs.review_required, cs.caregiver_id,
+        cs.agreed_rate, cs.proposed_rate, cs.estimated_cost, cs.actual_cost,
+        COALESCE(cs.short_notice_surcharge, 0) AS short_notice_surcharge,
+        COALESCE(led.charged, leg.charged) AS family_charged,
+        COALESCE(led.paid, leg.paid) AS caregiver_paid,
+        COALESCE(led.tip_cents, leg.tip_cents) AS tip_cents,
         cr.first_name || ' ' || cr.last_name AS recipient_name,
         cu.first_name || ' ' || cu.last_name AS caregiver_name,
         fu.first_name || ' ' || fu.last_name AS family_name
@@ -144,10 +163,36 @@ router.get("/sessions/all", authenticate, requireAdmin, async (req, res) => {
       LEFT JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
       LEFT JOIN users cu ON cp.user_id = cu.id
       LEFT JOIN users fu ON cs.family_user_id = fu.id
+      LEFT JOIN (
+        -- The ledger is the record of money that moved (a visit settled by capturing its hold
+        -- never writes a payments row). Same kinds the admin person drawer counts.
+        SELECT session_id, SUM(family_cents) / 100.0 AS charged, SUM(caregiver_cents) / 100.0 AS paid,
+          SUM(CASE WHEN kind = 'tip' THEN caregiver_cents ELSE 0 END) AS tip_cents
+        FROM ledger_entries
+        WHERE status = 'succeeded' AND kind IN ('capture', 'remainder', 'autopay', 'checkout', 'cancel_fee', 'tip')
+        GROUP BY session_id
+      ) led ON led.session_id = cs.id
+      LEFT JOIN (
+        -- Paid visits from before the ledger existed.
+        SELECT session_id, SUM(amount) AS charged, SUM(caregiver_payout) AS paid,
+          SUM(COALESCE(tip_cents, 0)) AS tip_cents
+        FROM payments WHERE status = 'completed' GROUP BY session_id
+      ) leg ON leg.session_id = cs.id
       WHERE ${where}
       ORDER BY cs.scheduled_date DESC, cs.scheduled_time DESC
-      LIMIT 100
+      LIMIT ${caregiverId ? 300 : 100}
     `).all(...params);
+
+    // Everyone with a visit in this window (ignoring the caregiver filter), for the picker.
+    const caregivers = await db.prepare(`
+      SELECT cs.caregiver_id AS id, cu.first_name || ' ' || cu.last_name AS name, COUNT(*)::int AS count
+      FROM care_sessions cs
+      JOIN caregiver_profiles cp ON cs.caregiver_id = cp.id
+      JOIN users cu ON cp.user_id = cu.id
+      WHERE ${listWhere}
+      GROUP BY cs.caregiver_id, cu.first_name, cu.last_name
+      ORDER BY cu.first_name, cu.last_name
+    `).all(...listParams);
 
     // Quick counts by status
     const counts = {};
@@ -155,7 +200,7 @@ router.get("/sessions/all", authenticate, requireAdmin, async (req, res) => {
       counts[r.status] = (counts[r.status] || 0) + 1;
     }
 
-    res.json({ sessions: rows, counts, days });
+    res.json({ sessions: rows, counts, days, caregivers });
   } catch (err) {
     console.error("Admin all sessions error:", err);
     res.status(500).json({ error: "Failed to fetch sessions" });

@@ -614,6 +614,10 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
   const [allSessionsLoading, setAllSessionsLoading] = useState(false);
   const [sessionStatusFilter, setSessionStatusFilter] = useState('all');
   const [sessionDaysFilter, setSessionDaysFilter] = useState(30);
+  // v1.166.1 — one caregiver's visits, and what each one paid her
+  const [sessionCaregiverFilter, setSessionCaregiverFilter] = useState('');
+  const [sessionCaregivers, setSessionCaregivers] = useState([]);
+  const [sessionSort, setSessionSort] = useState('date');
   const [sessionDetail, setSessionDetail] = useState(null);
   const [sessionDetailLoading, setSessionDetailLoading] = useState(false);
 
@@ -970,13 +974,16 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
   };
 
   // ─── All Sessions browser ───
-  const loadAllSessions = async (status, days) => {
+  const loadAllSessions = async (status, days, caregiverId) => {
     setAllSessionsLoading(true);
     try {
       const s = status || sessionStatusFilter;
       const d = days || sessionDaysFilter;
-      const res = await apiFetch(`/api/admin/sessions/all?status=${s}&days=${d}`);
-      if (res?.ok) { const data = await res.json(); setAllSessions(data.sessions || []); }
+      const cg = caregiverId !== undefined ? caregiverId : sessionCaregiverFilter;
+      const qs = new URLSearchParams({ status: s, days: String(d) });
+      if (cg) qs.set('caregiverId', cg);
+      const res = await apiFetch(`/api/admin/sessions/all?${qs}`);
+      if (res?.ok) { const data = await res.json(); setAllSessions(data.sessions || []); setSessionCaregivers(data.caregivers || []); }
     } catch {}
     setAllSessionsLoading(false);
   };
@@ -5795,16 +5802,51 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                   <option value={30}>30 days</option>
                   <option value={60}>60 days</option>
                   <option value={90}>90 days</option>
+                  <option value={365}>1 year</option>
+                </select>
+                <select value={sessionCaregiverFilter} aria-label="Caregiver"
+                  onChange={e => { const c = e.target.value; setSessionCaregiverFilter(c); loadAllSessions(null, null, c); }}
+                  style={{ padding: '3px 8px', borderRadius: 6, fontSize: 11, border: '1px solid #ddd', background: 'var(--bg-surface)' }}>
+                  <option value="">All caregivers</option>
+                  {sessionCaregivers.map(c => <option key={c.id} value={c.id}>{c.name} ({c.count})</option>)}
+                </select>
+                <select value={sessionSort} aria-label="Sort" onChange={e => setSessionSort(e.target.value)}
+                  style={{ padding: '3px 8px', borderRadius: 6, fontSize: 11, border: '1px solid #ddd', background: 'var(--bg-surface)' }}>
+                  <option value="date">Newest first</option>
+                  <option value="oldest">Oldest first</option>
+                  <option value="caregiver">By caregiver</option>
                 </select>
               </div>
             </div>
+            {(() => {
+              // v1.166.1 — the totals that answer "was that the right amount?"
+              if (!sessionCaregiverFilter || allSessionsLoading || allSessions.length === 0) return null;
+              const money = (n) => '$' + (Number(n) || 0).toFixed(2);
+              const paidRows = allSessions.filter(s => s.caregiver_paid != null);
+              const paid = paidRows.reduce((t, s) => t + Number(s.caregiver_paid || 0), 0);
+              const hours = paidRows.reduce((t, s) => t + Number(s.duration_hours || 0), 0);
+              const name = (sessionCaregivers.find(c => c.id === sessionCaregiverFilter) || {}).name || 'This caregiver';
+              return (
+                <div style={{ padding: '8px 14px', marginBottom: 8, borderRadius: 8, background: 'var(--bg-highlight)', fontSize: 12, color: 'var(--text-primary)' }}>
+                  <strong>{name}</strong>: {allSessions.length} visit{allSessions.length === 1 ? '' : 's'} shown {'\u00B7'} {paidRows.length} paid, {hours} hr {'\u00B7'} {money(paid)} paid out
+                </div>
+              );
+            })()}
             {allSessionsLoading ? (
               <div style={{ textAlign: 'center', padding: 20, color: 'var(--text-muted)' }}>Loading...</div>
             ) : allSessions.length === 0 ? (
               <div style={{ textAlign: 'center', padding: 20, color: 'var(--text-muted)' }}>No sessions found</div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                {allSessions.map(s => {
+                {[...allSessions].sort((a, b) => {
+                  const when = (x) => `${x.scheduled_date || ''} ${x.scheduled_time || ''}`;
+                  if (sessionSort === 'oldest') return when(a).localeCompare(when(b));
+                  if (sessionSort === 'caregiver') {
+                    const byName = (a.caregiver_name || '\uffff').localeCompare(b.caregiver_name || '\uffff');
+                    if (byName) return byName;
+                  }
+                  return when(b).localeCompare(when(a));
+                }).map(s => {
                   const statusColors = { completed: '#16a34a', in_progress: '#2563eb', confirmed: '#7c3aed', cancelled: '#dc2626', requested: '#d97706', open: '#d97706', pending: '#d97706', matching: '#6b7280', negotiating: '#6b7280' };
                   const flags = [];
                   if (s.caregiver_no_show) flags.push('NO-SHOW');
@@ -5832,6 +5874,21 @@ const AdminPanel = window.AdminPanel = ({ currentUser }) => {
                         <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 2 }}>
                           {s.scheduled_date} {s.scheduled_time} {'\u00B7'} {s.service_type || ''} {'\u00B7'} CG: {s.caregiver_name || 'unassigned'}
                         </div>
+                        {(() => {
+                          // v1.166.1 — hours x rate, any rush, what the family paid and what she got
+                          const money = (n) => '$' + (Number(n) || 0).toFixed(2);
+                          const rate = Number(s.agreed_rate) || Number(s.proposed_rate) || 0;
+                          const bits = [];
+                          if (s.duration_hours) bits.push(`${Number(s.duration_hours)} hr${rate ? ' @ ' + money(rate) : ''}`);
+                          if (Number(s.short_notice_surcharge) > 0) bits.push(`rush +${money(s.short_notice_surcharge)}`);
+                          if (s.family_charged != null) bits.push(`family paid ${money(s.family_charged)}`);
+                          if (s.caregiver_paid != null) bits.push(`caregiver got ${money(s.caregiver_paid)}`);
+                          else if (s.estimated_cost != null) bits.push(`est. ${money(s.estimated_cost)}`);
+                          if (Number(s.tip_cents) > 0) bits.push(`incl. ${money(Number(s.tip_cents) / 100)} tip`);
+                          return bits.length ? (
+                            <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2 }}>{bits.join(' \u00B7 ')}</div>
+                          ) : null;
+                        })()}
                       </div>
                       <span style={{ fontSize: 16, color: 'var(--text-muted)' }}>{'\u203A'}</span>
                     </div>
