@@ -301,7 +301,7 @@ async function nights(db, recipientId, firstName, tz, { count = 7, beforeDay = n
     const [y, m, d] = day.split("-").map(Number);
     const weekday = new Date(Date.UTC(y, m - 1, d, 12)).toLocaleDateString("en-US", { weekday: "short", timeZone: "UTC" });
     const rest = restlessness(entries);
-    let told = entries.length ? story : `The Hub wasn't watching that night.`;
+    let told = entries.length ? story : (fullEnd > now ? "The Hub hasn't been watching tonight." : "The Hub wasn't watching that night.");
     if (rest) told = restlessStory(firstName, rest, fullEnd > now) || told;
     out.push({
       day, label: `${weekday} ${m}/${d}`, inProgress: fullEnd > now,

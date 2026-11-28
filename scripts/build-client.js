@@ -111,6 +111,11 @@ const scripts = [
   "js/components/MyAccount.js",
   "js/components/Reimbursements.js",
   "js/components/MoneyView.js",
+  // v1.166.2 — window.HubPersonCheck, the Hub's on-tablet person check. Added in v1.160.0 but
+  // never listed here, so it never reached a browser: every Hub ran with no person check, and
+  // the TV counted (Pete, 11/25-27). tests/buildIncludesEveryClientFile.test.js now fails if a
+  // file under public/js is left out.
+  "js/hubPersonCheck.js",
   "js/components/RecipientPhone.js", // v1.129.4 — a care recipient's own sign-in + simple phone screen; CareTeamManage and CaredForView render it
   "js/components/CareTeamManage.js",
   "js/components/CareTeamPage.js",
