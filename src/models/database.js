@@ -3972,6 +3972,27 @@ async function initializeDatabase() {
         `CREATE INDEX IF NOT EXISTS idx_hub_review_clips_cr ON hub_review_clips(care_recipient_id, taken_at)`,
       ],
     },
+    {
+      // v1.167.0 — Pete, 11/27: "I want to be able to train the system." A mark on a saved
+      // minute: right / not_up / missed, with what the Hub noticed and whether it counted. No
+      // picture, no sound: a mark outlives its clip (clip_id is kept only to show the mark
+      // while the clip exists). utils/hubTuning.js reads them to suggest changes.
+      id: "105_hub_review_marks",
+      statements: [
+        `CREATE TABLE IF NOT EXISTS hub_review_marks (
+          id TEXT PRIMARY KEY,
+          care_recipient_id TEXT NOT NULL,
+          clip_id TEXT,
+          marked_by TEXT NOT NULL,
+          verdict TEXT NOT NULL,
+          counted BOOLEAN NOT NULL,
+          signals TEXT,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )`,
+        `CREATE UNIQUE INDEX IF NOT EXISTS idx_hub_review_marks_clip ON hub_review_marks(clip_id) WHERE clip_id IS NOT NULL`,
+        `CREATE INDEX IF NOT EXISTS idx_hub_review_marks_cr ON hub_review_marks(care_recipient_id, created_at)`,
+      ],
+    },
   ];
   for (const m of MIGRATIONS_V2) {
     if (applied.has(m.id)) continue;

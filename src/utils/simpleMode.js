@@ -93,6 +93,11 @@ function cleanHub(raw) {
     if (Array.isArray(raw.callUserIds)) {
       out.callUserIds = [...new Set(raw.callUserIds.filter((x) => typeof x === "string" && x.length <= 64))].slice(0, MAX_HUB_CALLS);
     }
+    // v1.167.0 — tuning from the family's review marks (utils/hubTuning.js). Only what the
+    // leader confirmed is ever stored here.
+    out.tuning = require("./hubTuning").cleanTuning(raw.tuning);
+  } else {
+    out.tuning = require("./hubTuning").cleanTuning(null);
   }
   return out;
 }
@@ -273,7 +278,7 @@ function relationLabel(label) {
 }
 
 async function hubScreenFor(db, recipient, linkedUserId, todayStr, hubCfg) {
-  const out = { on: true, faces: hubCfg.faces, week: hubCfg.week, showPhotos: hubCfg.photos !== false, photos: [], photoAspect: hubCfg.photoAspect || null, dimFrom: hubCfg.dimFrom, dimTo: hubCfg.dimTo, kiosk: hubCfg.kiosk !== false, today: todayStr, here: null, days: [], people: [] };
+  const out = { on: true, faces: hubCfg.faces, week: hubCfg.week, showPhotos: hubCfg.photos !== false, photos: [], photoAspect: hubCfg.photoAspect || null, dimFrom: hubCfg.dimFrom, dimTo: hubCfg.dimTo, kiosk: hubCfg.kiosk !== false, tuning: hubCfg.tuning || require("./hubTuning").cleanTuning(null), today: todayStr, here: null, days: [], people: [] };
 
   // Who is here right now: a visit in progress today.
   const here = await db.prepare(`

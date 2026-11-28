@@ -60,14 +60,16 @@
    * detector doesn't see it in every frame — in a test photo a person shown on a tablet's
    * screen counted because that frame missed the tablet. Remembered screens close that gap.
    */
-  function judge(detections, width, height, known) {
+  // v1.167.0 — personMin can be raised or lowered by the leader's confirmed tuning.
+  function judge(detections, width, height, known, personMin) {
+    const PMIN = typeof personMin === 'number' && personMin >= 0.2 && personMin <= 0.9 ? personMin : PERSON_MIN;
     const boxes = (detections || []).map((d) => {
       const c = d.categories && d.categories[0];
       const b = d.boundingBox || {};
       return { label: c ? c.categoryName : '', score: c ? c.score : 0, x: b.originX || 0, y: b.originY || 0, w: b.width || 0, h: b.height || 0 };
     });
     const screens = boxes.filter((b) => SCREENS.has(b.label) && b.score >= SCREEN_MIN);
-    const people = boxes.filter((b) => b.label === 'person' && b.score >= PERSON_MIN);
+    const people = boxes.filter((b) => b.label === 'person' && b.score >= PMIN);
     const W = width || 1, H = height || 1;
     const remembered = (known || []).map((k) => ({ x: k.x * W, y: k.y * H, w: k.w * W, h: k.h * H }));
     const all = screens.concat(remembered);
@@ -104,12 +106,12 @@
   }
 
   /** One frame (video, image or canvas) → judge(...). Loads the detector the first time. */
-  async function check(source, known) {
+  async function check(source, known, personMin) {
     const d = await load();
     const w = source.videoWidth || source.naturalWidth || source.width;
     const h = source.videoHeight || source.naturalHeight || source.height;
     const res = d.detect(source);
-    return judge(res && res.detections, w, h, known);
+    return judge(res && res.detections, w, h, known, personMin);
   }
 
   window.HubPersonCheck = { load, check, judge, inside, iou, rememberScreens, state: () => state, PERSON_MIN, SCREEN_MIN };

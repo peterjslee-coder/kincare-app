@@ -345,6 +345,46 @@ describe("noticing when she is up", () => {
     expect((await h.request.get(`/api/drop-in/${recipientId}/live`).set(h.auth(mom.token))).status).toBe(404);
   });
 
+  // v1.167.0 — "I want to be able to train the system." ... "Suggest and confirm."
+  test("Hub check: marks, a suggestion, Apply, and the awake rule follows it", async () => {
+    const admin = await h.createUser({ firstName: "Ad", lastName: "Min2", isAdmin: true });
+    await db.prepare("UPDATE users SET is_admin = 1 WHERE id = ?").run(admin.user.id);
+    const A = (r) => r.set(h.auth(admin.token));
+    // Seven minutes it counted for sound near a person; mark them wrong.
+    const ids = [];
+    for (let i = 0; i < 7; i++) {
+      const id = uuid(); ids.push(id);
+      await db.prepare("INSERT INTO hub_review_clips (id, care_recipient_id, counted, signals, expires_at) VALUES (?, ?, TRUE, ?, NOW() + INTERVAL '72 hours')")
+        .run(id, recipientId, JSON.stringify({ person: false, voiceSeconds: 40 }));
+      expect((await A(h.request.post(`/api/admin/hub-check/${recipientId}/clips/${id}/mark`).send({ verdict: "not_up" }))).body.mark).toBe("not_up");
+    }
+    // A mark that doesn't fit the minute is refused.
+    expect((await A(h.request.post(`/api/admin/hub-check/${recipientId}/clips/${ids[0]}/mark`).send({ verdict: "missed" }))).status).toBe(400);
+    const v = await A(h.request.get(`/api/admin/hub-check/${recipientId}`));
+    expect(v.body.score).toMatchObject({ marked: 7, notUp: 7 });
+    expect(v.body.clips.find((c) => c.id === ids[0]).mark).toBe("not_up");
+    const sug = v.body.suggestions.find((x) => x.key === "soundNearPerson");
+    expect(sug.change).toEqual({ soundNearPerson: false });
+    // Nothing changed until Apply.
+    expect(v.body.tuning.soundNearPerson).toBe(true);
+    // Family settings can't set it.
+    await h.request.put(`/api/care-recipients/${recipientId}/simple-mode`).set(h.auth(leader.token)).send({ hub: { tuning: { soundNearPerson: false } } });
+    expect((await A(h.request.get(`/api/admin/hub-check/${recipientId}`))).body.tuning.soundNearPerson).toBe(true);
+    const applied = await A(h.request.post(`/api/admin/hub-check/${recipientId}/tuning`).send({ change: sug.change }));
+    expect(applied.body.tuning).toMatchObject({ soundNearPerson: false, motionNearPerson: true });
+    // The awake rule follows it: sound near a recent person no longer counts; movement still does.
+    await db.prepare("DELETE FROM hub_awake WHERE care_recipient_id = ?").run(recipientId);
+    const post = (b) => h.request.post(`/api/drop-in/${recipientId}/awake`).set(h.auth(mom.token)).send(b);
+    expect((await post({ person: true })).body.recorded).toBe(true);
+    expect((await post({ voiceSeconds: 40, person: false })).body.recorded).toBe(false);
+    expect((await post({ motion: true, person: false })).body.recorded).toBe(true);
+    // Marks outlive the clips.
+    await A(h.request.post(`/api/admin/hub-check/${recipientId}/delete`).send({}));
+    expect((await A(h.request.get(`/api/admin/hub-check/${recipientId}`))).body.score.marked).toBe(7);
+    // Reset.
+    expect((await A(h.request.post(`/api/admin/hub-check/${recipientId}/tuning`).send({ reset: true }))).body.tuning.soundNearPerson).toBe(true);
+  });
+
   test("withdrawing stops everything at once", async () => {
     const r = await h.request.post(`/api/drop-in/${recipientId}/revoke`).set(h.auth(mom.token)).send({});
     expect(r.status).toBe(200);

@@ -1,6 +1,6 @@
 // InPlace Service Worker — v1.57.14
-const CACHE_NAME = 'inplace-build-48806848';
-const SW_VERSION = 'build-48806848';
+const CACHE_NAME = 'inplace-build-bf783fa7';
+const SW_VERSION = 'build-bf783fa7';
 const STATIC_ASSETS = [
   '/',
   '/css/styles.css',
