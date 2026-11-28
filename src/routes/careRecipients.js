@@ -721,7 +721,10 @@ router.put("/:id/simple-mode", requireRole("family"), async (req, res) => {
     }
     // v1.152.0 — InPlace Hub settings ride in the same record; a partial `hub` keeps the rest.
     const callType = req.body.callType === "video" ? "video" : req.body.callType === "voice" ? "voice" : prev.callType;
-    const hub = sm.cleanHub({ ...prev.hub, ...(req.body.hub && typeof req.body.hub === "object" ? req.body.hub : {}) });
+    // v1.167.0 — tuning changes only through Admin → Hub check (suggest, then confirm).
+    const bodyHub = req.body.hub && typeof req.body.hub === "object" ? { ...req.body.hub } : {};
+    delete bodyHub.tuning;
+    const hub = sm.cleanHub({ ...prev.hub, ...bodyHub });
     let textConversationId = prev.textConversationId;
     if (show.text && linkedUserId && textUserIds.length) {
       textConversationId = await syncTextGroup(db, {

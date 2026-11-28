@@ -47,7 +47,9 @@ test("the Hub only counts a minute on a person or a touch when the check is runn
   expect(phone).toMatch(/person: checking \? personSeen : null/);
   expect(phone).toMatch(/if \(known\.length && inKnownScreen\(\(j % 64\) \/ 64, Math\.floor\(j \/ 64\) \/ 48\)\) continue;/);
   const route = code("src/routes/dropIn.js");
-  expect(route).toMatch(/: \(person \|\| touches > 0 \|\| \(\(motion \|\| talking\) && personRecently\)\);/);
+  expect(route).toMatch(/: \(person \|\| touches > 0 \|\| \(near && personRecently\)\);/);
+  // v1.167.0 — "near" is movement or sound, each only if the confirmed tuning still allows it.
+  expect(route).toMatch(/const near = \(motion && tuning\.motionNearPerson\) \|\| \(talking && tuning\.soundNearPerson\);/);
 });
 
 test("nothing from the camera leaves the tablet but yes/no and counts", () => {

@@ -304,9 +304,13 @@ router.post("/:recipientId/awake", async (req, res) => {
     const personRecently = !!lastSeen && (Date.now() - lastSeen) <= PERSON_RECENT_MIN * 60000;
     // v1.164.0 — with no person check running, sound and movement can't be told from the TV,
     // so only a touch counts. The Hub's status line says the check isn't working.
+    // v1.167.0 — what counts near a person follows the leader's confirmed tuning
+    // (utils/hubTuning.js): movement and sound each can be switched off.
+    const tuning = require("../utils/simpleMode").parseSimpleMode(a.cr.simple_mode).hub.tuning || require("../utils/hubTuning").cleanTuning(null);
+    const near = (motion && tuning.motionNearPerson) || (talking && tuning.soundNearPerson);
     const awake = person === null
       ? touches > 0
-      : (person || touches > 0 || ((motion || talking) && personRecently)); // a person, not a TV
+      : (person || touches > 0 || (near && personRecently)); // a person, not a TV
     const review = await require("../utils/hubReview").isOn(db, a.cr.id);
     if (!awake) return res.json({ recorded: false, review });
     if (joins) {

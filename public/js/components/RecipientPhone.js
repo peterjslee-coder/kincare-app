@@ -959,7 +959,10 @@ const VOICE_OVER_FLOOR = 2.2;    // speech-band loudness this many times the roo
 // the last few minutes (server, routes/dropIn.js). Movement inside any screen the detector has
 // found — remembered on this tablet, since a TV doesn't move — is ignored.
 const PERSON_CHECK_MS = 15000;
-const HubAwake = ({ recipientId }) => {
+const HubAwake = ({ recipientId, personMin }) => {
+  // v1.167.0 — the leader's confirmed tuning, read fresh by each check without restarting the camera.
+  const personMinRef = React.useRef(personMin);
+  personMinRef.current = personMin;
   // v1.164.0 — checking the noticing (utils/hubReview.js): while it's signed for, each reported
   // minute also sends one picture and the last ~15 s of sound, and a small mark shows here.
   const [reviewOn, setReviewOn] = React.useState(false);
@@ -1079,7 +1082,7 @@ const HubAwake = ({ recipientId }) => {
         if (detecting || stopped || !window.HubPersonCheck || !video.videoWidth) return;
         detecting = true;
         try {
-          const r = await window.HubPersonCheck.check(video, known);
+          const r = await window.HubPersonCheck.check(video, known, personMinRef.current);
           if (r.person) personSeen = true;
           lastSeen = Array.isArray(r.seen) ? r.seen : [];
           if (r.screens && r.screens.length) {
@@ -1723,7 +1726,7 @@ const SimpleViewInner = ({ initial, onPanelChange, startCall, callBusy }) => {
         onRead={markRead} onAck={ackText} onText={openText}
         onMessages={() => setPanel('messages')} onCall={startCall}
         onHubShape={(aspect) => { if (data && data.careRecipientId) apiFetch(`/api/care-recipients/${data.careRecipientId}/simple-screen/hub-shape`, { method: 'POST', body: JSON.stringify({ photoAspect: aspect }) }).catch(() => {}); }} />
-      {s.hub && s.hub.noticeAwake && !callBusy && data && data.careRecipientId && <HubAwake recipientId={data.careRecipientId} />}
+      {s.hub && s.hub.noticeAwake && !callBusy && data && data.careRecipientId && <HubAwake recipientId={data.careRecipientId} personMin={s.hub.tuning && s.hub.tuning.personMin} />}
       {s.hub && <HubKiosk on={s.hub.kiosk !== false} />}
       {s.hub && <HubScreen />}
       {s.hub && data && data.careRecipientId && <HubHeartbeat recipientId={data.careRecipientId} busy={!!callBusy} watching={!!(s.hub.noticeAwake && !callBusy)} />}
@@ -2262,6 +2265,71 @@ const ReviewMedia = ({ apiBase, clip }) => {
   );
 };
 
+// v1.167.0 — Pete: "I want to be able to train the system." Marks feed utils/hubTuning.js.
+const ReviewMark = ({ apiBase, clip, onMarked }) => {
+  const { showToast } = useToast();
+  const [mark, setMark] = useState(clip.mark || null);
+  const choose = async (verdict) => {
+    const next = mark === verdict ? null : verdict;
+    try {
+      const r = await apiFetch(`${apiBase}/clips/${clip.id}/mark`, { method: 'POST', body: JSON.stringify({ verdict: next }) });
+      const d = await r.json().catch(() => ({}));
+      if (r.ok) { setMark(d.mark); if (onMarked) onMarked(); } else showToast(d.error || "Couldn't save that", 'error');
+    } catch { showToast('Could not reach the server', 'error'); }
+  };
+  const opts = clip.counted
+    ? [['right', '\u2713 Right, up'], ['not_up', '\u2717 Wrongly counted']]
+    : [['right', '\u2713 Right, not up'], ['missed', '\u2717 Missed, was up']];
+  return (
+    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 8 }} data-testid="review-mark">
+      {opts.map(([v, label]) => (
+        <button key={v} type="button" onClick={() => choose(v)} aria-pressed={mark === v}
+          style={{ padding: '6px 10px', borderRadius: 8, fontSize: 12.5, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+            border: `1px solid ${v === 'right' ? 'var(--color-success)' : 'var(--color-error)'}`,
+            background: mark === v ? (v === 'right' ? 'var(--color-success)' : 'var(--color-error)') : 'var(--bg-card)',
+            color: mark === v ? '#fff' : (v === 'right' ? 'var(--color-success)' : 'var(--color-error)') }}>{label}</button>
+      ))}
+    </div>
+  );
+};
+
+const TuningPanel = ({ apiBase, v, reload }) => {
+  const { showToast } = useToast();
+  const [busy, setBusy] = useState(false);
+  const t = v.tuning || {};
+  const d = v.defaults || {};
+  const changed = Object.keys(d).some((k) => t[k] !== d[k]);
+  const send = async (body, msg) => {
+    setBusy(true);
+    try {
+      const r = await apiFetch(`${apiBase}/tuning`, { method: 'POST', body: JSON.stringify(body) });
+      const x = await r.json().catch(() => ({}));
+      if (r.ok) { showToast(msg, 'success'); reload(); } else showToast(x.error || "Couldn't change that", 'error');
+    } catch { showToast('Could not reach the server', 'error'); }
+    setBusy(false);
+  };
+  const sc = v.score || { marked: 0 };
+  return (
+    <div data-testid="hub-tuning" style={{ border: '1px solid var(--border-color)', borderRadius: 10, padding: 10, margin: '10px 0', background: 'var(--bg-surface)', fontSize: 12.5 }}>
+      <div style={{ fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4 }}>Teaching the Hub</div>
+      <div style={{ color: 'var(--text-secondary)' }}>
+        {sc.marked ? `You've marked ${sc.marked}: ${sc.right} right, ${sc.notUp} counted wrongly, ${sc.missed} missed.` : 'Mark minutes below as right or wrong. When a pattern is clear, a suggestion shows up here for you to apply.'}
+      </div>
+      <div style={{ color: 'var(--text-secondary)', marginTop: 4 }}>
+        Now: a person counts at {Math.round((t.personMin || 0) * 100)}% sure \u00b7 movement near a person {t.motionNearPerson ? 'counts' : "doesn't count"} \u00b7 sound near a person {t.soundNearPerson ? 'counts' : "doesn't count"}
+        {changed && <button type="button" disabled={busy} onClick={() => send({ reset: true }, 'Back to the starting settings')} style={{ marginLeft: 8, background: 'none', border: 'none', color: 'var(--accent-color)', fontWeight: 700, cursor: 'pointer', fontSize: 12.5, padding: 0 }}>Reset</button>}
+      </div>
+      {(v.suggestions || []).map((x) => (
+        <div key={x.key + JSON.stringify(x.change)} style={{ marginTop: 8, padding: 8, borderRadius: 8, background: 'var(--bg-card)', border: '1px solid var(--role-color)' }}>
+          <div style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{'\u{1F4A1}'} {x.title}?</div>
+          <div style={{ color: 'var(--text-secondary)', margin: '2px 0 6px' }}>{x.why}</div>
+          <button type="button" disabled={busy} onClick={() => send({ change: x.change }, 'Applied. The Hub reloads to use it.')} style={{ padding: '6px 12px', borderRadius: 8, border: 'none', background: 'var(--role-color)', color: 'var(--text-on-primary)', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>Apply</button>
+        </div>
+      ))}
+    </div>
+  );
+};
+
 const describeSignals = (g) => {
   const out = [];
   out.push(g.person === true ? 'person seen' : g.person === false ? 'no person seen' : `person check ${g.personCheck === 'failed' ? 'NOT WORKING' : g.personCheck === 'ready' ? 'on' : (g.personCheck || 'off')}`);
@@ -2310,6 +2378,7 @@ const HubReview = window.HubReview = ({ hub: initial }) => {
       {v.on && (
         <div>
           <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>Each saved minute is deleted after {v.hours} hours if you don't delete it first. The Hub shows a small "Checking" mark while this is on.</div>
+          <TuningPanel apiBase={apiBase} v={v} reload={load} />
           <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13, marginBottom: 8 }}>
             <input type="checkbox" checked={onlyUp} onChange={(e) => { setOnlyUp(e.target.checked); setShown(20); }} /> Only minutes it counted as up ({(v.clips || []).filter((c) => c.counted).length} of {(v.clips || []).length})
           </label>
@@ -2333,6 +2402,7 @@ const HubReview = window.HubReview = ({ hub: initial }) => {
                   {c.signals && c.signals.seen && c.signals.seen.length > 0 && <div style={{ color: 'var(--text-muted)' }}>The camera's guess: {c.signals.seen.join(', ')}</div>}
                 </div>
                 <ReviewMedia apiBase={apiBase} clip={c} />
+                <ReviewMark apiBase={apiBase} clip={c} onMarked={load} />
               </div>
             ))}
           </div>

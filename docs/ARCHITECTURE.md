@@ -7,8 +7,8 @@ build red.
 
 Hand-written sections (§3 "Where is…") are preserved across regeneration; edit those freely.
 
-Structure at last generation: 687 HTTP routes across 72 mounts ·
-131 `CREATE TABLE` statements · 17 background jobs · 47 socket events
+Structure at last generation: 689 HTTP routes across 72 mounts ·
+132 `CREATE TABLE` statements · 17 background jobs · 47 socket events
 (18 with no client listener) · 77 push event types · 66 `window.__*` globals.
 
 ---
@@ -42,7 +42,7 @@ JSX is *not* compiled in the browser; Babel-standalone is not loaded. Editing an
 | `/api/activity` | `src/routes/activity.js` | 4 |  |
 | `/api/admin` | `src/routes/admin/` | 105 |  |
 | `/api/admin/financials` | `src/routes/financials.js` | 14 |  |
-| `/api/admin/hub-check` | `src/routes/hubCheck.js` | 6 |  |
+| `/api/admin/hub-check` | `src/routes/hubCheck.js` | 8 |  |
 | `/api/admin/outreach` | `src/routes/outreach.js` | 0 |  |
 | `/api/admin/tickets` | `src/routes/tickets.js` | 7 |  |
 | `/api/admin/treasury` | `src/routes/treasury.js` | 1 |  |
@@ -254,7 +254,7 @@ why this app runs on exactly one Railway replica.
 | `family_no_show` | `routes/accountability.js` | 🔶 **none** |
 | `hub_find` | `routes/careRecipients.js` | yes |
 | `hub_found` | `routes/careRecipients.js` | yes |
-| `hub_refresh` | `routes/careRecipients.js` | yes |
+| `hub_refresh` | `routes/careRecipients.js`, `routes/hubCheck.js` | yes |
 | `instructions_updated` | `routes/sessions.js` | 🔶 **none** |
 | `interview_accepted` | `routes/interviews.js` | 🔶 **none** |
 | `interview_cancelled` | `routes/interviews.js` | 🔶 **none** |
