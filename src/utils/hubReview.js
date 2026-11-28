@@ -97,9 +97,17 @@ async function saveClip(db, careRecipientId, { photo, audio, counted, signals })
   const okPhoto = typeof photo === "string" && DATA_URI.test(photo) && photo.startsWith("data:image/jpeg") && bytesOf(photo) <= MAX_PHOTO_BYTES;
   const okAudio = typeof audio === "string" && DATA_URI.test(audio) && audio.startsWith("data:audio/") && bytesOf(audio) <= MAX_AUDIO_BYTES;
   if (!okPhoto && !okAudio) return { saved: false, reason: "nothing_to_save" };
-  const photoRef = okPhoto ? await S.storeFileData("hubreview", photo) : null;
-  const audioRef = okAudio ? await S.storeFileData("hubreview", audio) : null;
-  if ((photoRef && !S.isRemote(photoRef)) || (audioRef && !S.isRemote(audioRef))) return { saved: false, reason: "no_storage" };
+  // v1.166.3 — Pete, 11/27: "I see 19 counted as up, but only see one pic with no sound." The
+  // Hub's recorder labels its sound "audio/webm;codecs=opus", and storage only understood
+  // "data:<type>;base64," — so every minute with sound failed as a whole, picture included.
+  // The type parameters are dropped here, and each part is kept even if the other fails.
+  const plain = (uri) => String(uri).replace(/^data:([^;,]+)(;[^,]*)?;base64,/, (m0, t) => `data:${t};base64,`);
+  const store = async (uri) => {
+    try { const ref = await S.storeFileData("hubreview", plain(uri)); return S.isRemote(ref) ? ref : null; } catch { return null; }
+  };
+  const photoRef = okPhoto ? await store(photo) : null;
+  const audioRef = okAudio ? await store(audio) : null;
+  if (!photoRef && !audioRef) return { saved: false, reason: "no_storage" };
   const clean = {
     motion: !!(signals && signals.motion),
     voiceSeconds: Math.max(0, Math.min(60, Number(signals && signals.voiceSeconds) || 0)),
@@ -107,6 +115,8 @@ async function saveClip(db, careRecipientId, { photo, audio, counted, signals })
     person: signals && signals.person === true ? true : signals && signals.person === false ? false : null,
     seen: Array.isArray(signals && signals.seen) ? signals.seen.slice(0, 12).map((x) => String(x).slice(0, 40)) : [],
     personCheck: String((signals && signals.personCheck) || "").slice(0, 20) || null,
+    // v1.166.3 — how bright the picture is (0-255), so a black picture reads "too dark to see".
+    light: Number.isFinite(Number(signals && signals.light)) ? Math.max(0, Math.min(255, Math.round(Number(signals.light)))) : null,
   };
   await db.prepare(
     `INSERT INTO hub_review_clips (id, care_recipient_id, counted, signals, photo_ref, audio_ref, expires_at)
