@@ -973,7 +973,7 @@ const HubAwake = ({ recipientId }) => {
     let stream = null, ctx = null, analyser = null, tick = null, report = null, stopped = false;
     let prev = null, motion = false, voiceSec = 0, floor = null;
     let personSeen = false, detectTimer = null, detecting = false;
-    let lastSeen = [], review = false, recorder = null, recTimer = null, lastAudio = null;
+    let lastSeen = [], review = false, recorder = null, recTimer = null, lastAudio = null, recorderFailed = false;
     // Rolling ~15 s of sound, only while checking is on: a fresh recorder every 15 s, keeping the
     // newest finished piece (each piece is a whole file on its own).
     const startRecorder = () => {
@@ -982,12 +982,12 @@ const HubAwake = ({ recipientId }) => {
       const next = () => {
         if (stopped || !review) { recorder = null; return; }
         let r;
-        try { r = new MediaRecorder(audioOnly, { audioBitsPerSecond: 24000 }); } catch { recorder = null; return; }
+        try { r = new MediaRecorder(audioOnly, { audioBitsPerSecond: 24000 }); } catch { recorder = null; recorderFailed = true; return; }
         const parts = [];
         r.ondataavailable = (e) => { if (e.data && e.data.size) parts.push(e.data); };
         r.onstop = () => { if (parts.length) lastAudio = new Blob(parts, { type: r.mimeType || 'audio/webm' }); };
         recorder = r;
-        try { r.start(); } catch { recorder = null; return; }
+        try { r.start(); } catch { recorder = null; recorderFailed = true; return; }
         recTimer = setTimeout(() => { try { r.state !== 'inactive' && r.stop(); } catch { /* gone */ } next(); }, 15000);
       };
       next();
@@ -1001,18 +1001,27 @@ const HubAwake = ({ recipientId }) => {
       const fr = new FileReader(); fr.onload = () => resolve(fr.result); fr.onerror = () => resolve(null); fr.readAsDataURL(blob);
     });
     const sendClip = async (body, counted) => {
-      let photo = null, audio = null;
+      let photo = null, audio = null, light = null;
       try {
         if (video.videoWidth) {
           const c = document.createElement('canvas'); c.width = 480; c.height = Math.round(480 * video.videoHeight / video.videoWidth);
-          c.getContext('2d').drawImage(video, 0, 0, c.width, c.height);
+          const cg = c.getContext('2d');
+          cg.drawImage(video, 0, 0, c.width, c.height);
           photo = c.toDataURL('image/jpeg', 0.6);
+          // v1.166.3 — average brightness, so a black night picture says "too dark", not nothing.
+          try {
+            const px = cg.getImageData(0, 0, c.width, c.height).data;
+            let sum = 0, n = 0;
+            for (let i = 0; i < px.length; i += 64) { sum += (px[i] * 3 + px[i + 1] * 6 + px[i + 2]) / 10; n += 1; }
+            light = n ? Math.round(sum / n) : null;
+          } catch { light = null; }
         }
       } catch { photo = null; }
       try { if (lastAudio) audio = await toDataUri(lastAudio); } catch { audio = null; }
       if (audio && !/^data:audio\/(webm|ogg|mp4)/.test(audio)) audio = audio.replace(/^data:[^;,]+/, 'data:audio/webm');
+      if (audio) audio = audio.replace(/^data:([^;,]+)(;[^,]*)?;base64,/, (m0, t) => `data:${t};base64,`); // v1.166.3 — no ";codecs=opus"
       const personCheck = window.HubPersonCheck ? window.HubPersonCheck.state() : 'missing';
-      apiFetch(`/api/drop-in/${recipientId}/review-clip`, { method: 'POST', body: JSON.stringify({ photo, audio, counted, signals: { ...body, seen: lastSeen, personCheck } }) }).catch(() => {});
+      apiFetch(`/api/drop-in/${recipientId}/review-clip`, { method: 'POST', body: JSON.stringify({ photo, audio, counted, signals: { ...body, seen: lastSeen, personCheck, light, sound: lastAudio ? 'recorded' : recorderFailed ? 'recorder failed' : 'not yet' } }) }).catch(() => {});
     };
     const SCREENS_KEY = 'inplace_hub_screens_' + recipientId;
     let known = [];
@@ -2213,13 +2222,15 @@ const HubNights = ({ recipientId, name }) => {
 // seeing... Delete it after every review, until I'm sure it's accurate."
 const ReviewMedia = ({ apiBase, clip }) => {
   const [img, setImg] = useState(null);
+  const [imgFailed, setImgFailed] = useState(false);
   const [aud, setAud] = useState(null);
   const [loading, setLoading] = useState(false);
   useEffect(() => {
     let url = null, live = true;
     if (clip.hasPhoto) {
       apiFetch(`${apiBase}/clips/${clip.id}/photo`).then((r) => (r && r.ok ? r.blob() : null))
-        .then((b) => { if (b && live) { url = URL.createObjectURL(b); setImg(url); } }).catch(() => {});
+        .then((b) => { if (!live) return; if (b) { url = URL.createObjectURL(b); setImg(url); } else setImgFailed(true); })
+        .catch(() => { if (live) setImgFailed(true); });
     }
     return () => { live = false; if (url) URL.revokeObjectURL(url); };
   }, [clip.id]);
@@ -2236,13 +2247,16 @@ const ReviewMedia = ({ apiBase, clip }) => {
   return (
     <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
       <div style={{ width: 150, height: 112, flexShrink: 0, borderRadius: 8, overflow: 'hidden', background: 'var(--bg-surface)', border: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, color: 'var(--text-muted)' }}>
-        {img ? <img src={img} alt="What the Hub's camera saw" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : clip.hasPhoto ? 'Loading…' : 'No picture'}
+        {img ? <img src={img} alt="What the Hub's camera saw" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : !clip.hasPhoto ? 'No picture' : imgFailed ? "Couldn't load" : 'Loading…'}
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
         {clip.hasAudio ? (aud
           ? <audio src={aud} controls autoPlay style={{ width: '100%', height: 32 }} />
           : <button type="button" onClick={play} style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid var(--role-color)', background: 'var(--bg-card)', color: 'var(--role-color)', fontWeight: 700, fontSize: 12.5, cursor: 'pointer', fontFamily: 'inherit' }}>{loading ? 'Loading…' : '▶ Play the sound'}</button>)
-          : <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>No sound saved</span>}
+          : <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>No sound saved{clip.signals && clip.signals.sound ? ` (${clip.signals.sound})` : ''}</span>}
+        {clip.signals && clip.signals.light != null && clip.signals.light < 25 && (
+          <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 6 }}>Too dark for the camera to see much (brightness {clip.signals.light} of 255).</div>
+        )}
       </div>
     </div>
   );
